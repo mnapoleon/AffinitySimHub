@@ -46,7 +46,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="..\StatsPlus\ac_track_id_map.json" Link="ac_track_id_map.json">
+    <Content Include="ac_track_id_map.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>

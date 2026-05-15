@@ -123,7 +123,7 @@ jobs:
             ""
             "## Release Summary"
             "- Semver bump: $bump"
-            "- Released from PR #$pullNumber: $pullTitle"
+            "- Released from PR #$($pullNumber): $pullTitle"
             "- Previous release: $previousLabel"
             ""
             "## Changes Since Last Release"

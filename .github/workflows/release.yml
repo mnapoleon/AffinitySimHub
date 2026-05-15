@@ -12,7 +12,7 @@ permissions:
 jobs:
   tag-and-release:
     if: github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'main'
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
 
     steps:
       - name: Checkout
@@ -20,6 +20,11 @@ jobs:
         with:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.merge_commit_sha }}
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
 
       - name: Resolve merged PR and bump type
         id: pr
@@ -132,7 +137,51 @@ jobs:
 
           "notes_path=$notesPath" >> $env:GITHUB_OUTPUT
 
+      - name: Restore
+        if: steps.pr.outputs.should_release == 'true'
+        shell: pwsh
+        run: dotnet restore .\Affinity.sln /p:UseSimHubSdkStubs=true
+
+      - name: Build plugin
+        if: steps.pr.outputs.should_release == 'true'
+        shell: pwsh
+        run: dotnet build .\Affinity\Affinity.csproj --configuration Release --no-restore /p:UseSimHubSdkStubs=true /p:SimHubInstallPath=C:\does-not-exist
+
+      - name: Package release asset
+        id: package
+        if: steps.pr.outputs.should_release == 'true'
+        shell: pwsh
+        run: |
+          $tag = '${{ steps.version.outputs.tag }}'
+          $stagingDir = Join-Path $env:RUNNER_TEMP 'affinity-release'
+          $assetName = "Affinity-$tag.zip"
+          $assetPath = Join-Path $env:RUNNER_TEMP $assetName
+
+          Remove-Item -LiteralPath $stagingDir -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Path $stagingDir | Out-Null
+
+          Copy-Item -LiteralPath '.\Affinity\bin\Release\net48\Affinity.dll' -Destination $stagingDir
+          Copy-Item -LiteralPath '.\Affinity\bin\Release\net48\Affinity.pdb' -Destination $stagingDir -ErrorAction SilentlyContinue
+          Set-Content -Path (Join-Path $stagingDir 'README.txt') -Value @(
+            'Affinity SimHub Plugin'
+            ''
+            'Install:'
+            '1. Close SimHub.'
+            '2. Extract the zip.'
+            '3. Copy Affinity.dll into your SimHub install directory.'
+            '4. Start SimHub.'
+          ) -Encoding UTF8
+
+          if (Test-Path $assetPath) {
+            Remove-Item -LiteralPath $assetPath -Force
+          }
+
+          Compress-Archive -Path (Join-Path $stagingDir '*') -DestinationPath $assetPath
+          "asset_name=$assetName" >> $env:GITHUB_OUTPUT
+          "asset_path=$assetPath" >> $env:GITHUB_OUTPUT
+
       - name: Create tag and GitHub release
+        id: release
         if: steps.pr.outputs.should_release == 'true'
         uses: actions/github-script@v7
         env:
@@ -152,6 +201,12 @@ jobs:
               });
 
               core.notice(`Tag ${tag} already exists; skipping tag and release creation.`);
+              const existingRelease = await github.rest.repos.getReleaseByTag({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag,
+              });
+              core.setOutput("release_id", String(existingRelease.data.id));
               return;
             } catch (error) {
               if (error.status !== 404) {
@@ -166,7 +221,7 @@ jobs:
               sha: "${{ github.event.pull_request.merge_commit_sha }}",
             });
 
-            await github.rest.repos.createRelease({
+            const release = await github.rest.repos.createRelease({
               owner: context.repo.owner,
               repo: context.repo.repo,
               tag_name: tag,
@@ -175,4 +230,45 @@ jobs:
               body: releaseBody,
             });
 
+            core.setOutput("release_id", String(release.data.id));
             core.notice(`Created ${tag} and published a GitHub release.`);
+
+      - name: Upload plugin asset
+        if: steps.pr.outputs.should_release == 'true'
+        uses: actions/github-script@v7
+        env:
+          RELEASE_ID: ${{ steps.release.outputs.release_id }}
+          ASSET_NAME: ${{ steps.package.outputs.asset_name }}
+          ASSET_PATH: ${{ steps.package.outputs.asset_path }}
+        with:
+          script: |
+            const fs = require("fs");
+            const releaseId = Number(process.env.RELEASE_ID);
+            const assetName = process.env.ASSET_NAME;
+            const assetPath = process.env.ASSET_PATH;
+            const assetData = fs.readFileSync(assetPath);
+
+            const existingAssets = await github.rest.repos.listReleaseAssets({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: releaseId,
+            });
+
+            const existingAsset = existingAssets.data.find(asset => asset.name === assetName);
+            if (existingAsset) {
+              await github.rest.repos.deleteReleaseAsset({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                asset_id: existingAsset.id,
+              });
+            }
+
+            await github.rest.repos.uploadReleaseAsset({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: releaseId,
+              name: assetName,
+              data: assetData,
+            });
+
+            core.notice(`Uploaded ${assetName} to release ${releaseId}.`);

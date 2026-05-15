@@ -657,64 +657,13 @@ namespace Affinity
 
         internal void RefreshDistanceSummaries()
         {
-            List<DistanceSummary> summaries = BuildDistanceSummaries()
-                .OrderBy(summary => summary.GameName)
-                .ThenBy(summary => summary.CarModel)
-                .ThenBy(summary => summary.TrackNameWithConfig)
-                .ToList();
-
-            List<GameDistanceTab> tabs = summaries
-                .GroupBy(summary => summary.GameName)
-                .Select(group => new GameDistanceTab
-                {
-                    GameName = group.Key,
-                    TotalDistanceKm = group.Sum(summary => summary.TotalDistanceKm),
-                    TotalDistanceMiles = group.Sum(summary => summary.TotalDistanceMiles),
-                    TotalDistanceDisplay = Settings.DisplayInMiles
-                        ? group.Sum(summary => summary.TotalDistanceMiles)
-                        : group.Sum(summary => summary.TotalDistanceKm),
-                    TotalCompletedLaps = group.Sum(summary => summary.CompletedLaps),
-                    TrackSummaries = group
-                        .GroupBy(summary => summary.TrackNameWithConfig)
-                        .Select(trackGroup => new TrackDistanceSummary
-                        {
-                            TrackName = trackGroup.Key,
-                            TrackDisplayName = GetDisplayTrackNameWithConfig(group.Key, trackGroup.Key),
-                            DistanceKm = trackGroup.Sum(summary => summary.TotalDistanceKm),
-                            DistanceMiles = trackGroup.Sum(summary => summary.TotalDistanceMiles),
-                            DistanceDisplay = Settings.DisplayInMiles
-                                ? trackGroup.Sum(summary => summary.TotalDistanceMiles)
-                                : trackGroup.Sum(summary => summary.TotalDistanceKm),
-                            CompletedLaps = trackGroup.Sum(summary => summary.CompletedLaps)
-                        })
-                        .OrderByDescending(summary => summary.DistanceDisplay)
-                        .ThenBy(summary => summary.TrackName)
-                        .ToList(),
-                    CarSummaries = group
-                        .GroupBy(summary => summary.CarModel)
-                        .Select(carGroup => new CarDistanceSummary
-                        {
-                            CarModel = carGroup.Key,
-                            DistanceKm = carGroup.Sum(summary => summary.TotalDistanceKm),
-                            DistanceMiles = carGroup.Sum(summary => summary.TotalDistanceMiles),
-                            DistanceDisplay = Settings.DisplayInMiles
-                                ? carGroup.Sum(summary => summary.TotalDistanceMiles)
-                                : carGroup.Sum(summary => summary.TotalDistanceKm),
-                            CompletedLaps = carGroup.Sum(summary => summary.CompletedLaps)
-                        })
-                        .OrderByDescending(summary => summary.DistanceDisplay)
-                        .ThenBy(summary => summary.CarModel)
-                        .ToList()
-                })
-                .OrderBy(tab => tab.GameName)
-                .ToList();
-
-            TotalDistanceKm = summaries.Sum(summary => summary.TotalDistanceKm);
+            AffinitySummarySnapshot snapshot = AffinitySummaryBuilder.BuildSnapshot(_database, Settings.DisplayInMiles, _assettoCorsaTrackMap);
+            TotalDistanceKm = snapshot.TotalDistanceKm;
 
             string selectedGame = SelectedGameTab?.GameName;
 
             GameTabs.Clear();
-            foreach (GameDistanceTab tab in tabs)
+            foreach (GameDistanceTab tab in snapshot.GameTabs)
             {
                 GameTabs.Add(tab);
             }
@@ -805,31 +754,6 @@ namespace Affinity
             catch (Exception ex)
             {
                 SimHub.Logging.Current.Error($"Affinity - Failed to save database: {ex.Message}");
-            }
-        }
-
-        private IEnumerable<DistanceSummary> BuildDistanceSummaries()
-        {
-            foreach (KeyValuePair<string, GameBucket> gameEntry in _database.Games)
-            {
-                foreach (KeyValuePair<string, CarBucket> carEntry in gameEntry.Value.Cars)
-                {
-                    foreach (KeyValuePair<string, TrackBucket> trackEntry in carEntry.Value.Tracks)
-                    {
-                        TrackBucket track = trackEntry.Value;
-                        yield return new DistanceSummary
-                        {
-                            GameName = gameEntry.Key,
-                            CarModel = carEntry.Key,
-                            TrackName = track.TrackName,
-                            TrackNameWithConfig = track.TrackNameWithConfig,
-                            TotalDistanceKm = track.TotalDistanceMeters / MetersPerKilometer,
-                            TotalDistanceMiles = track.TotalDistanceMeters / MetersPerMile,
-                            CompletedLaps = track.CompletedLaps,
-                            LastUpdatedUtc = track.LastUpdatedUtc
-                        };
-                    }
-                }
             }
         }
 
@@ -1099,31 +1023,12 @@ namespace Affinity
             }
 
             double trackLengthMeters = status.TrackLength > 0.0 ? status.TrackLength : status.ReportedTrackLength;
-            return GetTrackPositionWithinLapMeters(status, trackLengthMeters);
+            return AffinityGameLogic.GetTrackPositionWithinLapMeters(status, trackLengthMeters);
         }
 
         private static double GetTrackPositionWithinLapMeters(StatusDataBase status, double trackLengthMeters)
         {
-            if (status == null || trackLengthMeters <= 0.0)
-            {
-                return -1.0;
-            }
-
-            double trackPositionMeters = status.TrackPositionMeters;
-            if (trackPositionMeters > trackLengthMeters + 1.0)
-            {
-                return trackPositionMeters;
-            }
-
-            if (trackPositionMeters < 0.0 && status.TrackPositionPercent > 0.0)
-            {
-                double trackPositionPercent = status.TrackPositionPercent > 1.0 && status.TrackPositionPercent <= 100.0
-                    ? status.TrackPositionPercent / 100.0
-                    : status.TrackPositionPercent;
-                trackPositionMeters = trackPositionPercent * trackLengthMeters;
-            }
-
-            return Math.Max(0.0, Math.Min(trackPositionMeters, trackLengthMeters));
+            return AffinityGameLogic.GetTrackPositionWithinLapMeters(status, trackLengthMeters);
         }
 
         private void PublishProperties(PluginManager pluginManager, string gameName, string trackName, string carModel, double totalKm, int totalCompletedLaps, double sessionKm, int sessionCompletedLaps)
@@ -1164,44 +1069,32 @@ namespace Affinity
 
         private bool IsSupportedGame(string gameName)
         {
-            return IsAssettoCorsaGame(gameName) ||
-                IsRaceRoomGame(gameName) ||
-                IsAutomobilista2Game(gameName) ||
-                IsIRacingGame(gameName) ||
-                IsRFactor2Game(gameName);
+            return AffinityGameLogic.IsSupportedGame(gameName);
         }
 
         private bool IsAssettoCorsaGame(string gameName)
         {
-            string normalized = NormalizeGameName(gameName);
-            return string.Equals(normalized, "assettocorsa", StringComparison.Ordinal) ||
-                string.Equals(normalized, "assettocorsaevo", StringComparison.Ordinal);
+            return AffinityGameLogic.IsAssettoCorsaGame(gameName);
         }
 
         private bool IsRaceRoomGame(string gameName)
         {
-            string normalized = NormalizeGameName(gameName);
-            return string.Equals(normalized, "raceroomracingexperience", StringComparison.Ordinal) ||
-                string.Equals(normalized, "r3e", StringComparison.Ordinal) ||
-                string.Equals(normalized, "rrre", StringComparison.Ordinal);
+            return AffinityGameLogic.IsRaceRoomGame(gameName);
         }
 
         private bool IsAutomobilista2Game(string gameName)
         {
-            string normalized = NormalizeGameName(gameName);
-            return string.Equals(normalized, "automobilista2", StringComparison.Ordinal);
+            return AffinityGameLogic.IsAutomobilista2Game(gameName);
         }
 
         private bool IsIRacingGame(string gameName)
         {
-            string normalized = NormalizeGameName(gameName);
-            return string.Equals(normalized, "iracing", StringComparison.Ordinal);
+            return AffinityGameLogic.IsIRacingGame(gameName);
         }
 
         private bool IsRFactor2Game(string gameName)
         {
-            string normalized = NormalizeGameName(gameName);
-            return string.Equals(normalized, "rfactor2", StringComparison.Ordinal);
+            return AffinityGameLogic.IsRFactor2Game(gameName);
         }
 
         private bool UsesStatefulDerivedDistance(string gameName)
@@ -1368,19 +1261,7 @@ namespace Affinity
 
         private string GetDebugLoggingSettingsKey(string gameName)
         {
-            string normalized = NormalizeGameName(gameName);
-            if (string.IsNullOrWhiteSpace(normalized))
-            {
-                return string.Empty;
-            }
-
-            if (string.Equals(normalized, "r3e", StringComparison.Ordinal) ||
-                string.Equals(normalized, "rrre", StringComparison.Ordinal))
-            {
-                return "raceroomracingexperience";
-            }
-
-            return normalized;
+            return AffinityGameLogic.GetDebugLoggingSettingsKey(gameName);
         }
 
         private string GetDebugLoggingDisplayName(string settingsKey)
@@ -1406,21 +1287,7 @@ namespace Affinity
 
         private static string NormalizeGameName(string gameName)
         {
-            if (string.IsNullOrWhiteSpace(gameName))
-            {
-                return string.Empty;
-            }
-
-            StringBuilder builder = new StringBuilder(gameName.Length);
-            foreach (char character in gameName)
-            {
-                if (char.IsLetterOrDigit(character))
-                {
-                    builder.Append(char.ToLowerInvariant(character));
-                }
-            }
-
-            return builder.ToString();
+            return AffinityGameLogic.NormalizeGameName(gameName);
         }
 
         private static string NormalizeContextValue(string value, string fallback)
@@ -1430,19 +1297,7 @@ namespace Affinity
 
         private string GetDisplayTrackNameWithConfig(string gameName, string rawTrackNameWithConfig)
         {
-            if (!IsAssettoCorsaGame(gameName))
-            {
-                return rawTrackNameWithConfig;
-            }
-
-            if (string.IsNullOrWhiteSpace(rawTrackNameWithConfig))
-            {
-                return rawTrackNameWithConfig;
-            }
-
-            return _assettoCorsaTrackMap.TryGetValue(rawTrackNameWithConfig, out string mappedName)
-                ? mappedName
-                : rawTrackNameWithConfig;
+            return AffinityGameLogic.GetDisplayTrackNameWithConfig(gameName, rawTrackNameWithConfig, _assettoCorsaTrackMap);
         }
 
         private void OnPropertyChanged([CallerMemberName] string propertyName = null)

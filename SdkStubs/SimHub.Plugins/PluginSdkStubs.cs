@@ -5,6 +5,8 @@ using GameReaderCommon;
 using FormsControl = System.Windows.Forms.Control;
 using WpfControl = System.Windows.Controls.Control;
 using WpfGroupBox = System.Windows.Controls.GroupBox;
+using WpfTabControl = System.Windows.Controls.TabControl;
+using WpfTabItem = System.Windows.Controls.TabItem;
 
 namespace SimHub.Plugins
 {
@@ -79,6 +81,14 @@ namespace SimHub.Plugins
 
 namespace SimHub.Plugins.Styles
 {
+    public class SHTabControl : WpfTabControl
+    {
+    }
+
+    public class SHTabItem : WpfTabItem
+    {
+    }
+
     public class SHSection : WpfGroupBox
     {
         public static readonly DependencyProperty TitleProperty =

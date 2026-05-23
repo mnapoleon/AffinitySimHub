@@ -1166,6 +1166,8 @@ namespace Affinity
                 Settings.GameDebugLogging = new Dictionary<string, bool>();
             }
 
+            RemoveUnsupportedGameDebugLoggingSettings();
+
             foreach (KeyValuePair<string, string> entry in DefaultGameDebugLoggingEntries)
             {
                 if (!Settings.GameDebugLogging.ContainsKey(entry.Key))
@@ -1213,6 +1215,11 @@ namespace Affinity
                     continue;
                 }
 
+                if (!IsSupportedDebugLoggingSettingsKey(settingsKey))
+                {
+                    continue;
+                }
+
                 entries.Add(new KeyValuePair<string, string>(settingsKey, GetDebugLoggingDisplayName(settingsKey)));
             }
 
@@ -1237,6 +1244,23 @@ namespace Affinity
             }
 
             Settings.GameDebugLogging[settingsKey] = isEnabled;
+        }
+
+        private void RemoveUnsupportedGameDebugLoggingSettings()
+        {
+            if (Settings.GameDebugLogging == null || Settings.GameDebugLogging.Count == 0)
+            {
+                return;
+            }
+
+            List<string> unsupportedKeys = Settings.GameDebugLogging.Keys
+                .Where(settingsKey => !IsSupportedDebugLoggingSettingsKey(settingsKey))
+                .ToList();
+
+            foreach (string unsupportedKey in unsupportedKeys)
+            {
+                Settings.GameDebugLogging.Remove(unsupportedKey);
+            }
         }
 
         private string GetDebugLogPath(string gameName)
@@ -1283,6 +1307,11 @@ namespace Affinity
                 default:
                     return settingsKey;
             }
+        }
+
+        private bool IsSupportedDebugLoggingSettingsKey(string settingsKey)
+        {
+            return IsSupportedGame(settingsKey);
         }
 
         private static string NormalizeGameName(string gameName)

@@ -66,22 +66,12 @@
                                                Grid.Column="0"
                                                Margin="0,0,12,8"
                                                FontWeight="Bold"
-                                               Text="Total laps" />
+                                               Text="Total time" />
                                     <TextBlock Grid.Row="2"
                                                Grid.Column="1"
                                                Grid.ColumnSpan="2"
                                                Margin="0,0,0,8"
-                                               Text="{Binding CurrentContextCompletedLaps}" />
-
-                                    <TextBlock Grid.Row="3"
-                                               Grid.Column="0"
-                                               Margin="0,0,12,0"
-                                               FontWeight="Bold"
-                                               Text="Session laps" />
-                                    <TextBlock Grid.Row="3"
-                                               Grid.Column="1"
-                                               Grid.ColumnSpan="2"
-                                               Text="{Binding SessionCompletedLaps}" />
+                                               Text="{Binding CurrentContextUsedTimeDisplay}" />
                                 </Grid>
 
                                 <StackPanel Grid.Column="2" HorizontalAlignment="Right">
@@ -98,6 +88,10 @@
                                                    VerticalAlignment="Center"
                                                    Text="{Binding DistanceUnitLabel}" />
                                     </StackPanel>
+                                    <TextBlock Margin="0,8,0,0"
+                                               HorizontalAlignment="Right"
+                                               FontWeight="SemiBold"
+                                               Text="{Binding TotalUsedTimeDisplay, StringFormat=Total time across all games: {0}}" />
                                     <ItemsControl Margin="0,8,0,0" ItemsSource="{Binding GameTabs}">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate>
@@ -115,7 +109,7 @@
                                                     <TextBlock Margin="8,0,0,0"
                                                                VerticalAlignment="Center"
                                                                FontSize="12"
-                                                               Text="{Binding TotalCompletedLaps, StringFormat={}({0} laps)}" />
+                                                               Text="{Binding TotalUsedTimeDisplay}" />
                                                     <TextBlock Margin="4,0,0,0"
                                                                VerticalAlignment="Center"
                                                                FontSize="12"
@@ -175,7 +169,7 @@
                                                             <TextBlock Text="{Binding DataContext.DistanceColumnHeader, ElementName=Root}" />
                                                         </DataGridTextColumn.Header>
                                                     </DataGridTextColumn>
-                                                    <DataGridTextColumn Width="110" Binding="{Binding CompletedLaps}" Header="Laps" />
+                                                    <DataGridTextColumn Width="100" Binding="{Binding UsedTimeDisplay}" Header="Time" />
                                                 </DataGrid.Columns>
                                             </DataGrid>
 
@@ -193,7 +187,7 @@
                                                             <TextBlock Text="{Binding DataContext.DistanceColumnHeader, ElementName=Root}" />
                                                         </DataGridTextColumn.Header>
                                                     </DataGridTextColumn>
-                                                    <DataGridTextColumn Width="110" Binding="{Binding CompletedLaps}" Header="Laps" />
+                                                    <DataGridTextColumn Width="100" Binding="{Binding UsedTimeDisplay}" Header="Time" />
                                                 </DataGrid.Columns>
                                             </DataGrid>
                                         </Grid>

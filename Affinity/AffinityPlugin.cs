@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text;
+using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -16,7 +17,7 @@ using SimHub.Plugins;
 namespace Affinity
 {
     [PluginName("Affinity")]
-    [PluginDescription("Tracks cumulative distance by game, car, and track across sessions.")]
+    [PluginDescription("Tracks cumulative distance and time by game, car, and track across sessions.")]
     [PluginAuthor("Affinity")]
     public class AffinityPlugin : IPlugin, IDataPlugin, IWPFSettingsV2, INotifyPropertyChanged
     {
@@ -35,6 +36,8 @@ namespace Affinity
         private const double MetersPerKilometer = 1000.0;
         private const double MetersPerMile = 1609.344;
         private const double SaveThresholdMeters = 50.0;
+        private const double SaveThresholdUsedTimeSeconds = 30.0;
+        private const double MaxCountedTelemetryGapSeconds = 5.0;
         private static readonly KeyValuePair<string, string>[] DefaultGameDebugLoggingEntries =
         {
             new KeyValuePair<string, string>("assettocorsa", "Assetto Corsa"),
@@ -60,9 +63,9 @@ namespace Affinity
         private string _dataStatus = "Waiting for telemetry";
         private double _currentContextDistanceKm;
         private double _sessionDistanceKm;
-        private int _currentContextCompletedLaps;
-        private int _sessionCompletedLaps;
         private double _totalDistanceKm;
+        private double _currentContextUsedTime;
+        private double _totalUsedTime;
         private bool _isTelemetryActive;
         private GameDistanceTab _selectedGameTab;
         private Guid _activeSessionId = Guid.Empty;
@@ -75,7 +78,9 @@ namespace Affinity
         private double _lastObservedSessionMeters = -1.0;
         private int _lastObservedCompletedLaps = -1;
         private double _pendingMetersSinceSave;
+        private double _pendingUsedTimeSecondsSinceSave;
         private DateTime _lastTelemetryDebugLogUtc = DateTime.MinValue;
+        private DateTime _lastSessionSampleUtc = DateTime.MinValue;
 
         public event PropertyChangedEventHandler PropertyChanged;
 
@@ -111,37 +116,11 @@ namespace Affinity
             ? TotalDistanceKm * MetersPerKilometer / MetersPerMile
             : TotalDistanceKm;
 
+        public string CurrentContextUsedTimeDisplay => FormatUsedTime(_currentContextUsedTime);
+
+        public string TotalUsedTimeDisplay => FormatUsedTime(_totalUsedTime);
+
         public Brush StatusSectionForeground => IsTelemetryActive ? Brushes.LimeGreen : Brushes.Red;
-
-        public int CurrentContextCompletedLaps
-        {
-            get => _currentContextCompletedLaps;
-            private set
-            {
-                if (_currentContextCompletedLaps == value)
-                {
-                    return;
-                }
-
-                _currentContextCompletedLaps = value;
-                OnPropertyChanged();
-            }
-        }
-
-        public int SessionCompletedLaps
-        {
-            get => _sessionCompletedLaps;
-            private set
-            {
-                if (_sessionCompletedLaps == value)
-                {
-                    return;
-                }
-
-                _sessionCompletedLaps = value;
-                OnPropertyChanged();
-            }
-        }
 
         public string CurrentGameName
         {
@@ -300,6 +279,38 @@ namespace Affinity
             }
         }
 
+        public double CurrentContextUsedTime
+        {
+            get => _currentContextUsedTime;
+            private set
+            {
+                if (Math.Abs(_currentContextUsedTime - value) < 0.0001)
+                {
+                    return;
+                }
+
+                _currentContextUsedTime = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(CurrentContextUsedTimeDisplay));
+            }
+        }
+
+        public double TotalUsedTime
+        {
+            get => _totalUsedTime;
+            private set
+            {
+                if (Math.Abs(_totalUsedTime - value) < 0.0001)
+                {
+                    return;
+                }
+
+                _totalUsedTime = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(TotalUsedTimeDisplay));
+            }
+        }
+
         public void Init(PluginManager pluginManager)
         {
             PluginManager = pluginManager;
@@ -320,10 +331,8 @@ namespace Affinity
             pluginManager.AddProperty("Affinity.CarModel", GetType(), string.Empty);
             pluginManager.AddProperty("Affinity.CurrentContextDistanceKm", GetType(), 0.0);
             pluginManager.AddProperty("Affinity.CurrentContextDistanceMiles", GetType(), 0.0);
-            pluginManager.AddProperty("Affinity.CurrentContextCompletedLaps", GetType(), 0);
             pluginManager.AddProperty("Affinity.SessionDistanceKm", GetType(), 0.0);
             pluginManager.AddProperty("Affinity.SessionDistanceMiles", GetType(), 0.0);
-            pluginManager.AddProperty("Affinity.SessionCompletedLaps", GetType(), 0);
             pluginManager.AddProperty("Affinity.DataFilePath", GetType(), _databasePath);
             pluginManager.AddProperty("Affinity.DebugLogPath", GetType(), GetDebugLogPath(string.Empty));
 
@@ -336,6 +345,7 @@ namespace Affinity
         {
             try
             {
+                DateTime now = DateTime.UtcNow;
                 pluginManager.SetPropertyValue("Affinity.Enabled", GetType(), Settings.EnablePlugin);
                 pluginManager.SetPropertyValue("Affinity.IsGameRunning", GetType(), data.GameRunning);
                 pluginManager.SetPropertyValue("Affinity.DataFilePath", GetType(), _databasePath);
@@ -345,8 +355,10 @@ namespace Affinity
                 {
                     DataStatus = !Settings.EnablePlugin ? "Plugin disabled" : "Waiting for telemetry";
                     IsTelemetryActive = false;
+                    bool finalizedTime = AccumulateActiveSessionTime(now);
+                    SavePendingUsageIfNeeded(force: finalizedTime);
                     ResetActiveSession(clearContext: false);
-                    PublishProperties(pluginManager, string.Empty, string.Empty, string.Empty, 0.0, 0, 0.0, 0);
+                    PublishProperties(pluginManager, string.Empty, string.Empty, string.Empty, 0.0, 0.0);
                     _hasLoggedDataError = false;
                     return;
                 }
@@ -360,8 +372,10 @@ namespace Affinity
                 {
                     DataStatus = $"Unsupported game: {gameName}";
                     IsTelemetryActive = false;
+                    bool finalizedTime = AccumulateActiveSessionTime(now);
+                    SavePendingUsageIfNeeded(force: finalizedTime);
                     ResetActiveSession(clearContext: false);
-                    PublishProperties(pluginManager, gameName, string.Empty, string.Empty, 0.0, 0, 0.0, 0);
+                    PublishProperties(pluginManager, gameName, string.Empty, string.Empty, 0.0, 0.0);
                     _hasLoggedDataError = false;
                     return;
                 }
@@ -382,11 +396,13 @@ namespace Affinity
                 double absoluteSessionMeters = -1.0;
                 int completedLaps = Math.Max(0, data.NewData.CompletedLaps);
                 bool shouldDebugTelemetry = ShouldDebugTelemetry(gameName);
+                bool bucketTimeUpdated = AccumulateActiveSessionTime(now);
 
                 if (!string.Equals(_activeContextKey, contextKey, StringComparison.OrdinalIgnoreCase) ||
                     _activeSessionId != sessionId ||
                     data.NewData.IsSessionRestart)
                 {
+                    SavePendingUsageIfNeeded(force: bucketTimeUpdated);
                     _activeContextKey = contextKey;
                     _activeSessionId = sessionId;
                     _sessionDistanceSource = ResolveSessionDistanceSource(gameName, data.NewData);
@@ -398,9 +414,9 @@ namespace Affinity
                         : GetAbsoluteSessionDistanceMeters(gameName, data.NewData, _sessionDistanceSource);
                     _lastObservedSessionMeters = 0.0;
                     _lastObservedCompletedLaps = completedLaps;
+                    _lastSessionSampleUtc = now;
                     SessionDistanceKm = 0.0;
-                    SessionCompletedLaps = completedLaps;
-                    DataStatus = "Tracking session distance and laps";
+                    DataStatus = "Tracking session distance and time";
                     IsTelemetryActive = true;
 
                     if (shouldDebugTelemetry)
@@ -417,7 +433,6 @@ namespace Affinity
                     if (usesStatefulDerivedDistance && LooksLikeTransientIracingZeroDrop(gameName, data.NewData, completedLaps, trackLengthMeters))
                     {
                         SessionDistanceKm = _lastObservedSessionMeters / MetersPerKilometer;
-                        SessionCompletedLaps = _lastObservedCompletedLaps;
                         DataStatus = "Ignoring transient iRacing telemetry reset";
                         IsTelemetryActive = true;
 
@@ -432,9 +447,7 @@ namespace Affinity
                             CurrentTrackNameWithConfig,
                             CurrentCarModel,
                             CurrentContextDistanceKm,
-                            CurrentContextCompletedLaps,
-                            SessionDistanceKm,
-                            SessionCompletedLaps);
+                            SessionDistanceKm);
                         return;
                     }
 
@@ -474,7 +487,7 @@ namespace Affinity
                     if (looksLikeDerivedLapBoundaryWrap)
                     {
                         SessionDistanceKm = _lastObservedSessionMeters / MetersPerKilometer;
-                        DataStatus = "Waiting for lap counter sync at line";
+                        DataStatus = "Waiting for telemetry sync at line";
                         IsTelemetryActive = true;
 
                         if (shouldDebugTelemetry)
@@ -526,7 +539,7 @@ namespace Affinity
                     if (lapDelta > 0 && shouldIgnoreLapIncrement)
                     {
                         _lastObservedCompletedLaps = completedLaps;
-                        DataStatus = "Ignoring low-speed lap increment at line";
+                        DataStatus = "Ignoring low-speed telemetry transition at line";
                         IsTelemetryActive = true;
 
                         if (shouldDebugTelemetry)
@@ -536,10 +549,8 @@ namespace Affinity
                     }
                     else if (lapDelta > 0)
                     {
-                        bucket.CompletedLaps += lapDelta;
                         bucket.LastUpdatedUtc = DateTime.UtcNow;
                         _lastObservedCompletedLaps = completedLaps;
-                        SessionCompletedLaps = completedLaps;
                         bucketUpdated = true;
 
                         if (shouldDebugTelemetry)
@@ -550,8 +561,7 @@ namespace Affinity
                     else if (completedLaps < _lastObservedCompletedLaps)
                     {
                         _lastObservedCompletedLaps = completedLaps;
-                        SessionCompletedLaps = completedLaps;
-                        DataStatus = "Session lap counter reset detected";
+                        DataStatus = "Session counter reset detected";
                         IsTelemetryActive = true;
 
                         if (shouldDebugTelemetry)
@@ -563,16 +573,11 @@ namespace Affinity
                     if (bucketUpdated)
                     {
                         CurrentContextDistanceKm = bucket.TotalDistanceMeters / MetersPerKilometer;
-                        CurrentContextCompletedLaps = bucket.CompletedLaps;
-                        DataStatus = $"Recorded {CurrentContextDistanceKm:F2} km and {CurrentContextCompletedLaps} laps for {CurrentContext}";
+                        CurrentContextUsedTime = bucket.UsedTime;
+                        DataStatus = $"Recorded {CurrentContextDistanceKm:F2} km for {CurrentContext}";
                         IsTelemetryActive = true;
 
-                        if (_pendingMetersSinceSave >= SaveThresholdMeters || lapDelta > 0)
-                        {
-                            SaveDatabase();
-                            RefreshDistanceSummaries();
-                            _pendingMetersSinceSave = 0.0;
-                        }
+                        SavePendingUsageIfNeeded(force: false, refreshSummaries: true);
                     }
                     else if (shouldDebugTelemetry && ShouldLogTelemetryHeartbeat())
                     {
@@ -582,9 +587,9 @@ namespace Affinity
 
                 TrackBucket currentBucket = GetOrCreateTrackBucket(gameName, carModel, trackName, trackNameWithConfig);
                 CurrentContextDistanceKm = currentBucket.TotalDistanceMeters / MetersPerKilometer;
-                CurrentContextCompletedLaps = currentBucket.CompletedLaps;
+                CurrentContextUsedTime = currentBucket.UsedTime;
                 IsTelemetryActive = true;
-                PublishProperties(pluginManager, gameName, GetDisplayTrackNameWithConfig(gameName, trackNameWithConfig), carModel, CurrentContextDistanceKm, CurrentContextCompletedLaps, SessionDistanceKm, SessionCompletedLaps);
+                PublishProperties(pluginManager, gameName, GetDisplayTrackNameWithConfig(gameName, trackNameWithConfig), carModel, CurrentContextDistanceKm, SessionDistanceKm);
                 _hasLoggedDataError = false;
             }
             catch (Exception ex)
@@ -601,6 +606,7 @@ namespace Affinity
 
         public void End(PluginManager pluginManager)
         {
+            AccumulateActiveSessionTime(DateTime.UtcNow);
             SaveDatabase();
             SaveSettings();
             SimHub.Logging.Current.Info("Affinity - Shutting down");
@@ -658,26 +664,7 @@ namespace Affinity
         internal void RefreshDistanceSummaries()
         {
             AffinitySummarySnapshot snapshot = AffinitySummaryBuilder.BuildSnapshot(_database, Settings.DisplayInMiles, _assettoCorsaTrackMap);
-            TotalDistanceKm = snapshot.TotalDistanceKm;
-
-            string selectedGame = SelectedGameTab?.GameName;
-
-            GameTabs.Clear();
-            foreach (GameDistanceTab tab in snapshot.GameTabs)
-            {
-                GameTabs.Add(tab);
-            }
-
-            SelectedGameTab = GameTabs.FirstOrDefault(tab =>
-                string.Equals(tab.GameName, selectedGame, StringComparison.OrdinalIgnoreCase))
-                ?? GameTabs.FirstOrDefault();
-
-            foreach (GameDistanceTab tab in GameTabs)
-            {
-                EnsureGameDebugLoggingConfigured(tab.GameName);
-            }
-
-            RefreshGameDebugLoggingOptions();
+            ExecuteOnUiThread(() => ApplySummarySnapshot(snapshot));
         }
 
         private AffinitySettings LoadSettings()
@@ -1031,17 +1018,15 @@ namespace Affinity
             return AffinityGameLogic.GetTrackPositionWithinLapMeters(status, trackLengthMeters);
         }
 
-        private void PublishProperties(PluginManager pluginManager, string gameName, string trackName, string carModel, double totalKm, int totalCompletedLaps, double sessionKm, int sessionCompletedLaps)
+        private void PublishProperties(PluginManager pluginManager, string gameName, string trackName, string carModel, double totalKm, double sessionKm)
         {
             pluginManager.SetPropertyValue("Affinity.GameName", GetType(), gameName);
             pluginManager.SetPropertyValue("Affinity.TrackName", GetType(), trackName);
             pluginManager.SetPropertyValue("Affinity.CarModel", GetType(), carModel);
             pluginManager.SetPropertyValue("Affinity.CurrentContextDistanceKm", GetType(), totalKm);
             pluginManager.SetPropertyValue("Affinity.CurrentContextDistanceMiles", GetType(), totalKm * MetersPerKilometer / MetersPerMile);
-            pluginManager.SetPropertyValue("Affinity.CurrentContextCompletedLaps", GetType(), totalCompletedLaps);
             pluginManager.SetPropertyValue("Affinity.SessionDistanceKm", GetType(), sessionKm);
             pluginManager.SetPropertyValue("Affinity.SessionDistanceMiles", GetType(), sessionKm * MetersPerKilometer / MetersPerMile);
-            pluginManager.SetPropertyValue("Affinity.SessionCompletedLaps", GetType(), sessionCompletedLaps);
         }
 
         private void ResetActiveSession(bool clearContext)
@@ -1056,10 +1041,11 @@ namespace Affinity
             _lastObservedSessionMeters = -1.0;
             _lastObservedCompletedLaps = -1;
             _pendingMetersSinceSave = 0.0;
+            _pendingUsedTimeSecondsSinceSave = 0.0;
+            _lastSessionSampleUtc = DateTime.MinValue;
             SessionDistanceKm = 0.0;
-            SessionCompletedLaps = 0;
-            CurrentContextCompletedLaps = clearContext ? 0 : CurrentContextCompletedLaps;
             CurrentContextDistanceKm = clearContext ? 0.0 : CurrentContextDistanceKm;
+            CurrentContextUsedTime = clearContext ? 0.0 : CurrentContextUsedTime;
         }
 
         private static string BuildContextKey(string gameName, string carModel, string trackNameWithConfig)
@@ -1341,6 +1327,99 @@ namespace Affinity
             OnPropertyChanged(nameof(CurrentContextDistanceDisplay));
             OnPropertyChanged(nameof(SessionDistanceDisplay));
             OnPropertyChanged(nameof(TotalDistanceDisplay));
+            OnPropertyChanged(nameof(CurrentContextUsedTimeDisplay));
+            OnPropertyChanged(nameof(TotalUsedTimeDisplay));
+        }
+
+        private bool AccumulateActiveSessionTime(DateTime now)
+        {
+            if (_lastSessionSampleUtc == DateTime.MinValue || string.IsNullOrWhiteSpace(_activeContextKey))
+            {
+                _lastSessionSampleUtc = now;
+                return false;
+            }
+
+            double elapsedSeconds = (now - _lastSessionSampleUtc).TotalSeconds;
+            _lastSessionSampleUtc = now;
+            if (elapsedSeconds <= 0.0 || elapsedSeconds > MaxCountedTelemetryGapSeconds)
+            {
+                return false;
+            }
+
+            TrackBucket bucket = GetOrCreateTrackBucket(CurrentGameName, CurrentCarModel, CurrentTrackName, CurrentTrackNameWithConfig);
+            bucket.UsedTime += elapsedSeconds;
+            bucket.LastUpdatedUtc = now;
+            _pendingUsedTimeSecondsSinceSave += elapsedSeconds;
+            CurrentContextUsedTime = bucket.UsedTime;
+            return true;
+        }
+
+        private void SavePendingUsageIfNeeded(bool force, bool refreshSummaries = false)
+        {
+            if (!force &&
+                _pendingMetersSinceSave < SaveThresholdMeters &&
+                _pendingUsedTimeSecondsSinceSave < SaveThresholdUsedTimeSeconds)
+            {
+                return;
+            }
+
+            SaveDatabase();
+            if (refreshSummaries || _pendingUsedTimeSecondsSinceSave > 0.0)
+            {
+                RefreshDistanceSummaries();
+            }
+
+            _pendingMetersSinceSave = 0.0;
+            _pendingUsedTimeSecondsSinceSave = 0.0;
+        }
+
+        private static string FormatUsedTime(double usedTimeSeconds)
+        {
+            TimeSpan duration = TimeSpan.FromSeconds(Math.Max(0.0, usedTimeSeconds));
+            int totalHours = (int)duration.TotalHours;
+            return $"{totalHours:D2}:{duration.Minutes:D2}:{duration.Seconds:D2}";
+        }
+
+        private void ApplySummarySnapshot(AffinitySummarySnapshot snapshot)
+        {
+            snapshot = snapshot ?? new AffinitySummarySnapshot();
+            TotalDistanceKm = snapshot.TotalDistanceKm;
+            TotalUsedTime = snapshot.TotalUsedTime;
+
+            string selectedGame = SelectedGameTab?.GameName;
+
+            GameTabs.Clear();
+            foreach (GameDistanceTab tab in snapshot.GameTabs)
+            {
+                GameTabs.Add(tab);
+            }
+
+            SelectedGameTab = GameTabs.FirstOrDefault(tab =>
+                string.Equals(tab.GameName, selectedGame, StringComparison.OrdinalIgnoreCase))
+                ?? GameTabs.FirstOrDefault();
+
+            foreach (GameDistanceTab tab in GameTabs)
+            {
+                EnsureGameDebugLoggingConfigured(tab.GameName);
+            }
+
+            RefreshGameDebugLoggingOptions();
+        }
+
+        private static void ExecuteOnUiThread(Action action)
+        {
+            if (action == null)
+            {
+                return;
+            }
+
+            if (Application.Current?.Dispatcher == null || Application.Current.Dispatcher.CheckAccess())
+            {
+                action();
+                return;
+            }
+
+            Application.Current.Dispatcher.BeginInvoke(action);
         }
 
         private static ImageSource CreatePictureIcon()

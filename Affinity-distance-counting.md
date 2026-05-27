@@ -1,6 +1,6 @@
-# Affinity Distance And Lap Counting
+# Affinity Distance And Time Tracking
 
-This note explains how `Affinity` currently counts distance and laps, and where the behavior differs by game.
+This note explains how `Affinity` currently tracks cumulative distance and cumulative time, and where the distance behavior differs by game.
 
 ## Scope
 
@@ -16,22 +16,17 @@ Internally, the active bucket key is:
 
 That means the live context total at the top of the plugin is for the current `game / car / track` combination only.
 
-## Lap Counting
+## What Affinity Stores
 
-Affinity does not infer laps from distance.
+Each active `game / car / track` bucket stores:
 
-It uses the sim-provided `CompletedLaps` value and stores only positive changes:
+- cumulative distance
+- cumulative used time
+- created and last-updated timestamps
 
-- `lapDelta = currentCompletedLaps - lastObservedCompletedLaps`
-- if `lapDelta > 0`, Affinity adds that delta to the current bucket
+Affinity does not store lap totals anymore.
 
-Implications:
-
-- If a sim counts an out lap as a completed lap, Affinity will also count it.
-- If a sim delays or advances its lap increment slightly relative to track position, Affinity follows the sim’s lap counter.
-- Lap totals are cumulative within each `game / car / track` bucket.
-
-## Distance Counting
+## Distance Tracking
 
 Affinity tracks a per-session distance baseline and then adds only positive session-distance deltas into the current bucket.
 
@@ -41,6 +36,23 @@ High-level flow:
 2. Establish a session origin.
 3. On each update, compute `sessionMeters = absoluteSessionMeters - origin`.
 4. Add only positive deltas to the bucket.
+
+## Time Tracking
+
+Affinity also accumulates cumulative used time for the active bucket.
+
+High-level flow:
+
+1. When a valid session starts, Affinity stores the current UTC sample time.
+2. On each later telemetry update, it measures wall-clock elapsed time since the previous sample.
+3. If the elapsed time is positive and small enough to look like normal live telemetry, Affinity adds it to the active bucket's `UsedTime`.
+4. On session changes, context changes, disabled state, or shutdown, pending time is flushed to disk.
+
+Important details:
+
+- Time is cumulative across sessions for each `game / car / track` bucket.
+- Time is inferred from telemetry update cadence, not from `CreatedUtc` / `LastUpdatedUtc`.
+- Very large telemetry gaps are ignored so sleep, pauses, or missing telemetry do not create huge false time jumps.
 
 ## Distance Sources
 
@@ -57,6 +69,8 @@ Derived distance is computed from lap count and track position:
 - `CompletedLaps * TrackLength + TrackPositionWithinLap`
 
 If `TrackPositionMeters` is already larger than one lap length, it is treated as an already-cumulative value.
+
+Even though Affinity no longer stores lap totals, it still uses the sim's lap counter internally when a game's telemetry makes that necessary for distance reconstruction or telemetry guards.
 
 ### SessionOdoMeters
 
@@ -129,12 +143,12 @@ Why:
 
 Extra guards:
 
-- derived lap-wrap guard at the start/finish line
+- derived line-wrap guard at the start/finish line
 
 Why:
 
-- In RaceRoom, `TrackPosition` can wrap to near zero one frame before `CompletedLaps` increments.
-- Without a guard, that can look like a session reset followed by an extra full-lap jump, which double-counts one lap.
+- In RaceRoom, `TrackPosition` can wrap to near zero one frame before the sim's lap counter increments.
+- Without a guard, that can look like a session reset followed by an extra full-lap jump, which double-counts distance.
 
 ### Automobilista 2
 
@@ -152,13 +166,13 @@ Why:
 
 Session origin:
 
-- not based on lap-count origin
-- distance is integrated from forward track-position movement across lap wraps
+- not based on a fixed lap-derived starting point
+- distance is integrated from forward track-position movement across line wraps
 
 Why:
 
-- AMS2 can start partway around the lap in a real pit stall location, and its lap counter can lag relative to line crossings.
-- Affinity therefore tracks forward path traveled from successive track-position updates instead of depending on lap-count timing to build cumulative distance.
+- AMS2 can start partway around the circuit in a real pit stall location, and its lap counter can lag relative to line crossings.
+- Affinity therefore tracks forward path traveled from successive track-position updates instead of depending on lap-counter timing to build cumulative distance.
 
 Extra guards:
 
@@ -181,16 +195,16 @@ Distance source:
 Why:
 
 - iRacing's SimHub `SessionOdo` values were not trustworthy as a per-session distance source.
-- Its `CompletedLaps` semantics can also lag the real line crossing for pit and out-lap scenarios, which makes the generic lap-count-derived formula undercount or reset incorrectly.
+- Its lap semantics can also lag the real line crossing for pit and out-lap scenarios, which makes the generic lap-count-derived formula undercount or reset incorrectly.
 
 Session origin:
 
-- not based on lap-count origin
-- distance is integrated from forward track-position movement across lap wraps
+- not based on a fixed lap-derived starting point
+- distance is integrated from forward track-position movement across line wraps
 
 Why:
 
-- iRacing can start the car partway around the lap at pit exit and may keep `CompletedLaps = 0` across the out lap.
+- iRacing can start the car partway around the circuit at pit exit and may keep `CompletedLaps = 0` across the out lap.
 - Affinity therefore measures actual forward path traveled from successive track-position updates instead of reconstructing session distance from lap count.
 
 Extra guards:
@@ -200,7 +214,7 @@ Extra guards:
 Why:
 
 - iRacing can briefly report `0` laps and `0` position without a real session restart.
-- Without a guard, that transient reset can double-count both distance and laps when telemetry snaps back a frame later.
+- Without a guard, that transient reset can double-count distance when telemetry snaps back a frame later.
 
 ### rFactor 2
 
@@ -215,12 +229,12 @@ Distance source:
 Why:
 
 - rFactor 2's `SessionOdo` did not behave like a trustworthy session-distance source.
-- Its pit and garage exit flow can also oscillate `TrackPosition` around the timing line before the session lap counter settles.
+- Its pit and garage exit flow can also oscillate `TrackPosition` around the timing line before the session counters settle.
 
 Session origin:
 
-- not based on lap-count origin
-- distance is integrated from forward track-position movement across lap wraps
+- not based on a fixed lap-derived starting point
+- distance is integrated from forward track-position movement across line wraps
 
 Why:
 
@@ -230,12 +244,12 @@ Why:
 Extra guards:
 
 - ignores low-speed track-position wraps near the timing line while leaving the pit and garage area
-- ignores near-stationary lap increments at the line
+- ignores near-stationary line transitions at the timing line
 
 Why:
 
-- rFactor 2 can bounce between just-before-line and just-after-line positions at low speed before the real lap flow stabilizes.
-- It can also report an extra completed lap when the car is effectively stopped on the line at the end of a run.
+- rFactor 2 can bounce between just-before-line and just-after-line positions at low speed before the real telemetry flow stabilizes.
+- It can also report extra counter changes when the car is effectively stopped on the line at the end of a run.
 
 ### Other Games
 
@@ -256,7 +270,7 @@ At session start, Affinity records:
 - active bucket key
 - chosen distance source
 - session origin
-- current completed lap count
+- current telemetry sample time
 
 For derived-source sessions that still use the simple lap-count formula, the origin may be intentionally forced to `0`.
 
@@ -272,8 +286,8 @@ Affinity has a few protections for bad telemetry transitions:
   - ignores large initial jumps while stationary
 - session distance reset handling
   - if session distance drops materially, Affinity updates its local baseline instead of adding negative distance
-- derived lap-wrap guard
-  - for derived-source sims, if track position wraps by about one lap before the lap counter increments, Affinity waits for lap-counter sync instead of treating that wrap as a real reset
+- derived line-wrap guard
+  - for derived-source sims, if track position wraps by about one lap before the sim's counters settle, Affinity waits for telemetry sync instead of treating that wrap as a real reset
 
 ## What The UI Shows
 
@@ -283,8 +297,7 @@ Top values are current live context values:
 
 - current total distance for the active `game / car / track`
 - current session distance
-- current total laps for the active `game / car / track`
-- current session laps
+- cumulative total time for the active `game / car / track`
 
 ### Game Tabs
 
@@ -305,9 +318,9 @@ The car table is grouped by car only, across all tracks in that game.
 ## Practical Implications
 
 - Affinity is cumulative, not per-run.
-- If you want to validate one clean test, clear the distance data first.
-- If a sim’s other overlays show `CompletedLaps = 3`, Affinity will also store `3` laps if the lap counter advanced that way.
-- Raw distance and lap semantics can still differ by sim, especially around pit starts and out laps.
+- If you want to validate one clean test, clear the stored data first.
+- Time totals represent observed active telemetry duration for that `game / car / track` context.
+- Raw distance semantics can still differ by sim, especially around pit starts, pit exits, and line-wrap behavior.
 
 ## Debug Logging
 
@@ -331,5 +344,5 @@ It records:
 - `TrackLength`
 - derived session meters
 - session deltas
-- lap deltas
+- counter deltas used by telemetry guards
 - reset and wrap events

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -8,6 +9,8 @@ namespace Affinity
         public List<GameDistanceTab> GameTabs { get; set; } = new List<GameDistanceTab>();
 
         public double TotalDistanceKm { get; set; }
+
+        public double TotalUsedTime { get; set; }
     }
 
     internal static class AffinitySummaryBuilder
@@ -36,7 +39,8 @@ namespace Affinity
                     TotalDistanceDisplay = displayInMiles
                         ? group.Sum(summary => summary.TotalDistanceMiles)
                         : group.Sum(summary => summary.TotalDistanceKm),
-                    TotalCompletedLaps = group.Sum(summary => summary.CompletedLaps),
+                    TotalUsedTime = group.Sum(summary => summary.UsedTime),
+                    TotalUsedTimeDisplay = FormatUsedTime(group.Sum(summary => summary.UsedTime)),
                     TrackSummaries = group
                         .GroupBy(summary => summary.TrackNameWithConfig)
                         .Select(trackGroup => new TrackDistanceSummary
@@ -48,7 +52,8 @@ namespace Affinity
                             DistanceDisplay = displayInMiles
                                 ? trackGroup.Sum(summary => summary.TotalDistanceMiles)
                                 : trackGroup.Sum(summary => summary.TotalDistanceKm),
-                            CompletedLaps = trackGroup.Sum(summary => summary.CompletedLaps)
+                            UsedTime = trackGroup.Sum(summary => summary.UsedTime),
+                            UsedTimeDisplay = FormatUsedTime(trackGroup.Sum(summary => summary.UsedTime))
                         })
                         .OrderByDescending(summary => summary.DistanceDisplay)
                         .ThenBy(summary => summary.TrackName)
@@ -63,7 +68,8 @@ namespace Affinity
                             DistanceDisplay = displayInMiles
                                 ? carGroup.Sum(summary => summary.TotalDistanceMiles)
                                 : carGroup.Sum(summary => summary.TotalDistanceKm),
-                            CompletedLaps = carGroup.Sum(summary => summary.CompletedLaps)
+                            UsedTime = carGroup.Sum(summary => summary.UsedTime),
+                            UsedTimeDisplay = FormatUsedTime(carGroup.Sum(summary => summary.UsedTime))
                         })
                         .OrderByDescending(summary => summary.DistanceDisplay)
                         .ThenBy(summary => summary.CarModel)
@@ -75,7 +81,8 @@ namespace Affinity
             return new AffinitySummarySnapshot
             {
                 GameTabs = tabs,
-                TotalDistanceKm = summaries.Sum(summary => summary.TotalDistanceKm)
+                TotalDistanceKm = summaries.Sum(summary => summary.TotalDistanceKm),
+                TotalUsedTime = summaries.Sum(summary => summary.UsedTime)
             };
         }
 
@@ -116,12 +123,19 @@ namespace Affinity
                             TrackNameWithConfig = track.TrackNameWithConfig,
                             TotalDistanceKm = track.TotalDistanceMeters / MetersPerKilometer,
                             TotalDistanceMiles = track.TotalDistanceMeters / MetersPerMile,
-                            CompletedLaps = track.CompletedLaps,
+                            UsedTime = track.UsedTime,
                             LastUpdatedUtc = track.LastUpdatedUtc
                         };
                     }
                 }
             }
+        }
+
+        private static string FormatUsedTime(double usedTimeSeconds)
+        {
+            TimeSpan duration = TimeSpan.FromSeconds(System.Math.Max(0.0, usedTimeSeconds));
+            int totalHours = (int)duration.TotalHours;
+            return $"{totalHours:D2}:{duration.Minutes:D2}:{duration.Seconds:D2}";
         }
     }
 }

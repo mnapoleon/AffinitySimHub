@@ -28,14 +28,14 @@ namespace Affinity.Tests
                                         TrackName = "monza",
                                         TrackNameWithConfig = "monza_gp",
                                         TotalDistanceMeters = 5000.0,
-                                        CompletedLaps = 2
+                                        UsedTime = 600.0
                                     },
                                     ["monza_short"] = new TrackBucket
                                     {
                                         TrackName = "monza",
                                         TrackNameWithConfig = "monza_short",
                                         TotalDistanceMeters = 2000.0,
-                                        CompletedLaps = 1
+                                        UsedTime = 300.0
                                     }
                                 }
                             },
@@ -48,7 +48,7 @@ namespace Affinity.Tests
                                         TrackName = "spa",
                                         TrackNameWithConfig = "spa",
                                         TotalDistanceMeters = 10000.0,
-                                        CompletedLaps = 4
+                                        UsedTime = 1200.0
                                     }
                                 }
                             }
@@ -67,7 +67,7 @@ namespace Affinity.Tests
                                         TrackName = "lime_rock",
                                         TrackNameWithConfig = "lime_rock",
                                         TotalDistanceMeters = 1609.344,
-                                        CompletedLaps = 1
+                                        UsedTime = 180.0
                                     }
                                 }
                             }
@@ -84,14 +84,16 @@ namespace Affinity.Tests
             AffinitySummarySnapshot snapshot = AffinitySummaryBuilder.BuildSnapshot(database, displayInMiles: false, trackMap);
 
             Assert.AreEqual(18.609344, snapshot.TotalDistanceKm, 0.000001);
+            Assert.AreEqual(2280.0, snapshot.TotalUsedTime, 0.000001);
             Assert.AreEqual(2, snapshot.GameTabs.Count);
 
             GameDistanceTab assettoTab = snapshot.GameTabs.Single(tab => tab.GameName == "Assetto Corsa");
             Assert.AreEqual(17.0, assettoTab.TotalDistanceKm, 0.000001);
-            Assert.AreEqual(7, assettoTab.TotalCompletedLaps);
+            Assert.AreEqual("00:35:00", assettoTab.TotalUsedTimeDisplay);
             Assert.AreEqual("spa", assettoTab.TrackSummaries[0].TrackDisplayName);
             Assert.AreEqual("Monza GP", assettoTab.TrackSummaries[1].TrackDisplayName);
             Assert.AreEqual("Ferrari 488 GT3", assettoTab.CarSummaries[0].CarModel);
+            Assert.AreEqual("00:20:00", assettoTab.TrackSummaries[0].UsedTimeDisplay);
         }
 
         [TestMethod]
@@ -114,7 +116,7 @@ namespace Affinity.Tests
                                         TrackName = "lime_rock",
                                         TrackNameWithConfig = "lime_rock",
                                         TotalDistanceMeters = 1609.344,
-                                        CompletedLaps = 1
+                                        UsedTime = 90.0
                                     }
                                 }
                             }
@@ -129,6 +131,7 @@ namespace Affinity.Tests
             Assert.AreEqual(1.0, onlyTab.TotalDistanceDisplay, 0.000001);
             Assert.AreEqual(1.0, onlyTab.TrackSummaries.Single().DistanceDisplay, 0.000001);
             Assert.AreEqual(1.0, onlyTab.CarSummaries.Single().DistanceDisplay, 0.000001);
+            Assert.AreEqual("00:01:30", onlyTab.TotalUsedTimeDisplay);
         }
     }
 }

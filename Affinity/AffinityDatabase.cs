@@ -102,6 +102,10 @@ namespace Affinity
 
         public string TotalUsedTimeDisplay { get; set; } = string.Empty;
 
+        public TrackDistanceSummary TopTrackSummary { get; set; }
+
+        public CarDistanceSummary TopCarSummary { get; set; }
+
         public List<TrackDistanceSummary> TrackSummaries { get; set; } = new List<TrackDistanceSummary>();
 
         public List<CarDistanceSummary> CarSummaries { get; set; } = new List<CarDistanceSummary>();

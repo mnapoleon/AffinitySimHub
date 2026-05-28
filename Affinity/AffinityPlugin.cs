@@ -66,6 +66,7 @@ namespace Affinity
         private double _totalDistanceKm;
         private double _currentContextUsedTime;
         private double _totalUsedTime;
+        private GameDistanceTab _featuredGameTab;
         private bool _isTelemetryActive;
         private GameDistanceTab _selectedGameTab;
         private Guid _activeSessionId = Guid.Empty;
@@ -97,6 +98,21 @@ namespace Affinity
         public ObservableCollection<GameDistanceTab> GameTabs { get; } = new ObservableCollection<GameDistanceTab>();
 
         public ObservableCollection<GameDebugLoggingOption> GameDebugLoggingOptions { get; } = new ObservableCollection<GameDebugLoggingOption>();
+
+        public GameDistanceTab FeaturedGameTab
+        {
+            get => _featuredGameTab;
+            private set
+            {
+                if (ReferenceEquals(_featuredGameTab, value))
+                {
+                    return;
+                }
+
+                _featuredGameTab = value;
+                OnPropertyChanged();
+            }
+        }
 
         public string CurrentContext => $"{CurrentGameName} / {CurrentCarModel} / {GetDisplayTrackNameWithConfig(CurrentGameName, CurrentTrackNameWithConfig)}";
 
@@ -1385,6 +1401,11 @@ namespace Affinity
             snapshot = snapshot ?? new AffinitySummarySnapshot();
             TotalDistanceKm = snapshot.TotalDistanceKm;
             TotalUsedTime = snapshot.TotalUsedTime;
+            FeaturedGameTab = snapshot.GameTabs
+                .OrderByDescending(tab => tab.TotalDistanceKm)
+                .ThenByDescending(tab => tab.TotalUsedTime)
+                .ThenBy(tab => tab.GameName)
+                .FirstOrDefault();
 
             string selectedGame = SelectedGameTab?.GameName;
 

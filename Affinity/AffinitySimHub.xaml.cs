@@ -3,11 +3,11 @@ using System.Windows.Controls;
 
 namespace Affinity
 {
-    public partial class SettingsControl : UserControl
+    public partial class AffinitySimHub : UserControl
     {
         private readonly AffinityPlugin _plugin;
 
-        public SettingsControl(AffinityPlugin plugin)
+        public AffinitySimHub(AffinityPlugin plugin)
         {
             _plugin = plugin;
             InitializeComponent();

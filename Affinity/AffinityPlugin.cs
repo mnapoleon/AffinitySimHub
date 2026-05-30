@@ -84,8 +84,15 @@ namespace Affinity
         private double _pendingUsedTimeSecondsSinceSave;
         private DateTime _lastTelemetryDebugLogUtc = DateTime.MinValue;
         private DateTime _lastSessionSampleUtc = DateTime.MinValue;
+        private readonly AffinityOverviewTab _overviewTab = new AffinityOverviewTab();
+        private readonly AffinitySettingsTab _settingsTab = new AffinitySettingsTab();
 
         public event PropertyChangedEventHandler PropertyChanged;
+
+        public AffinityPlugin()
+        {
+            RebuildTopLevelTabs();
+        }
 
         public PluginManager PluginManager { get; set; }
 
@@ -98,6 +105,8 @@ namespace Affinity
         public string DatabasePath => _databasePath;
 
         public ObservableCollection<GameDistanceTab> GameTabs { get; } = new ObservableCollection<GameDistanceTab>();
+
+        public ObservableCollection<object> TopLevelTabs { get; } = new ObservableCollection<object>();
 
         public ObservableCollection<GameDebugLoggingOption> GameDebugLoggingOptions { get; } = new ObservableCollection<GameDebugLoggingOption>();
 
@@ -662,7 +671,7 @@ namespace Affinity
 
         public Control GetWPFSettingsControl(PluginManager pluginManager)
         {
-            return new SettingsControl(this)
+            return new AffinitySimHub(this)
             {
                 DataContext = this
             };
@@ -1445,6 +1454,8 @@ namespace Affinity
                 GameTabs.Add(tab);
             }
 
+            RebuildTopLevelTabs();
+
             SelectedGameTab = GameTabs.FirstOrDefault(tab =>
                 string.Equals(tab.GameName, selectedGame, StringComparison.OrdinalIgnoreCase))
                 ?? GameTabs.FirstOrDefault();
@@ -1455,6 +1466,18 @@ namespace Affinity
             }
 
             RefreshGameDebugLoggingOptions();
+        }
+
+        private void RebuildTopLevelTabs()
+        {
+            TopLevelTabs.Clear();
+            TopLevelTabs.Add(_overviewTab);
+            foreach (GameDistanceTab tab in GameTabs)
+            {
+                TopLevelTabs.Add(tab);
+            }
+
+            TopLevelTabs.Add(_settingsTab);
         }
 
         private static void ExecuteOnUiThread(Action action)

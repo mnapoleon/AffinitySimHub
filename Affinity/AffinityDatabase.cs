@@ -94,6 +94,8 @@ namespace Affinity
 
     public class GameDistanceTab
     {
+        public string Header => GameName;
+
         public string GameName { get; set; } = string.Empty;
 
         public double TotalDistanceKm { get; set; }
@@ -118,5 +120,15 @@ namespace Affinity
         {
             return GameName;
         }
+    }
+
+    public class AffinityOverviewTab
+    {
+        public string Header => "Affinity";
+    }
+
+    public class AffinitySettingsTab
+    {
+        public string Header => "Settings";
     }
 }

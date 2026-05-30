@@ -67,6 +67,8 @@ namespace Affinity
         private double _currentContextUsedTime;
         private double _totalUsedTime;
         private GameDistanceTab _featuredGameTab;
+        private TrackDistanceSummary _featuredTrackSummary;
+        private CarDistanceSummary _featuredCarSummary;
         private bool _isTelemetryActive;
         private GameDistanceTab _selectedGameTab;
         private Guid _activeSessionId = Guid.Empty;
@@ -110,6 +112,36 @@ namespace Affinity
                 }
 
                 _featuredGameTab = value;
+                OnPropertyChanged();
+            }
+        }
+
+        public TrackDistanceSummary FeaturedTrackSummary
+        {
+            get => _featuredTrackSummary;
+            private set
+            {
+                if (ReferenceEquals(_featuredTrackSummary, value))
+                {
+                    return;
+                }
+
+                _featuredTrackSummary = value;
+                OnPropertyChanged();
+            }
+        }
+
+        public CarDistanceSummary FeaturedCarSummary
+        {
+            get => _featuredCarSummary;
+            private set
+            {
+                if (ReferenceEquals(_featuredCarSummary, value))
+                {
+                    return;
+                }
+
+                _featuredCarSummary = value;
                 OnPropertyChanged();
             }
         }
@@ -1401,11 +1433,9 @@ namespace Affinity
             snapshot = snapshot ?? new AffinitySummarySnapshot();
             TotalDistanceKm = snapshot.TotalDistanceKm;
             TotalUsedTime = snapshot.TotalUsedTime;
-            FeaturedGameTab = snapshot.GameTabs
-                .OrderByDescending(tab => tab.TotalDistanceKm)
-                .ThenByDescending(tab => tab.TotalUsedTime)
-                .ThenBy(tab => tab.GameName)
-                .FirstOrDefault();
+            FeaturedGameTab = snapshot.FeaturedGameTab;
+            FeaturedTrackSummary = snapshot.FeaturedTrackSummary;
+            FeaturedCarSummary = snapshot.FeaturedCarSummary;
 
             string selectedGame = SelectedGameTab?.GameName;
 

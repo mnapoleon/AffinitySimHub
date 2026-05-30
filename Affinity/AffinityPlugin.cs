@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Windows;
@@ -33,12 +34,12 @@ namespace Affinity
         private const string SqliteDataFileName = "Affinity.distance.db";
         private const string LegacyDataFileName = "Affinity.distance.json";
         private const string DebugLogFileName = "Affinity.distance.debug.log";
-        private const string Version = "0.1.0";
         private const double MetersPerKilometer = 1000.0;
         private const double MetersPerMile = 1609.344;
         private const double SaveThresholdMeters = 50.0;
         private const double SaveThresholdUsedTimeSeconds = 30.0;
         private const double MaxCountedTelemetryGapSeconds = 5.0;
+        private static readonly string Version = ResolvePluginVersion();
         private static readonly KeyValuePair<string, string>[] DefaultGameDebugLoggingEntries =
         {
             new KeyValuePair<string, string>("assettocorsa", "Assetto Corsa"),
@@ -1611,6 +1612,22 @@ namespace Affinity
             image.EndInit();
             image.Freeze();
             return image;
+        }
+
+        private static string ResolvePluginVersion()
+        {
+            Assembly assembly = typeof(AffinityPlugin).Assembly;
+            AssemblyInformationalVersionAttribute informationalVersion = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>();
+            if (!string.IsNullOrWhiteSpace(informationalVersion?.InformationalVersion))
+            {
+                string version = informationalVersion.InformationalVersion.Trim();
+                int plusIndex = version.IndexOf('+');
+                return plusIndex >= 0
+                    ? version.Substring(0, plusIndex)
+                    : version;
+            }
+
+            return assembly.GetName().Version?.ToString() ?? "0.0.0";
         }
     }
 }

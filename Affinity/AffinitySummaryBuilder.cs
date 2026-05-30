@@ -29,7 +29,15 @@ namespace Affinity
             bool displayInMiles,
             IReadOnlyDictionary<string, string> assettoCorsaTrackMap)
         {
-            List<DistanceSummary> summaries = BuildDistanceSummaries(database)
+            return BuildSnapshot(BuildDistanceSummaries(database), displayInMiles, assettoCorsaTrackMap);
+        }
+
+        public static AffinitySummarySnapshot BuildSnapshot(
+            IEnumerable<DistanceSummary> distanceSummaries,
+            bool displayInMiles,
+            IReadOnlyDictionary<string, string> assettoCorsaTrackMap)
+        {
+            List<DistanceSummary> summaries = (distanceSummaries ?? Enumerable.Empty<DistanceSummary>())
                 .OrderBy(summary => summary.GameName)
                 .ThenBy(summary => summary.CarModel)
                 .ThenBy(summary => summary.TrackNameWithConfig)

@@ -97,7 +97,9 @@ jobs:
           }
 
           $nextTag = "v$major.$minor.$patch"
+          $nextVersion = "$major.$minor.$patch"
           "tag=$nextTag" >> $env:GITHUB_OUTPUT
+          "version=$nextVersion" >> $env:GITHUB_OUTPUT
           "previous_tag=$previousTag" >> $env:GITHUB_OUTPUT
 
       - name: Build release notes
@@ -145,7 +147,7 @@ jobs:
 
       - name: Build plugin
         shell: pwsh
-        run: dotnet build .\Affinity\Affinity.csproj --configuration Release --no-restore /p:UseSimHubSdkStubs=true /p:SimHubInstallPath=C:\does-not-exist
+        run: dotnet build .\Affinity\Affinity.csproj --configuration Release --no-restore /p:UseSimHubSdkStubs=true /p:SimHubInstallPath=C:\does-not-exist /p:Version=${{ steps.version.outputs.version }} /p:InformationalVersion=${{ steps.version.outputs.version }}
 
       - name: Package release asset
         id: package

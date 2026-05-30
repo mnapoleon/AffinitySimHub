@@ -12,16 +12,24 @@
         <styles:SHTabControl>
             <styles:SHTabItem Header="Data">
                 <StackPanel>
-                    <styles:SHSection Title="Stored Distance">
+                    <styles:SHSection>
                         <StackPanel Margin="12">
                             <Grid Margin="0,0,0,12">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="24" />
-                                    <ColumnDefinition Width="320" />
+                                    <ColumnDefinition Width="16" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="16" />
+                                    <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="16" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
 
                                 <Border Grid.Column="0"
+                                        Grid.Row="0"
                                         Padding="16,14"
                                         Background="#252525"
                                         BorderBrush="#2CB7F0"
@@ -56,52 +64,86 @@
                                     </StackPanel>
                                 </Border>
 
-                                <StackPanel Grid.Column="2"
-                                            HorizontalAlignment="Right">
-                                    <TextBlock HorizontalAlignment="Right"
-                                               FontSize="12"
-                                               Foreground="#B8B8B8"
-                                               Text="{Binding TotalUsedTimeDisplay, StringFormat=All games total time: {0}}" />
-                                    <StackPanel Margin="0,2,0,10"
-                                                HorizontalAlignment="Right"
-                                                Orientation="Horizontal">
-                                        <TextBlock FontSize="12"
-                                                   Foreground="#B8B8B8"
-                                                   Text="{Binding TotalDistanceDisplay, StringFormat=All games total distance: {0:F2}}" />
-                                        <TextBlock Margin="4,0,0,0"
+                                <Border Grid.Column="2"
+                                        Grid.Row="0"
+                                        Padding="16,14"
+                                        Background="#252525"
+                                        BorderBrush="#2CB7F0"
+                                        BorderThickness="1"
+                                        CornerRadius="6">
+                                    <StackPanel>
+                                        <TextBlock Foreground="#89D9FF"
                                                    FontSize="12"
-                                                   Foreground="#B8B8B8"
-                                                   Text="{Binding DistanceUnitLabel}" />
+                                                   FontWeight="SemiBold"
+                                                   Text="Most distance on track" />
+                                        <TextBlock Margin="0,8,0,0"
+                                                   FontSize="24"
+                                                   FontWeight="Bold"
+                                                   Text="{Binding FeaturedTrackSummary.TrackDisplayName, TargetNullValue=No track data yet}" />
+                                        <TextBlock Margin="0,4,0,0"
+                                                   FontSize="13"
+                                                   Foreground="#D8D8D8"
+                                                   Text="{Binding FeaturedTrackSummary.GameName, StringFormat=Game: {0}, TargetNullValue=Game: n/a}" />
+                                        <StackPanel Margin="0,10,0,0"
+                                                    Orientation="Horizontal">
+                                            <TextBlock VerticalAlignment="Bottom"
+                                                       FontSize="22"
+                                                       FontWeight="Bold"
+                                                       Text="{Binding FeaturedTrackSummary.DistanceDisplay, StringFormat=F2, TargetNullValue=0.00}" />
+                                            <TextBlock Margin="6,0,0,0"
+                                                       VerticalAlignment="Bottom"
+                                                       FontSize="13"
+                                                       FontWeight="SemiBold"
+                                                       Text="{Binding DistanceUnitLabel}" />
+                                        </StackPanel>
+                                        <TextBlock Margin="0,6,0,0"
+                                                   FontSize="22"
+                                                   FontWeight="Bold"
+                                                   Foreground="#D8D8D8"
+                                                   Text="{Binding FeaturedTrackSummary.UsedTimeDisplay, StringFormat=Time driven: {0}, TargetNullValue=Time driven: 00:00:00}" />
                                     </StackPanel>
+                                </Border>
 
-                                    <ItemsControl HorizontalAlignment="Right"
-                                                  ItemsSource="{Binding GameTabs}">
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate>
-                                                <StackPanel Margin="0,2,0,0"
-                                                            HorizontalAlignment="Right"
-                                                            Orientation="Horizontal">
-                                                    <TextBlock VerticalAlignment="Center"
-                                                               FontSize="12"
-                                                               Text="{Binding GameName}" />
-                                                    <TextBlock Margin="8,0,0,0"
-                                                               VerticalAlignment="Center"
-                                                               FontSize="12"
-                                                               FontWeight="SemiBold"
-                                                               Text="{Binding TotalDistanceDisplay, StringFormat=F2}" />
-                                                    <TextBlock Margin="4,0,0,0"
-                                                               VerticalAlignment="Center"
-                                                               FontSize="12"
-                                                               Text="{Binding DataContext.DistanceUnitLabel, ElementName=Root}" />
-                                                    <TextBlock Margin="8,0,0,0"
-                                                               VerticalAlignment="Center"
-                                                               FontSize="12"
-                                                               Text="{Binding TotalUsedTimeDisplay}" />
-                                                </StackPanel>
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
-                                </StackPanel>
+                                <Border Grid.Column="4"
+                                        Grid.Row="0"
+                                        Padding="16,14"
+                                        Background="#252525"
+                                        BorderBrush="#2CB7F0"
+                                        BorderThickness="1"
+                                        CornerRadius="6">
+                                    <StackPanel>
+                                        <TextBlock Foreground="#89D9FF"
+                                                   FontSize="12"
+                                                   FontWeight="SemiBold"
+                                                   Text="Most distance in car" />
+                                        <TextBlock Margin="0,8,0,0"
+                                                   FontSize="24"
+                                                   FontWeight="Bold"
+                                                   Text="{Binding FeaturedCarSummary.CarModel, TargetNullValue=No car data yet}" />
+                                        <TextBlock Margin="0,4,0,0"
+                                                   FontSize="13"
+                                                   Foreground="#D8D8D8"
+                                                   Text="{Binding FeaturedCarSummary.GameName, StringFormat=Game: {0}, TargetNullValue=Game: n/a}" />
+                                        <StackPanel Margin="0,10,0,0"
+                                                    Orientation="Horizontal">
+                                            <TextBlock VerticalAlignment="Bottom"
+                                                       FontSize="22"
+                                                       FontWeight="Bold"
+                                                       Text="{Binding FeaturedCarSummary.DistanceDisplay, StringFormat=F2, TargetNullValue=0.00}" />
+                                            <TextBlock Margin="6,0,0,0"
+                                                       VerticalAlignment="Bottom"
+                                                       FontSize="13"
+                                                       FontWeight="SemiBold"
+                                                       Text="{Binding DistanceUnitLabel}" />
+                                        </StackPanel>
+                                        <TextBlock Margin="0,6,0,0"
+                                                   FontSize="22"
+                                                   FontWeight="Bold"
+                                                   Foreground="#D8D8D8"
+                                                   Text="{Binding FeaturedCarSummary.UsedTimeDisplay, StringFormat=Time driven: {0}, TargetNullValue=Time driven: 00:00:00}" />
+                                    </StackPanel>
+                                </Border>
+
                             </Grid>
 
                             <styles:SHTabControl ItemsSource="{Binding GameTabs}"
@@ -250,19 +292,86 @@
                         </StackPanel>
                     </styles:SHSection>
 
-                    <StackPanel Margin="12,0,12,0" HorizontalAlignment="Right">
-                        <TextBlock TextAlignment="Right"
-                                   Foreground="{Binding StatusSectionForeground}"
-                                   Text="{Binding DataStatus}" />
-                        <TextBlock Margin="0,4,0,0"
-                                   TextAlignment="Right"
-                                   Foreground="{Binding StatusSectionForeground}"
-                                   Text="{Binding CurrentContext}" />
-                        <TextBlock Margin="0,4,0,0"
-                                   TextAlignment="Right"
-                                   Foreground="{Binding StatusSectionForeground}"
-                                   Text="{Binding DatabasePath}" />
-                    </StackPanel>
+                    <Grid Margin="12,0,12,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="24" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Grid.Column="0"
+                                    HorizontalAlignment="Left">
+                            <TextBlock FontSize="12"
+                                       Foreground="#B8B8B8"
+                                       Text="{Binding TotalUsedTimeDisplay, StringFormat=All games total time: {0}}" />
+                            <StackPanel Margin="0,2,0,10"
+                                        Orientation="Horizontal">
+                                <TextBlock FontSize="12"
+                                           Foreground="#B8B8B8"
+                                           Text="{Binding TotalDistanceDisplay, StringFormat=All games total distance: {0:F2}}" />
+                                <TextBlock Margin="4,0,0,0"
+                                           FontSize="12"
+                                           Foreground="#B8B8B8"
+                                           Text="{Binding DistanceUnitLabel}" />
+                            </StackPanel>
+
+                            <ItemsControl ItemsSource="{Binding GameTabs}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Margin="0,2,0,0">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="130" />
+                                                <ColumnDefinition Width="70" />
+                                                <ColumnDefinition Width="40" />
+                                                <ColumnDefinition Width="75" />
+                                            </Grid.ColumnDefinitions>
+
+                                            <TextBlock Grid.Column="0"
+                                                       VerticalAlignment="Center"
+                                                       FontSize="12"
+                                                       Foreground="#B8B8B8"
+                                                       Text="{Binding GameName}" />
+                                            <TextBlock Grid.Column="1"
+                                                       Margin="8,0,0,0"
+                                                       VerticalAlignment="Center"
+                                                       HorizontalAlignment="Right"
+                                                       FontSize="12"
+                                                       FontWeight="SemiBold"
+                                                       Foreground="#B8B8B8"
+                                                       Text="{Binding TotalDistanceDisplay, StringFormat=F2}" />
+                                            <TextBlock Grid.Column="2"
+                                                       Margin="8,0,0,0"
+                                                       VerticalAlignment="Center"
+                                                       FontSize="12"
+                                                       Foreground="#B8B8B8"
+                                                       Text="{Binding DataContext.DistanceUnitLabel, ElementName=Root}" />
+                                            <TextBlock Grid.Column="3"
+                                                       Margin="8,0,0,0"
+                                                       VerticalAlignment="Center"
+                                                       HorizontalAlignment="Right"
+                                                       FontSize="12"
+                                                       Foreground="#B8B8B8"
+                                                       Text="{Binding TotalUsedTimeDisplay}" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="2" HorizontalAlignment="Right">
+                            <TextBlock TextAlignment="Right"
+                                       Foreground="{Binding StatusSectionForeground}"
+                                       Text="{Binding DataStatus}" />
+                            <TextBlock Margin="0,4,0,0"
+                                       TextAlignment="Right"
+                                       Foreground="{Binding StatusSectionForeground}"
+                                       Text="{Binding CurrentContext}" />
+                            <TextBlock Margin="0,4,0,0"
+                                       TextAlignment="Right"
+                                       Foreground="{Binding StatusSectionForeground}"
+                                       Text="{Binding DatabasePath}" />
+                        </StackPanel>
+                    </Grid>
                 </StackPanel>
             </styles:SHTabItem>
 

@@ -1,17 +1,23 @@
 name: Release
 
 on:
-  pull_request:
-    types:
-      - closed
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Semantic version bump type
+        required: true
+        default: patch
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
 
 permissions:
   contents: write
-  pull-requests: read
 
 jobs:
   tag-and-release:
-    if: github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'main'
     runs-on: windows-latest
 
     steps:
@@ -19,35 +25,31 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ github.event.pull_request.merge_commit_sha }}
+          ref: ${{ github.ref }}
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 9.0.x
 
-      - name: Resolve merged PR and bump type
-        id: pr
+      - name: Resolve release metadata
+        id: release_meta
         shell: pwsh
         run: |
-          $title = '${{ github.event.pull_request.title }}'.Trim()
-          $match = [regex]::Match($title, '^(major|minor|patch):\s+(.+)$', [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
-
-          if (-not $match.Success) {
-            throw "Merged PR title '$title' does not match the required semver prefix format."
+          $bump = '${{ inputs.bump }}'.Trim().ToLowerInvariant()
+          if ($bump -notin @('patch', 'minor', 'major')) {
+            throw "Unsupported bump type: $bump"
           }
 
-          "should_release=true" >> $env:GITHUB_OUTPUT
-          "pull_number=${{ github.event.pull_request.number }}" >> $env:GITHUB_OUTPUT
-          "pull_title=$title" >> $env:GITHUB_OUTPUT
-          "bump=$($match.Groups[1].Value.ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+          "bump=$bump" >> $env:GITHUB_OUTPUT
+          "target_ref=${{ github.ref_name }}" >> $env:GITHUB_OUTPUT
+          "target_sha=${{ github.sha }}" >> $env:GITHUB_OUTPUT
 
       - name: Compute next semantic version
         id: version
-        if: steps.pr.outputs.should_release == 'true'
         shell: pwsh
         run: |
-          $bump = '${{ steps.pr.outputs.bump }}'
+          $bump = '${{ steps.release_meta.outputs.bump }}'
           $tagNames = git tag --list | Where-Object { $_ -match '^v(\d+)\.(\d+)\.(\d+)$' }
 
           $versions = foreach ($tag in $tagNames) {
@@ -100,21 +102,20 @@ jobs:
 
       - name: Build release notes
         id: notes
-        if: steps.pr.outputs.should_release == 'true'
         shell: pwsh
         run: |
           $previousTag = '${{ steps.version.outputs.previous_tag }}'
           $nextTag = '${{ steps.version.outputs.tag }}'
-          $pullNumber = '${{ steps.pr.outputs.pull_number }}'
-          $pullTitle = '${{ steps.pr.outputs.pull_title }}'
-          $bump = '${{ steps.pr.outputs.bump }}'
+          $targetRef = '${{ steps.release_meta.outputs.target_ref }}'
+          $targetSha = '${{ steps.release_meta.outputs.target_sha }}'
+          $bump = '${{ steps.release_meta.outputs.bump }}'
           $notesPath = Join-Path $env:RUNNER_TEMP 'release-notes.md'
 
           if ([string]::IsNullOrWhiteSpace($previousTag)) {
-            $range = (git rev-list --max-parents=0 HEAD | Select-Object -First 1) + '..' + '${{ github.event.pull_request.merge_commit_sha }}'
+            $range = (git rev-list --max-parents=0 HEAD | Select-Object -First 1) + '..' + $targetSha
             $previousLabel = 'Initial release'
           } else {
-            $range = "$previousTag..${{ github.event.pull_request.merge_commit_sha }}"
+            $range = "$previousTag..$targetSha"
             $previousLabel = $previousTag
           }
 
@@ -128,7 +129,8 @@ jobs:
             ""
             "## Release Summary"
             "- Semver bump: $bump"
-            "- Released from PR #$($pullNumber): $pullTitle"
+            "- Released from ref: $targetRef"
+            "- Target commit: $targetSha"
             "- Previous release: $previousLabel"
             ""
             "## Changes Since Last Release"
@@ -138,18 +140,15 @@ jobs:
           "notes_path=$notesPath" >> $env:GITHUB_OUTPUT
 
       - name: Restore
-        if: steps.pr.outputs.should_release == 'true'
         shell: pwsh
         run: dotnet restore .\Affinity.sln /p:UseSimHubSdkStubs=true
 
       - name: Build plugin
-        if: steps.pr.outputs.should_release == 'true'
         shell: pwsh
         run: dotnet build .\Affinity\Affinity.csproj --configuration Release --no-restore /p:UseSimHubSdkStubs=true /p:SimHubInstallPath=C:\does-not-exist
 
       - name: Package release asset
         id: package
-        if: steps.pr.outputs.should_release == 'true'
         shell: pwsh
         run: |
           $tag = '${{ steps.version.outputs.tag }}'
@@ -182,7 +181,6 @@ jobs:
 
       - name: Create tag and GitHub release
         id: release
-        if: steps.pr.outputs.should_release == 'true'
         uses: actions/github-script@v7
         env:
           NEXT_TAG: ${{ steps.version.outputs.tag }}
@@ -218,14 +216,14 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               ref: `refs/tags/${tag}`,
-              sha: "${{ github.event.pull_request.merge_commit_sha }}",
+              sha: "${{ steps.release_meta.outputs.target_sha }}",
             });
 
             const release = await github.rest.repos.createRelease({
               owner: context.repo.owner,
               repo: context.repo.repo,
               tag_name: tag,
-              target_commitish: "${{ github.event.pull_request.merge_commit_sha }}",
+              target_commitish: "${{ steps.release_meta.outputs.target_sha }}",
               name: tag,
               body: releaseBody,
             });
@@ -234,7 +232,6 @@ jobs:
             core.notice(`Created ${tag} and published a GitHub release.`);
 
       - name: Upload plugin asset
-        if: steps.pr.outputs.should_release == 'true'
         uses: actions/github-script@v7
         env:
           RELEASE_ID: ${{ steps.release.outputs.release_id }}

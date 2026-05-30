@@ -58,6 +58,8 @@ namespace Affinity
 
     public class TrackDistanceSummary
     {
+        public string GameName { get; set; } = string.Empty;
+
         public string TrackName { get; set; } = string.Empty;
 
         public string TrackDisplayName { get; set; } = string.Empty;
@@ -75,6 +77,8 @@ namespace Affinity
 
     public class CarDistanceSummary
     {
+        public string GameName { get; set; } = string.Empty;
+
         public string CarModel { get; set; } = string.Empty;
 
         public double DistanceKm { get; set; }

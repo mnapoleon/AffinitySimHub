@@ -86,6 +86,11 @@ namespace Affinity.Tests
             Assert.AreEqual(18.609344, snapshot.TotalDistanceKm, 0.000001);
             Assert.AreEqual(2280.0, snapshot.TotalUsedTime, 0.000001);
             Assert.AreEqual(2, snapshot.GameTabs.Count);
+            Assert.AreEqual("Assetto Corsa", snapshot.FeaturedGameTab.GameName);
+            Assert.AreEqual("spa", snapshot.FeaturedTrackSummary.TrackDisplayName);
+            Assert.AreEqual("Assetto Corsa", snapshot.FeaturedTrackSummary.GameName);
+            Assert.AreEqual("Ferrari 488 GT3", snapshot.FeaturedCarSummary.CarModel);
+            Assert.AreEqual("Assetto Corsa", snapshot.FeaturedCarSummary.GameName);
 
             GameDistanceTab assettoTab = snapshot.GameTabs.Single(tab => tab.GameName == "Assetto Corsa");
             Assert.AreEqual(17.0, assettoTab.TotalDistanceKm, 0.000001);
@@ -132,6 +137,8 @@ namespace Affinity.Tests
             Assert.AreEqual(1.0, onlyTab.TrackSummaries.Single().DistanceDisplay, 0.000001);
             Assert.AreEqual(1.0, onlyTab.CarSummaries.Single().DistanceDisplay, 0.000001);
             Assert.AreEqual("00:01:30", onlyTab.TotalUsedTimeDisplay);
+            Assert.AreEqual("iRacing", snapshot.FeaturedTrackSummary.GameName);
+            Assert.AreEqual("iRacing", snapshot.FeaturedCarSummary.GameName);
         }
     }
 }

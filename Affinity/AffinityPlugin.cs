@@ -113,6 +113,8 @@ namespace Affinity
 
         public ObservableCollection<GameDistanceTab> GameTabs { get; } = new ObservableCollection<GameDistanceTab>();
 
+        public ObservableCollection<AffinityTopSummarySection> TopSummarySections { get; } = new ObservableCollection<AffinityTopSummarySection>();
+
         public ObservableCollection<object> TopLevelTabs { get; } = new ObservableCollection<object>();
 
         public ObservableCollection<GameDebugLoggingOption> GameDebugLoggingOptions { get; } = new ObservableCollection<GameDebugLoggingOption>();
@@ -742,7 +744,10 @@ namespace Affinity
         internal void RefreshDistanceSummaries()
         {
             AffinitySummarySnapshot snapshot = AffinitySummaryBuilder.BuildSnapshot(_database, Settings.DisplayInMiles, _assettoCorsaTrackMap);
-            ExecuteOnUiThread(() => ApplySummarySnapshot(snapshot));
+            DateTime nowUtc = DateTime.UtcNow;
+            AffinitySummarySnapshot thisMonthSnapshot = BuildMonthlySummarySnapshot(nowUtc);
+            AffinitySummarySnapshot lastMonthSnapshot = BuildMonthlySummarySnapshot(nowUtc.AddMonths(-1));
+            ExecuteOnUiThread(() => ApplySummarySnapshot(snapshot, thisMonthSnapshot, lastMonthSnapshot));
         }
 
         private AffinitySettings LoadSettings()
@@ -1544,14 +1549,39 @@ namespace Affinity
             return $"{totalHours:D2}:{duration.Minutes:D2}:{duration.Seconds:D2}";
         }
 
-        private void ApplySummarySnapshot(AffinitySummarySnapshot snapshot)
+        private AffinitySummarySnapshot BuildMonthlySummarySnapshot(DateTime monthUtc)
+        {
+            if (_sqliteRepository == null)
+            {
+                return new AffinitySummarySnapshot();
+            }
+
+            DateTime monthStartUtc = new DateTime(monthUtc.Year, monthUtc.Month, 1, 0, 0, 0, DateTimeKind.Utc);
+            DateTime nextMonthStartUtc = monthStartUtc.AddMonths(1);
+            return AffinitySummaryBuilder.BuildSnapshot(
+                _sqliteRepository.GetDistanceSummaries(monthStartUtc, nextMonthStartUtc),
+                Settings.DisplayInMiles,
+                _assettoCorsaTrackMap);
+        }
+
+        private void ApplySummarySnapshot(
+            AffinitySummarySnapshot snapshot,
+            AffinitySummarySnapshot thisMonthSnapshot,
+            AffinitySummarySnapshot lastMonthSnapshot)
         {
             snapshot = snapshot ?? new AffinitySummarySnapshot();
+            thisMonthSnapshot = thisMonthSnapshot ?? new AffinitySummarySnapshot();
+            lastMonthSnapshot = lastMonthSnapshot ?? new AffinitySummarySnapshot();
             TotalDistanceKm = snapshot.TotalDistanceKm;
             TotalUsedTime = snapshot.TotalUsedTime;
             FeaturedGameTab = snapshot.FeaturedGameTab;
             FeaturedTrackSummary = snapshot.FeaturedTrackSummary;
             FeaturedCarSummary = snapshot.FeaturedCarSummary;
+
+            TopSummarySections.Clear();
+            TopSummarySections.Add(CreateTopSummarySection("Top Overall", snapshot));
+            TopSummarySections.Add(CreateTopSummarySection("Top This Month", thisMonthSnapshot));
+            TopSummarySections.Add(CreateTopSummarySection("Top Last Month", lastMonthSnapshot));
 
             string selectedGame = SelectedGameTab?.GameName;
 
@@ -1573,6 +1603,18 @@ namespace Affinity
             }
 
             RefreshGameDebugLoggingOptions();
+        }
+
+        private static AffinityTopSummarySection CreateTopSummarySection(string header, AffinitySummarySnapshot snapshot)
+        {
+            snapshot = snapshot ?? new AffinitySummarySnapshot();
+            return new AffinityTopSummarySection
+            {
+                Header = header,
+                FeaturedGameTab = snapshot.FeaturedGameTab,
+                FeaturedTrackSummary = snapshot.FeaturedTrackSummary,
+                FeaturedCarSummary = snapshot.FeaturedCarSummary
+            };
         }
 
         private void RebuildTopLevelTabs()

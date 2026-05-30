@@ -125,6 +125,49 @@ namespace Affinity.Tests
         }
 
         [TestMethod]
+        public void GetDistanceSummaries_FiltersBySessionDateRange()
+        {
+            using (var repository = CreateRepository())
+            {
+                repository.UpsertSession(
+                    "april-session",
+                    "Assetto Corsa",
+                    "BMW M3 GT2",
+                    "monza",
+                    "monza_gp",
+                    new DateTime(2026, 4, 30, 23, 30, 0, DateTimeKind.Utc),
+                    new DateTime(2026, 4, 30, 23, 45, 0, DateTimeKind.Utc),
+                    2000.0,
+                    900.0);
+                repository.UpsertSession(
+                    "may-session",
+                    "Assetto Corsa",
+                    "Ferrari 488 GT3",
+                    "spa",
+                    "spa",
+                    new DateTime(2026, 5, 1, 0, 5, 0, DateTimeKind.Utc),
+                    new DateTime(2026, 5, 1, 0, 20, 0, DateTimeKind.Utc),
+                    5000.0,
+                    900.0);
+
+                var aprilSummaries = repository.GetDistanceSummaries(
+                    new DateTime(2026, 4, 1, 0, 0, 0, DateTimeKind.Utc),
+                    new DateTime(2026, 5, 1, 0, 0, 0, DateTimeKind.Utc));
+                var maySummaries = repository.GetDistanceSummaries(
+                    new DateTime(2026, 5, 1, 0, 0, 0, DateTimeKind.Utc),
+                    new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc));
+
+                Assert.AreEqual(1, aprilSummaries.Count);
+                Assert.AreEqual("BMW M3 GT2", aprilSummaries.Single().CarModel);
+                Assert.AreEqual(2.0, aprilSummaries.Single().TotalDistanceKm, 0.000001);
+
+                Assert.AreEqual(1, maySummaries.Count);
+                Assert.AreEqual("Ferrari 488 GT3", maySummaries.Single().CarModel);
+                Assert.AreEqual(5.0, maySummaries.Single().TotalDistanceKm, 0.000001);
+            }
+        }
+
+        [TestMethod]
         public void ExistingDisplayNames_ArePreferredInDistanceSummaries()
         {
             using (var repository = CreateRepository())

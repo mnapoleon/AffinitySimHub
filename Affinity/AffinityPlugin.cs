@@ -56,6 +56,7 @@ namespace Affinity
         private string _legacyDatabasePath = string.Empty;
         private string _debugLogPath = string.Empty;
         private string _acTrackMapPath = string.Empty;
+        private AffinityDatabase _database = new AffinityDatabase();
         private AffinitySqliteRepository _sqliteRepository;
         private Dictionary<string, string> _assettoCorsaTrackMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         private string _currentGameName = "No active game";
@@ -84,8 +85,6 @@ namespace Affinity
         private int _lastObservedCompletedLaps = -1;
         private string _activeStorageSessionUid = string.Empty;
         private DateTime _activeSessionStartedUtc = DateTime.MinValue;
-        private double _activeSessionBaseDistanceMeters;
-        private double _activeSessionBaseUsedTimeSeconds;
         private double _activeSessionUsedTimeSeconds;
         private double _pendingMetersSinceSave;
         private double _pendingUsedTimeSecondsSinceSave;
@@ -387,6 +386,7 @@ namespace Affinity
             EnsureDefaultGameDebugLoggingSettings();
             _assettoCorsaTrackMap = LoadAssettoCorsaTrackMap();
             InitializeDatabase();
+            _database = LoadRuntimeDatabase();
 
             pluginManager.AddProperty("Affinity.Version", GetType(), Version);
             pluginManager.AddProperty("Affinity.Enabled", GetType(), Settings.EnablePlugin);
@@ -421,7 +421,7 @@ namespace Affinity
                     DataStatus = !Settings.EnablePlugin ? "Plugin disabled" : "Waiting for telemetry";
                     IsTelemetryActive = false;
                     bool finalizedTime = AccumulateActiveSessionTime(now);
-                    SavePendingSessionIfNeeded(force: finalizedTime);
+                    FinalizeActiveSession(refreshSummaries: finalizedTime);
                     ResetActiveSession(clearContext: false);
                     PublishProperties(pluginManager, string.Empty, string.Empty, string.Empty, 0.0, 0.0);
                     _hasLoggedDataError = false;
@@ -438,7 +438,7 @@ namespace Affinity
                     DataStatus = $"Unsupported game: {gameName}";
                     IsTelemetryActive = false;
                     bool finalizedTime = AccumulateActiveSessionTime(now);
-                    SavePendingSessionIfNeeded(force: finalizedTime);
+                    FinalizeActiveSession(refreshSummaries: finalizedTime);
                     ResetActiveSession(clearContext: false);
                     PublishProperties(pluginManager, gameName, string.Empty, string.Empty, 0.0, 0.0);
                     _hasLoggedDataError = false;
@@ -462,7 +462,7 @@ namespace Affinity
                     _activeSessionId != sessionId ||
                     data.NewData.IsSessionRestart)
                 {
-                    SavePendingSessionIfNeeded(force: bucketTimeUpdated);
+                    FinalizeActiveSession(refreshSummaries: bucketTimeUpdated);
                     _activeContextKey = contextKey;
                     _activeSessionId = sessionId;
                     _activeStorageSessionUid = Guid.NewGuid().ToString("N");
@@ -479,8 +479,9 @@ namespace Affinity
                     _lastSessionSampleUtc = now;
                     _activeSessionUsedTimeSeconds = 0.0;
                     SessionDistanceKm = 0.0;
-                    LoadActiveContextBaseTotals(gameName, carModel, trackNameWithConfig);
-                    UpdateCurrentContextTotals();
+                    TrackBucket activeBucket = GetOrCreateTrackBucket(gameName, carModel, trackName, trackNameWithConfig);
+                    CurrentContextDistanceKm = activeBucket.TotalDistanceMeters / MetersPerKilometer;
+                    CurrentContextUsedTime = activeBucket.UsedTime;
                     DataStatus = "Tracking session distance and time";
                     IsTelemetryActive = true;
 
@@ -546,6 +547,7 @@ namespace Affinity
                         sessionMeters >= Math.Max(200.0, trackLengthMeters * 0.25) &&
                         !IsAutomobilista2Game(gameName) &&
                         data.NewData.SpeedKmh < 5.0;
+                    TrackBucket bucket = GetOrCreateTrackBucket(gameName, carModel, trackName, trackNameWithConfig);
                     bool bucketUpdated = false;
 
                     if (looksLikeDerivedLapBoundaryWrap)
@@ -573,6 +575,8 @@ namespace Affinity
                     }
                     else if (deltaMeters > 0.0)
                     {
+                        bucket.TotalDistanceMeters += deltaMeters;
+                        bucket.LastUpdatedUtc = DateTime.UtcNow;
                         _pendingMetersSinceSave += deltaMeters;
                         _lastObservedSessionMeters = sessionMeters;
                         SessionDistanceKm = sessionMeters / MetersPerKilometer;
@@ -611,6 +615,7 @@ namespace Affinity
                     }
                     else if (lapDelta > 0)
                     {
+                        bucket.LastUpdatedUtc = DateTime.UtcNow;
                         _lastObservedCompletedLaps = completedLaps;
                         bucketUpdated = true;
 
@@ -633,11 +638,12 @@ namespace Affinity
 
                     if (bucketUpdated)
                     {
-                        UpdateCurrentContextTotals();
+                        CurrentContextDistanceKm = bucket.TotalDistanceMeters / MetersPerKilometer;
+                        CurrentContextUsedTime = bucket.UsedTime;
                         DataStatus = $"Recorded {CurrentContextDistanceKm:F2} km for {CurrentContext}";
                         IsTelemetryActive = true;
 
-                        SavePendingSessionIfNeeded(force: false, refreshSummaries: true);
+                        RefreshLiveSummariesIfNeeded(force: false);
                     }
                     else if (shouldDebugTelemetry && ShouldLogTelemetryHeartbeat())
                     {
@@ -645,11 +651,18 @@ namespace Affinity
                     }
                 }
 
+                if (bucketTimeUpdated)
+                {
+                    RefreshLiveSummariesIfNeeded(force: false);
+                }
+
                 CurrentGameName = gameName;
                 CurrentCarModel = carModel;
                 CurrentTrackName = trackName;
                 CurrentTrackNameWithConfig = trackNameWithConfig;
-                UpdateCurrentContextTotals();
+                TrackBucket currentBucket = GetOrCreateTrackBucket(gameName, carModel, trackName, trackNameWithConfig);
+                CurrentContextDistanceKm = currentBucket.TotalDistanceMeters / MetersPerKilometer;
+                CurrentContextUsedTime = currentBucket.UsedTime;
                 IsTelemetryActive = true;
                 PublishProperties(pluginManager, gameName, GetDisplayTrackNameWithConfig(gameName, trackNameWithConfig), carModel, CurrentContextDistanceKm, SessionDistanceKm);
                 _hasLoggedDataError = false;
@@ -669,7 +682,7 @@ namespace Affinity
         public void End(PluginManager pluginManager)
         {
             AccumulateActiveSessionTime(DateTime.UtcNow);
-            SavePendingSessionIfNeeded(force: true, refreshSummaries: false);
+            FinalizeActiveSession(refreshSummaries: false);
             _sqliteRepository?.Dispose();
             _sqliteRepository = null;
             SaveSettings();
@@ -727,7 +740,7 @@ namespace Affinity
 
         internal void RefreshDistanceSummaries()
         {
-            AffinitySummarySnapshot snapshot = AffinitySummaryBuilder.BuildSnapshot(_sqliteRepository?.GetDistanceSummaries(), Settings.DisplayInMiles, _assettoCorsaTrackMap);
+            AffinitySummarySnapshot snapshot = AffinitySummaryBuilder.BuildSnapshot(_database, Settings.DisplayInMiles, _assettoCorsaTrackMap);
             ExecuteOnUiThread(() => ApplySummarySnapshot(snapshot));
         }
 
@@ -826,6 +839,66 @@ namespace Affinity
             }
 
             File.Move(_legacyDatabasePath, backupPath);
+        }
+
+        private AffinityDatabase LoadRuntimeDatabase()
+        {
+            var database = new AffinityDatabase();
+            if (_sqliteRepository == null)
+            {
+                return database;
+            }
+
+            foreach (DistanceSummary summary in _sqliteRepository.GetDistanceSummaries())
+            {
+                TrackBucket bucket = GetOrCreateTrackBucket(database, summary.GameName, summary.CarModel, summary.TrackName, summary.TrackNameWithConfig);
+                bucket.TotalDistanceMeters = summary.TotalDistanceKm * MetersPerKilometer;
+                bucket.UsedTime = summary.UsedTime;
+                bucket.LastUpdatedUtc = summary.LastUpdatedUtc;
+            }
+
+            return database;
+        }
+
+        private TrackBucket GetOrCreateTrackBucket(string gameName, string carModel, string trackName, string trackNameWithConfig)
+        {
+            return GetOrCreateTrackBucket(_database, gameName, carModel, trackName, trackNameWithConfig);
+        }
+
+        private static TrackBucket GetOrCreateTrackBucket(AffinityDatabase database, string gameName, string carModel, string trackName, string trackNameWithConfig)
+        {
+            if (database == null)
+            {
+                database = new AffinityDatabase();
+            }
+
+            if (!database.Games.TryGetValue(gameName, out GameBucket gameBucket))
+            {
+                gameBucket = new GameBucket();
+                database.Games[gameName] = gameBucket;
+            }
+
+            if (!gameBucket.Cars.TryGetValue(carModel, out CarBucket carBucket))
+            {
+                carBucket = new CarBucket();
+                gameBucket.Cars[carModel] = carBucket;
+            }
+
+            if (!carBucket.Tracks.TryGetValue(trackNameWithConfig, out TrackBucket trackBucket))
+            {
+                trackBucket = new TrackBucket
+                {
+                    GameName = gameName,
+                    CarModel = carModel,
+                    TrackName = trackName,
+                    TrackNameWithConfig = trackNameWithConfig,
+                    CreatedUtc = DateTime.UtcNow,
+                    LastUpdatedUtc = DateTime.UtcNow
+                };
+                carBucket.Tracks[trackNameWithConfig] = trackBucket;
+            }
+
+            return trackBucket;
         }
 
         private SessionDistanceSource ResolveSessionDistanceSource(string gameName, StatusDataBase status)
@@ -1088,6 +1161,7 @@ namespace Affinity
             _activeContextKey = string.Empty;
             _activeStorageSessionUid = string.Empty;
             _activeSessionStartedUtc = DateTime.MinValue;
+            _activeSessionUsedTimeSeconds = 0.0;
             _sessionDistanceSource = SessionDistanceSource.Unknown;
             _sessionStartTrackPositionMeters = -1.0;
             _sessionStatefulAbsoluteMeters = 0.0;
@@ -1095,9 +1169,6 @@ namespace Affinity
             _sessionDistanceOriginMeters = 0.0;
             _lastObservedSessionMeters = -1.0;
             _lastObservedCompletedLaps = -1;
-            _activeSessionBaseDistanceMeters = clearContext ? 0.0 : _activeSessionBaseDistanceMeters;
-            _activeSessionBaseUsedTimeSeconds = clearContext ? 0.0 : _activeSessionBaseUsedTimeSeconds;
-            _activeSessionUsedTimeSeconds = 0.0;
             _pendingMetersSinceSave = 0.0;
             _pendingUsedTimeSecondsSinceSave = 0.0;
             _lastSessionSampleUtc = DateTime.MinValue;
@@ -1404,13 +1475,16 @@ namespace Affinity
                 return false;
             }
 
+            TrackBucket bucket = GetOrCreateTrackBucket(CurrentGameName, CurrentCarModel, CurrentTrackName, CurrentTrackNameWithConfig);
+            bucket.UsedTime += elapsedSeconds;
+            bucket.LastUpdatedUtc = now;
             _activeSessionUsedTimeSeconds += elapsedSeconds;
             _pendingUsedTimeSecondsSinceSave += elapsedSeconds;
-            UpdateCurrentContextTotals();
+            CurrentContextUsedTime = bucket.UsedTime;
             return true;
         }
 
-        private void SavePendingSessionIfNeeded(bool force, bool refreshSummaries = false)
+        private void RefreshLiveSummariesIfNeeded(bool force)
         {
             if (!force &&
                 _pendingMetersSinceSave < SaveThresholdMeters &&
@@ -1419,23 +1493,26 @@ namespace Affinity
                 return;
             }
 
-            PersistActiveSession();
-            if (refreshSummaries || _pendingUsedTimeSecondsSinceSave > 0.0)
-            {
-                RefreshDistanceSummaries();
-            }
-
+            RefreshDistanceSummaries();
             _pendingMetersSinceSave = 0.0;
             _pendingUsedTimeSecondsSinceSave = 0.0;
         }
 
-        private void PersistActiveSession()
+        private void FinalizeActiveSession(bool refreshSummaries)
         {
-            if (_sqliteRepository == null ||
-                string.IsNullOrWhiteSpace(_activeStorageSessionUid) ||
-                string.IsNullOrWhiteSpace(_activeContextKey) ||
-                _activeSessionStartedUtc == DateTime.MinValue)
+            if (string.IsNullOrWhiteSpace(_activeStorageSessionUid) ||
+                _activeSessionStartedUtc == DateTime.MinValue ||
+                _sqliteRepository == null)
             {
+                return;
+            }
+
+            double sessionDistanceMeters = Math.Max(0.0, SessionDistanceKm * MetersPerKilometer);
+            double sessionTimeDrivenSeconds = Math.Max(0.0, _activeSessionUsedTimeSeconds);
+            if (sessionDistanceMeters <= 0.0 && sessionTimeDrivenSeconds <= 0.0)
+            {
+                _pendingMetersSinceSave = 0.0;
+                _pendingUsedTimeSecondsSinceSave = 0.0;
                 return;
             }
 
@@ -1447,28 +1524,16 @@ namespace Affinity
                 CurrentTrackNameWithConfig,
                 _activeSessionStartedUtc,
                 _lastSessionSampleUtc == DateTime.MinValue ? DateTime.UtcNow : _lastSessionSampleUtc,
-                Math.Max(0.0, SessionDistanceKm * MetersPerKilometer),
-                Math.Max(0.0, _activeSessionUsedTimeSeconds));
-        }
+                sessionDistanceMeters,
+                sessionTimeDrivenSeconds);
 
-        private void LoadActiveContextBaseTotals(string gameName, string carModel, string trackNameWithConfig)
-        {
-            if (_sqliteRepository == null)
+            if (refreshSummaries)
             {
-                _activeSessionBaseDistanceMeters = 0.0;
-                _activeSessionBaseUsedTimeSeconds = 0.0;
-                return;
+                RefreshLiveSummariesIfNeeded(force: true);
             }
 
-            AffinityContextTotals totals = _sqliteRepository.GetContextTotals(gameName, carModel, trackNameWithConfig);
-            _activeSessionBaseDistanceMeters = totals.TotalDistanceMeters;
-            _activeSessionBaseUsedTimeSeconds = totals.TotalTimeDrivenSeconds;
-        }
-
-        private void UpdateCurrentContextTotals()
-        {
-            CurrentContextDistanceKm = (_activeSessionBaseDistanceMeters + (SessionDistanceKm * MetersPerKilometer)) / MetersPerKilometer;
-            CurrentContextUsedTime = _activeSessionBaseUsedTimeSeconds + _activeSessionUsedTimeSeconds;
+            _pendingMetersSinceSave = 0.0;
+            _pendingUsedTimeSecondsSinceSave = 0.0;
         }
 
         private static string FormatUsedTime(double usedTimeSeconds)

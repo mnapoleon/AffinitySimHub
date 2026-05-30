@@ -127,6 +127,17 @@ namespace Affinity
         public string Header => "Affinity";
     }
 
+    public class AffinityTopSummarySection
+    {
+        public string Header { get; set; } = string.Empty;
+
+        public GameDistanceTab FeaturedGameTab { get; set; }
+
+        public TrackDistanceSummary FeaturedTrackSummary { get; set; }
+
+        public CarDistanceSummary FeaturedCarSummary { get; set; }
+    }
+
     public class AffinitySettingsTab
     {
         public string Header => "Settings";

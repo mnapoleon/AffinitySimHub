@@ -6,6 +6,7 @@
              xmlns:local="clr-namespace:Affinity"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:styles="clr-namespace:SimHub.Plugins.Styles;assembly=SimHub.Plugins"
+             xmlns:sys="clr-namespace:System;assembly=mscorlib"
              mc:Ignorable="d"
              d:DesignHeight="540"
              d:DesignWidth="900">
@@ -22,128 +23,147 @@
                     <StackPanel>
                         <styles:SHSection>
                             <StackPanel Margin="12">
-                                <Grid Margin="0,0,0,12">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="16" />
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="16" />
-                                        <ColumnDefinition Width="*" />
-                                    </Grid.ColumnDefinitions>
-
-                                    <Border Grid.Column="0"
-                                            Padding="16,14"
-                                            Background="#252525"
-                                            BorderBrush="#2CB7F0"
-                                            BorderThickness="1"
-                                            CornerRadius="6">
-                                        <StackPanel>
-                                            <TextBlock Foreground="#89D9FF"
-                                                       FontSize="12"
-                                                       FontWeight="SemiBold"
-                                                       Text="Most distance driven" />
-                                            <TextBlock Margin="0,8,0,0"
-                                                       FontSize="24"
-                                                       FontWeight="Bold"
-                                                       Text="{Binding DataContext.FeaturedGameTab.GameName, ElementName=Root, TargetNullValue=No game data yet}" />
-                                            <StackPanel Margin="0,10,0,0"
-                                                        Orientation="Horizontal">
-                                                <TextBlock VerticalAlignment="Bottom"
-                                                           FontSize="22"
-                                                           FontWeight="Bold"
-                                                           Text="{Binding DataContext.FeaturedGameTab.TotalDistanceDisplay, ElementName=Root, StringFormat=F2, TargetNullValue=0.00}" />
-                                                <TextBlock Margin="6,0,0,0"
-                                                           VerticalAlignment="Bottom"
-                                                           FontSize="13"
+                                <ItemsControl Margin="0,0,0,12"
+                                              ItemsSource="{Binding DataContext.TopSummarySections, ElementName=Root}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <StackPanel Margin="0,0,0,18">
+                                                <TextBlock Margin="0,0,0,8"
+                                                           FontSize="14"
                                                            FontWeight="SemiBold"
-                                                           Text="{Binding DataContext.DistanceUnitLabel, ElementName=Root}" />
-                                            </StackPanel>
-                                            <TextBlock Margin="0,6,0,0"
-                                                       FontSize="22"
-                                                       FontWeight="Bold"
-                                                       Foreground="#D8D8D8"
-                                                       Text="{Binding DataContext.FeaturedGameTab.TotalUsedTimeDisplay, ElementName=Root, StringFormat=Time driven: {0}, TargetNullValue=Time driven: 00:00:00}" />
-                                        </StackPanel>
-                                    </Border>
+                                                           Text="{Binding Header}" />
 
-                                    <Border Grid.Column="2"
-                                            Padding="16,14"
-                                            Background="#252525"
-                                            BorderBrush="#2CB7F0"
-                                            BorderThickness="1"
-                                            CornerRadius="6">
-                                        <StackPanel>
-                                            <TextBlock Foreground="#89D9FF"
-                                                       FontSize="12"
-                                                       FontWeight="SemiBold"
-                                                       Text="Most distance on track" />
-                                            <TextBlock Margin="0,8,0,0"
-                                                       FontSize="24"
-                                                       FontWeight="Bold"
-                                                       Text="{Binding DataContext.FeaturedTrackSummary.TrackDisplayName, ElementName=Root, TargetNullValue=No track data yet}" />
-                                            <TextBlock Margin="0,4,0,0"
-                                                       FontSize="13"
-                                                       Foreground="#D8D8D8"
-                                                       Text="{Binding DataContext.FeaturedTrackSummary.GameName, ElementName=Root, StringFormat=Game: {0}, TargetNullValue=Game: n/a}" />
-                                            <StackPanel Margin="0,10,0,0"
-                                                        Orientation="Horizontal">
-                                                <TextBlock VerticalAlignment="Bottom"
-                                                           FontSize="22"
-                                                           FontWeight="Bold"
-                                                           Text="{Binding DataContext.FeaturedTrackSummary.DistanceDisplay, ElementName=Root, StringFormat=F2, TargetNullValue=0.00}" />
-                                                <TextBlock Margin="6,0,0,0"
-                                                           VerticalAlignment="Bottom"
-                                                           FontSize="13"
-                                                           FontWeight="SemiBold"
-                                                           Text="{Binding DataContext.DistanceUnitLabel, ElementName=Root}" />
-                                            </StackPanel>
-                                            <TextBlock Margin="0,6,0,0"
-                                                       FontSize="22"
-                                                       FontWeight="Bold"
-                                                       Foreground="#D8D8D8"
-                                                       Text="{Binding DataContext.FeaturedTrackSummary.UsedTimeDisplay, ElementName=Root, StringFormat=Time driven: {0}, TargetNullValue=Time driven: 00:00:00}" />
-                                        </StackPanel>
-                                    </Border>
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="16" />
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="16" />
+                                                        <ColumnDefinition Width="*" />
+                                                    </Grid.ColumnDefinitions>
 
-                                    <Border Grid.Column="4"
-                                            Padding="16,14"
-                                            Background="#252525"
-                                            BorderBrush="#2CB7F0"
-                                            BorderThickness="1"
-                                            CornerRadius="6">
-                                        <StackPanel>
-                                            <TextBlock Foreground="#89D9FF"
-                                                       FontSize="12"
-                                                       FontWeight="SemiBold"
-                                                       Text="Most distance in car" />
-                                            <TextBlock Margin="0,8,0,0"
-                                                       FontSize="24"
-                                                       FontWeight="Bold"
-                                                       Text="{Binding DataContext.FeaturedCarSummary.CarModel, ElementName=Root, TargetNullValue=No car data yet}" />
-                                            <TextBlock Margin="0,4,0,0"
-                                                       FontSize="13"
-                                                       Foreground="#D8D8D8"
-                                                       Text="{Binding DataContext.FeaturedCarSummary.GameName, ElementName=Root, StringFormat=Game: {0}, TargetNullValue=Game: n/a}" />
-                                            <StackPanel Margin="0,10,0,0"
-                                                        Orientation="Horizontal">
-                                                <TextBlock VerticalAlignment="Bottom"
-                                                           FontSize="22"
-                                                           FontWeight="Bold"
-                                                           Text="{Binding DataContext.FeaturedCarSummary.DistanceDisplay, ElementName=Root, StringFormat=F2, TargetNullValue=0.00}" />
-                                                <TextBlock Margin="6,0,0,0"
-                                                           VerticalAlignment="Bottom"
-                                                           FontSize="13"
-                                                           FontWeight="SemiBold"
-                                                           Text="{Binding DataContext.DistanceUnitLabel, ElementName=Root}" />
+                                                    <Border Grid.Column="0"
+                                                            Padding="16,14"
+                                                            Background="#252525"
+                                                            BorderBrush="#2CB7F0"
+                                                            BorderThickness="1"
+                                                            CornerRadius="6">
+                                                        <StackPanel>
+                                                            <TextBlock Foreground="#89D9FF"
+                                                                       FontSize="12"
+                                                                       FontWeight="SemiBold"
+                                                                       Text="Most distance driven" />
+                                                            <TextBlock Margin="0,8,0,0"
+                                                                       FontSize="24"
+                                                                       FontWeight="Bold"
+                                                                       Text="{Binding FeaturedGameTab.GameName, FallbackValue={x:Static sys:String.Empty}, TargetNullValue={x:Static sys:String.Empty}}" />
+                                                            <TextBlock Margin="0,4,0,0"
+                                                                       FontSize="13"
+                                                                       Foreground="#D8D8D8"
+                                                                       Text="Game: "
+                                                                       Visibility="Hidden" />
+                                                            <StackPanel Margin="0,10,0,0"
+                                                                        Orientation="Horizontal">
+                                                                <TextBlock VerticalAlignment="Bottom"
+                                                                           FontSize="22"
+                                                                           FontWeight="Bold"
+                                                                           Text="{Binding FeaturedGameTab.TotalDistanceDisplay, StringFormat=F2, FallbackValue={x:Static sys:String.Empty}, TargetNullValue={x:Static sys:String.Empty}}" />
+                                                                <TextBlock Margin="6,0,0,0"
+                                                                           VerticalAlignment="Bottom"
+                                                                           FontSize="13"
+                                                                           FontWeight="SemiBold"
+                                                                           Text="{Binding DataContext.DistanceUnitLabel, ElementName=Root}" />
+                                                            </StackPanel>
+                                                            <TextBlock Margin="0,6,0,0"
+                                                                       FontSize="22"
+                                                                       FontWeight="Bold"
+                                                                       Foreground="#D8D8D8"
+                                                                       Text="{Binding FeaturedGameTab.TotalUsedTimeDisplay, StringFormat=Time driven: {0}, FallbackValue={x:Static sys:String.Empty}, TargetNullValue={x:Static sys:String.Empty}}" />
+                                                        </StackPanel>
+                                                    </Border>
+
+                                                    <Border Grid.Column="2"
+                                                            Padding="16,14"
+                                                            Background="#252525"
+                                                            BorderBrush="#2CB7F0"
+                                                            BorderThickness="1"
+                                                            CornerRadius="6">
+                                                        <StackPanel>
+                                                            <TextBlock Foreground="#89D9FF"
+                                                                       FontSize="12"
+                                                                       FontWeight="SemiBold"
+                                                                       Text="Most distance on track" />
+                                                            <TextBlock Margin="0,8,0,0"
+                                                                       FontSize="24"
+                                                                       FontWeight="Bold"
+                                                                       Text="{Binding FeaturedTrackSummary.TrackDisplayName, FallbackValue={x:Static sys:String.Empty}, TargetNullValue={x:Static sys:String.Empty}}" />
+                                                            <TextBlock Margin="0,4,0,0"
+                                                                       FontSize="13"
+                                                                       Foreground="#D8D8D8"
+                                                                       Text="{Binding FeaturedTrackSummary.GameName, StringFormat=Game: {0}, FallbackValue={x:Static sys:String.Empty}, TargetNullValue={x:Static sys:String.Empty}}" />
+                                                            <StackPanel Margin="0,10,0,0"
+                                                                        Orientation="Horizontal">
+                                                                <TextBlock VerticalAlignment="Bottom"
+                                                                           FontSize="22"
+                                                                           FontWeight="Bold"
+                                                                           Text="{Binding FeaturedTrackSummary.DistanceDisplay, StringFormat=F2, FallbackValue={x:Static sys:String.Empty}, TargetNullValue={x:Static sys:String.Empty}}" />
+                                                                <TextBlock Margin="6,0,0,0"
+                                                                           VerticalAlignment="Bottom"
+                                                                           FontSize="13"
+                                                                           FontWeight="SemiBold"
+                                                                           Text="{Binding DataContext.DistanceUnitLabel, ElementName=Root}" />
+                                                            </StackPanel>
+                                                            <TextBlock Margin="0,6,0,0"
+                                                                       FontSize="22"
+                                                                       FontWeight="Bold"
+                                                                       Foreground="#D8D8D8"
+                                                                       Text="{Binding FeaturedTrackSummary.UsedTimeDisplay, StringFormat=Time driven: {0}, FallbackValue={x:Static sys:String.Empty}, TargetNullValue={x:Static sys:String.Empty}}" />
+                                                        </StackPanel>
+                                                    </Border>
+
+                                                    <Border Grid.Column="4"
+                                                            Padding="16,14"
+                                                            Background="#252525"
+                                                            BorderBrush="#2CB7F0"
+                                                            BorderThickness="1"
+                                                            CornerRadius="6">
+                                                        <StackPanel>
+                                                            <TextBlock Foreground="#89D9FF"
+                                                                       FontSize="12"
+                                                                       FontWeight="SemiBold"
+                                                                       Text="Most distance in car" />
+                                                            <TextBlock Margin="0,8,0,0"
+                                                                       FontSize="24"
+                                                                       FontWeight="Bold"
+                                                                       Text="{Binding FeaturedCarSummary.CarModel, FallbackValue={x:Static sys:String.Empty}, TargetNullValue={x:Static sys:String.Empty}}" />
+                                                            <TextBlock Margin="0,4,0,0"
+                                                                       FontSize="13"
+                                                                       Foreground="#D8D8D8"
+                                                                       Text="{Binding FeaturedCarSummary.GameName, StringFormat=Game: {0}, FallbackValue={x:Static sys:String.Empty}, TargetNullValue={x:Static sys:String.Empty}}" />
+                                                            <StackPanel Margin="0,10,0,0"
+                                                                        Orientation="Horizontal">
+                                                                <TextBlock VerticalAlignment="Bottom"
+                                                                           FontSize="22"
+                                                                           FontWeight="Bold"
+                                                                           Text="{Binding FeaturedCarSummary.DistanceDisplay, StringFormat=F2, FallbackValue={x:Static sys:String.Empty}, TargetNullValue={x:Static sys:String.Empty}}" />
+                                                                <TextBlock Margin="6,0,0,0"
+                                                                           VerticalAlignment="Bottom"
+                                                                           FontSize="13"
+                                                                           FontWeight="SemiBold"
+                                                                           Text="{Binding DataContext.DistanceUnitLabel, ElementName=Root}" />
+                                                            </StackPanel>
+                                                            <TextBlock Margin="0,6,0,0"
+                                                                       FontSize="22"
+                                                                       FontWeight="Bold"
+                                                                       Foreground="#D8D8D8"
+                                                                       Text="{Binding FeaturedCarSummary.UsedTimeDisplay, StringFormat=Time driven: {0}, FallbackValue={x:Static sys:String.Empty}, TargetNullValue={x:Static sys:String.Empty}}" />
+                                                        </StackPanel>
+                                                    </Border>
+                                                </Grid>
                                             </StackPanel>
-                                            <TextBlock Margin="0,6,0,0"
-                                                       FontSize="22"
-                                                       FontWeight="Bold"
-                                                       Foreground="#D8D8D8"
-                                                       Text="{Binding DataContext.FeaturedCarSummary.UsedTimeDisplay, ElementName=Root, StringFormat=Time driven: {0}, TargetNullValue=Time driven: 00:00:00}" />
-                                        </StackPanel>
-                                    </Border>
-                                </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
 
                                 <TextBlock Margin="0,4,0,8"
                                            FontSize="14"
@@ -256,57 +276,73 @@
 
                         <Border Grid.Row="0"
                                 Grid.Column="0"
-                                Padding="10,8"
+                                Padding="16,14"
                                 Background="#252525"
-                                BorderBrush="#3A3A3A"
+                                BorderBrush="#2CB7F0"
                                 BorderThickness="1"
-                                CornerRadius="4">
+                                CornerRadius="6">
                             <StackPanel>
-                                <TextBlock FontSize="11"
-                                           Foreground="#89D9FF"
+                                <TextBlock Foreground="#89D9FF"
+                                           FontSize="12"
                                            FontWeight="SemiBold"
                                            Text="Top track by distance" />
-                                <TextBlock Margin="0,4,0,0"
-                                           FontSize="15"
-                                           FontWeight="SemiBold"
-                                           Text="{Binding TopTrackSummary.TrackDisplayName, TargetNullValue=No track data yet}" />
-                                <StackPanel Margin="0,4,0,0"
+                                <TextBlock Margin="0,8,0,0"
+                                           FontSize="24"
+                                           FontWeight="Bold"
+                                           Text="{Binding TopTrackSummary.TrackDisplayName, FallbackValue={x:Static sys:String.Empty}, TargetNullValue={x:Static sys:String.Empty}}" />
+                                <StackPanel Margin="0,10,0,0"
                                             Orientation="Horizontal">
-                                    <TextBlock FontWeight="Bold"
-                                               Text="{Binding TopTrackSummary.DistanceDisplay, StringFormat=F2, TargetNullValue=0.00}" />
-                                    <TextBlock Margin="4,0,0,0"
+                                    <TextBlock VerticalAlignment="Bottom"
+                                               FontSize="22"
+                                               FontWeight="Bold"
+                                               Text="{Binding TopTrackSummary.DistanceDisplay, StringFormat=F2, FallbackValue={x:Static sys:String.Empty}, TargetNullValue={x:Static sys:String.Empty}}" />
+                                    <TextBlock Margin="6,0,0,0"
+                                               VerticalAlignment="Bottom"
+                                               FontSize="13"
+                                               FontWeight="SemiBold"
                                                Text="{Binding DataContext.DistanceUnitLabel, ElementName=Root}" />
-                                    <TextBlock Margin="10,0,0,0"
-                                               Text="{Binding TopTrackSummary.UsedTimeDisplay, StringFormat=Time driven: {0}, TargetNullValue=Time driven: 00:00:00}" />
                                 </StackPanel>
+                                <TextBlock Margin="0,6,0,0"
+                                           FontSize="22"
+                                           FontWeight="Bold"
+                                           Foreground="#D8D8D8"
+                                           Text="{Binding TopTrackSummary.UsedTimeDisplay, StringFormat=Time driven: {0}, FallbackValue={x:Static sys:String.Empty}, TargetNullValue={x:Static sys:String.Empty}}" />
                             </StackPanel>
                         </Border>
 
                         <Border Grid.Row="0"
                                 Grid.Column="2"
-                                Padding="10,8"
+                                Padding="16,14"
                                 Background="#252525"
-                                BorderBrush="#3A3A3A"
+                                BorderBrush="#2CB7F0"
                                 BorderThickness="1"
-                                CornerRadius="4">
+                                CornerRadius="6">
                             <StackPanel>
-                                <TextBlock FontSize="11"
-                                           Foreground="#89D9FF"
+                                <TextBlock Foreground="#89D9FF"
+                                           FontSize="12"
                                            FontWeight="SemiBold"
                                            Text="Top car by distance" />
-                                <TextBlock Margin="0,4,0,0"
-                                           FontSize="15"
-                                           FontWeight="SemiBold"
-                                           Text="{Binding TopCarSummary.CarModel, TargetNullValue=No car data yet}" />
-                                <StackPanel Margin="0,4,0,0"
+                                <TextBlock Margin="0,8,0,0"
+                                           FontSize="24"
+                                           FontWeight="Bold"
+                                           Text="{Binding TopCarSummary.CarModel, FallbackValue={x:Static sys:String.Empty}, TargetNullValue={x:Static sys:String.Empty}}" />
+                                <StackPanel Margin="0,10,0,0"
                                             Orientation="Horizontal">
-                                    <TextBlock FontWeight="Bold"
-                                               Text="{Binding TopCarSummary.DistanceDisplay, StringFormat=F2, TargetNullValue=0.00}" />
-                                    <TextBlock Margin="4,0,0,0"
+                                    <TextBlock VerticalAlignment="Bottom"
+                                               FontSize="22"
+                                               FontWeight="Bold"
+                                               Text="{Binding TopCarSummary.DistanceDisplay, StringFormat=F2, FallbackValue={x:Static sys:String.Empty}, TargetNullValue={x:Static sys:String.Empty}}" />
+                                    <TextBlock Margin="6,0,0,0"
+                                               VerticalAlignment="Bottom"
+                                               FontSize="13"
+                                               FontWeight="SemiBold"
                                                Text="{Binding DataContext.DistanceUnitLabel, ElementName=Root}" />
-                                    <TextBlock Margin="10,0,0,0"
-                                               Text="{Binding TopCarSummary.UsedTimeDisplay, StringFormat=Time driven: {0}, TargetNullValue=Time driven: 00:00:00}" />
                                 </StackPanel>
+                                <TextBlock Margin="0,6,0,0"
+                                           FontSize="22"
+                                           FontWeight="Bold"
+                                           Foreground="#D8D8D8"
+                                           Text="{Binding TopCarSummary.UsedTimeDisplay, StringFormat=Time driven: {0}, FallbackValue={x:Static sys:String.Empty}, TargetNullValue={x:Static sys:String.Empty}}" />
                             </StackPanel>
                         </Border>
 

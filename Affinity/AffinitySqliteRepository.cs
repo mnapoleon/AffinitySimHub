@@ -261,7 +261,7 @@ WHERE g.normalized_name = @gameName
             }
         }
 
-        public List<DistanceSummary> GetDistanceSummaries()
+        public List<DistanceSummary> GetDistanceSummaries(DateTime? sessionDateStartUtc = null, DateTime? sessionDateEndUtc = null)
         {
             var summaries = new List<DistanceSummary>();
 
@@ -281,7 +281,11 @@ INNER JOIN track_contexts tc ON tc.id = s.track_context_id
 INNER JOIN games g ON g.id = tc.game_id
 INNER JOIN cars c ON c.id = tc.car_id
 INNER JOIN tracks t ON t.id = tc.track_id
+WHERE (@sessionDateStartUtc IS NULL OR s.session_date_utc >= @sessionDateStartUtc)
+  AND (@sessionDateEndUtc IS NULL OR s.session_date_utc < @sessionDateEndUtc)
 GROUP BY g.name, COALESCE(NULLIF(c.display_name, ''), c.model_name), t.raw_track_name, COALESCE(NULLIF(t.display_name, ''), t.track_name_with_config);";
+                command.Parameters.AddWithValue("@sessionDateStartUtc", sessionDateStartUtc.HasValue ? (object)ToIsoUtc(sessionDateStartUtc.Value.Date) : DBNull.Value);
+                command.Parameters.AddWithValue("@sessionDateEndUtc", sessionDateEndUtc.HasValue ? (object)ToIsoUtc(sessionDateEndUtc.Value.Date) : DBNull.Value);
 
                 using (var reader = command.ExecuteReader())
                 {

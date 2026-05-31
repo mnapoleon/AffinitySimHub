@@ -62,6 +62,31 @@ namespace Affinity.Tests
                 "PluginManager.GetCommonStoragePath(string) does not exist in SimHub and would fail at runtime.");
         }
 
+        [TestMethod]
+        public void PluginManagerStubModelsAddPropertyAsGenericFourArgumentMethod()
+        {
+            Type pluginManagerType = typeof(PluginManager);
+
+            Assert.IsTrue(
+                pluginManagerType
+                    .GetMethods()
+                    .Any(method =>
+                        method.Name == "AddProperty" &&
+                        method.IsGenericMethodDefinition &&
+                        method.GetParameters().Select(parameter => parameter.ParameterType).SequenceEqual(
+                            new[] { typeof(string), typeof(Type), method.GetGenericArguments()[0], typeof(string) })),
+                "PluginManager.AddProperty must compile to SimHub's generic four-argument overload.");
+            Assert.IsFalse(
+                pluginManagerType
+                    .GetMethods()
+                    .Any(method =>
+                        method.Name == "AddProperty" &&
+                        !method.IsGenericMethodDefinition &&
+                        method.GetParameters().Select(parameter => parameter.ParameterType).SequenceEqual(
+                            new[] { typeof(string), typeof(Type), typeof(object) })),
+                "PluginManager.AddProperty(string, Type, object) does not exist in SimHub and would fail at runtime.");
+        }
+
         private static void AssertReferenceVersion(AssemblyName[] references, string name, Version expectedVersion)
         {
             AssemblyName reference = references.SingleOrDefault(candidate => candidate.Name == name);

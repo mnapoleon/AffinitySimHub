@@ -82,7 +82,7 @@ namespace SimHub.Plugins
             return GetCommonStoragePath(pathParts);
         }
 
-        public virtual void AddProperty(string propertyName, Type ownerType, object initialValue)
+        public virtual void AddProperty<T>(string propertyName, Type ownerType, T initialValue, string unit = null)
         {
         }
 

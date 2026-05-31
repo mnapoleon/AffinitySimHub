@@ -127,6 +127,22 @@ namespace Affinity.Tests
             StringAssert.DoesNotContain(pluginSource, "\"Affinity.Enabled\"");
         }
 
+        [TestMethod]
+        public void SettingsViewSource_DoesNotReferenceRemovedEnablePluginSetting()
+        {
+            string path = AppDomain.CurrentDomain.BaseDirectory;
+            while (!string.IsNullOrEmpty(path) && !Directory.Exists(Path.Combine(path, ".git")))
+            {
+                path = Path.GetDirectoryName(path);
+            }
+
+            Assert.IsFalse(string.IsNullOrEmpty(path), "Could not locate the repository root for source inspection tests.");
+            string settingsViewSource = File.ReadAllText(Path.Combine(path, "Affinity", "AffinitySimHub.xaml"));
+
+            StringAssert.DoesNotContain(settingsViewSource, "Settings.EnablePlugin");
+            StringAssert.DoesNotContain(settingsViewSource, "Enable plugin");
+        }
+
         private static void AssertReferenceVersion(AssemblyName[] references, string name, Version expectedVersion)
         {
             AssemblyName reference = references.SingleOrDefault(candidate => candidate.Name == name);

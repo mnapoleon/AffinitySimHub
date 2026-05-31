@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using SimHub.Plugins;
 
@@ -19,6 +20,16 @@ namespace Affinity.Tests
             AssertReferenceVersion(references, "GameReaderCommon", new Version(1, 0, 0, 0));
             AssertReferenceVersion(references, "SimHub.Logging", new Version(1, 0, 0, 0));
             AssertReferenceVersion(references, "SimHub.Plugins", new Version(1, 0, 9631, 22016));
+        }
+
+        [TestMethod]
+        public void AffinityPluginExposesSemanticVersionDisplayString()
+        {
+            AffinityPlugin plugin = new AffinityPlugin();
+
+            Assert.IsTrue(
+                Regex.IsMatch(plugin.PluginVersionDisplay, @"^\d+\.\d+\.\d+$"),
+                "The Settings tab should show a major.minor.patch semantic version string without extra build metadata.");
         }
 
         [TestMethod]
@@ -101,6 +112,37 @@ namespace Affinity.Tests
                 "SimHub.Logging.Current must use log4net.ILog like the real SimHub API.");
         }
 
+        [TestMethod]
+        public void PluginSource_DoesNotReferenceRemovedAffinityEnabledProperty()
+        {
+            string path = AppDomain.CurrentDomain.BaseDirectory;
+            while (!string.IsNullOrEmpty(path) && !Directory.Exists(Path.Combine(path, ".git")))
+            {
+                path = Path.GetDirectoryName(path);
+            }
+
+            Assert.IsFalse(string.IsNullOrEmpty(path), "Could not locate the repository root for source inspection tests.");
+            string pluginSource = File.ReadAllText(Path.Combine(path, "Affinity", "AffinityPlugin.cs"));
+
+            StringAssert.DoesNotContain(pluginSource, "\"Affinity.Enabled\"");
+        }
+
+        [TestMethod]
+        public void SettingsViewSource_DoesNotReferenceRemovedEnablePluginSetting()
+        {
+            string path = AppDomain.CurrentDomain.BaseDirectory;
+            while (!string.IsNullOrEmpty(path) && !Directory.Exists(Path.Combine(path, ".git")))
+            {
+                path = Path.GetDirectoryName(path);
+            }
+
+            Assert.IsFalse(string.IsNullOrEmpty(path), "Could not locate the repository root for source inspection tests.");
+            string settingsViewSource = File.ReadAllText(Path.Combine(path, "Affinity", "AffinitySimHub.xaml"));
+
+            StringAssert.DoesNotContain(settingsViewSource, "Settings.EnablePlugin");
+            StringAssert.DoesNotContain(settingsViewSource, "Enable plugin");
+        }
+
         private static void AssertReferenceVersion(AssemblyName[] references, string name, Version expectedVersion)
         {
             AssemblyName reference = references.SingleOrDefault(candidate => candidate.Name == name);
@@ -110,6 +152,17 @@ namespace Affinity.Tests
                 expectedVersion,
                 reference.Version,
                 $"Affinity.dll must reference SimHub's runtime {name} identity so SimHub can discover the plugin.");
+        }
+
+    }
+
+    internal static class StringAssert
+    {
+        public static void DoesNotContain(string value, string substring)
+        {
+            Assert.IsFalse(
+                value?.Contains(substring) ?? false,
+                $"Expected the string to not contain '{substring}'.");
         }
     }
 }

@@ -4,8 +4,6 @@ namespace Affinity
 {
     public class AffinitySettings
     {
-        public bool EnablePlugin { get; set; } = true;
-
         public bool DisplayInMiles { get; set; }
 
         public bool EnableDebugLogging { get; set; }
@@ -14,7 +12,6 @@ namespace Affinity
 
         public void Reset()
         {
-            EnablePlugin = true;
             DisplayInMiles = false;
             EnableDebugLogging = false;
             GameDebugLogging = new Dictionary<string, bool>();

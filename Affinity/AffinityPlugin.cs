@@ -111,6 +111,17 @@ namespace Affinity
 
         public string DatabasePath => _databasePath;
 
+        public string PluginVersionDisplay
+        {
+            get
+            {
+                string versionCore = Version.Split('+')[0].Split('-')[0];
+                return System.Version.TryParse(versionCore, out System.Version parsedVersion)
+                    ? $"{parsedVersion.Major}.{parsedVersion.Minor}.{parsedVersion.Build}"
+                    : versionCore;
+            }
+        }
+
         public ObservableCollection<GameDistanceTab> GameTabs { get; } = new ObservableCollection<GameDistanceTab>();
 
         public ObservableCollection<AffinityTopSummarySection> TopSummarySections { get; } = new ObservableCollection<AffinityTopSummarySection>();
@@ -392,7 +403,6 @@ namespace Affinity
             _database = LoadRuntimeDatabase();
 
             pluginManager.AddProperty("Affinity.Version", GetType(), Version);
-            pluginManager.AddProperty("Affinity.Enabled", GetType(), Settings.EnablePlugin);
             pluginManager.AddProperty("Affinity.IsGameRunning", GetType(), false);
             pluginManager.AddProperty("Affinity.GameName", GetType(), string.Empty);
             pluginManager.AddProperty("Affinity.TrackName", GetType(), string.Empty);
@@ -414,14 +424,13 @@ namespace Affinity
             try
             {
                 DateTime now = DateTime.UtcNow;
-                pluginManager.SetPropertyValue("Affinity.Enabled", GetType(), Settings.EnablePlugin);
                 pluginManager.SetPropertyValue("Affinity.IsGameRunning", GetType(), data.GameRunning);
                 pluginManager.SetPropertyValue("Affinity.DataFilePath", GetType(), _databasePath);
                 pluginManager.SetPropertyValue("Affinity.DebugLogPath", GetType(), GetDebugLogPath(string.Empty));
 
-                if (!Settings.EnablePlugin || !data.GameRunning || data.NewData == null)
+                if (!data.GameRunning || data.NewData == null)
                 {
-                    DataStatus = !Settings.EnablePlugin ? "Plugin disabled" : "Waiting for telemetry";
+                    DataStatus = "Waiting for telemetry";
                     IsTelemetryActive = false;
                     bool finalizedTime = AccumulateActiveSessionTime(now);
                     FinalizeActiveSession(refreshSummaries: finalizedTime);

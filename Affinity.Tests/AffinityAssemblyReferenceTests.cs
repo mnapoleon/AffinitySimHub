@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using SimHub.Plugins;
 
@@ -19,6 +20,16 @@ namespace Affinity.Tests
             AssertReferenceVersion(references, "GameReaderCommon", new Version(1, 0, 0, 0));
             AssertReferenceVersion(references, "SimHub.Logging", new Version(1, 0, 0, 0));
             AssertReferenceVersion(references, "SimHub.Plugins", new Version(1, 0, 9631, 22016));
+        }
+
+        [TestMethod]
+        public void AffinityPluginExposesSemanticVersionDisplayString()
+        {
+            AffinityPlugin plugin = new AffinityPlugin();
+
+            Assert.IsTrue(
+                Regex.IsMatch(plugin.PluginVersionDisplay, @"^\d+\.\d+\.\d+$"),
+                "The Settings tab should show a major.minor.patch semantic version string without extra build metadata.");
         }
 
         [TestMethod]

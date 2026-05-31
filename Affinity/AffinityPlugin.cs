@@ -111,6 +111,17 @@ namespace Affinity
 
         public string DatabasePath => _databasePath;
 
+        public string PluginVersionDisplay
+        {
+            get
+            {
+                string versionCore = Version.Split('+')[0].Split('-')[0];
+                return System.Version.TryParse(versionCore, out System.Version parsedVersion)
+                    ? $"{parsedVersion.Major}.{parsedVersion.Minor}.{parsedVersion.Build}"
+                    : versionCore;
+            }
+        }
+
         public ObservableCollection<GameDistanceTab> GameTabs { get; } = new ObservableCollection<GameDistanceTab>();
 
         public ObservableCollection<AffinityTopSummarySection> TopSummarySections { get; } = new ObservableCollection<AffinityTopSummarySection>();

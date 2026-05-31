@@ -4,6 +4,9 @@
     <UseWPF>true</UseWPF>
     <AssemblyName>SimHub.Plugins</AssemblyName>
     <RootNamespace>SimHub.Plugins</RootNamespace>
+    <Version>1.0.9631.22016</Version>
+    <AssemblyVersion>1.0.9631.22016</AssemblyVersion>
+    <FileVersion>1.0.9631.22016</FileVersion>
     <LangVersion>latest</LangVersion>
   </PropertyGroup>
 

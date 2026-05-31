@@ -1,6 +1,7 @@
 using System;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 using GameReaderCommon;
 using FormsControl = System.Windows.Forms.Control;
 using WpfControl = System.Windows.Controls.Control;
@@ -45,6 +46,8 @@ namespace SimHub.Plugins
 
     public interface IPlugin
     {
+        PluginManager PluginManager { set; }
+
         void Init(PluginManager pluginManager);
 
         void End(PluginManager pluginManager);
@@ -55,11 +58,16 @@ namespace SimHub.Plugins
         void DataUpdate(PluginManager pluginManager, ref GameData data);
     }
 
-    public interface IWPFSettingsV2
+    public interface IWPFSettings
     {
         WpfControl GetWPFSettingsControl(PluginManager pluginManager);
+    }
 
-        FormsControl GetSettingsControl(PluginManager pluginManager);
+    public interface IWPFSettingsV2
+    {
+        string LeftMenuTitle { get; }
+
+        ImageSource PictureIcon { get; }
     }
 
     public class PluginManager

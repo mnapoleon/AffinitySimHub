@@ -20,7 +20,7 @@ namespace Affinity
     [PluginName("Affinity")]
     [PluginDescription("Tracks cumulative distance and time by game, car, and track across sessions.")]
     [PluginAuthor("Affinity")]
-    public class AffinityPlugin : IPlugin, IDataPlugin, IWPFSettingsV2, INotifyPropertyChanged
+    public class AffinityPlugin : IPlugin, IDataPlugin, IWPFSettings, IWPFSettingsV2, INotifyPropertyChanged
     {
         private enum SessionDistanceSource
         {

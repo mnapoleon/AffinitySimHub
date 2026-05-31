@@ -143,11 +143,11 @@ jobs:
 
       - name: Restore
         shell: pwsh
-        run: dotnet restore .\Affinity.sln /p:UseSimHubSdkStubs=true
+        run: dotnet restore .\Affinity.sln
 
       - name: Build plugin
         shell: pwsh
-        run: dotnet build .\Affinity\Affinity.csproj --configuration Release --no-restore /p:UseSimHubSdkStubs=true /p:SimHubInstallPath=C:\does-not-exist /p:Version=${{ steps.version.outputs.version }} /p:InformationalVersion=${{ steps.version.outputs.version }}
+        run: dotnet build .\Affinity\Affinity.csproj --configuration Release --no-restore /p:SimHubInstallPath=C:\does-not-exist /p:Version=${{ steps.version.outputs.version }} /p:InformationalVersion=${{ steps.version.outputs.version }}
 
       - name: Install Inno Setup
         shell: pwsh

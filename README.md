@@ -170,7 +170,7 @@ Key files and folders:
 - [Affinity\SettingsControl.xaml](Affinity/SettingsControl.xaml): SimHub settings/data UI
 - [Affinity\SettingsControl.xaml.cs](Affinity/SettingsControl.xaml.cs): save/reset/refresh handlers
 - [Affinity.Tests](Affinity.Tests): MSTest coverage for summary building, settings, and game logic
-- [SdkStubs](SdkStubs): local SDK stubs used for test-friendly builds without a live SimHub install
+- [lib/SimHub](lib/SimHub): committed SimHub reference assemblies used by local builds and GitHub Actions
 
 ## Developer Setup
 
@@ -233,9 +233,7 @@ The installer copies the plugin and SQLite runtime dependencies into the selecte
 
 ### Stub-based development and tests
 
-The project can swap to local SDK stubs when `UseSimHubSdkStubs=true`. This is mainly useful for test-friendly or offline development scenarios and helps avoid a hard dependency on live SimHub binaries during some workflows.
-
-The stubs live under [SdkStubs](SdkStubs).
+The project builds against committed SimHub reference assemblies under [lib/SimHub](lib/SimHub) so local development and GitHub Actions use the same compile-time SDK surface.
 
 ## Runtime Files
 

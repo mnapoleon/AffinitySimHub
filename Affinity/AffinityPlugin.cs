@@ -403,7 +403,6 @@ namespace Affinity
             _database = LoadRuntimeDatabase();
 
             pluginManager.AddProperty("Affinity.Version", GetType(), Version);
-            pluginManager.AddProperty("Affinity.Enabled", GetType(), Settings.EnablePlugin);
             pluginManager.AddProperty("Affinity.IsGameRunning", GetType(), false);
             pluginManager.AddProperty("Affinity.GameName", GetType(), string.Empty);
             pluginManager.AddProperty("Affinity.TrackName", GetType(), string.Empty);
@@ -425,14 +424,13 @@ namespace Affinity
             try
             {
                 DateTime now = DateTime.UtcNow;
-                pluginManager.SetPropertyValue("Affinity.Enabled", GetType(), Settings.EnablePlugin);
                 pluginManager.SetPropertyValue("Affinity.IsGameRunning", GetType(), data.GameRunning);
                 pluginManager.SetPropertyValue("Affinity.DataFilePath", GetType(), _databasePath);
                 pluginManager.SetPropertyValue("Affinity.DebugLogPath", GetType(), GetDebugLogPath(string.Empty));
 
-                if (!Settings.EnablePlugin || !data.GameRunning || data.NewData == null)
+                if (!data.GameRunning || data.NewData == null)
                 {
-                    DataStatus = !Settings.EnablePlugin ? "Plugin disabled" : "Waiting for telemetry";
+                    DataStatus = "Waiting for telemetry";
                     IsTelemetryActive = false;
                     bool finalizedTime = AccumulateActiveSessionTime(now);
                     FinalizeActiveSession(refreshSummaries: finalizedTime);

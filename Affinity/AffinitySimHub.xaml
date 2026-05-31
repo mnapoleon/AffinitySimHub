@@ -409,26 +409,14 @@
                                     <Grid.RowDefinitions>
                                         <RowDefinition Height="Auto" />
                                         <RowDefinition Height="Auto" />
-                                        <RowDefinition Height="Auto" />
                                     </Grid.RowDefinitions>
 
                                     <TextBlock Grid.Row="0"
                                                Grid.Column="0"
                                                Margin="0,0,12,8"
                                                VerticalAlignment="Center"
-                                               Text="Enable plugin" />
-                                    <CheckBox Grid.Row="0"
-                                              Grid.Column="1"
-                                              Margin="0,0,0,8"
-                                              HorizontalAlignment="Left"
-                                              IsChecked="{Binding DataContext.Settings.EnablePlugin, ElementName=Root, Mode=TwoWay}" />
-
-                                    <TextBlock Grid.Row="1"
-                                               Grid.Column="0"
-                                               Margin="0,0,12,8"
-                                               VerticalAlignment="Center"
                                                Text="Distance units" />
-                                    <CheckBox Grid.Row="1"
+                                    <CheckBox Grid.Row="0"
                                               Grid.Column="1"
                                               Margin="0,0,0,8"
                                               HorizontalAlignment="Left"
@@ -437,12 +425,12 @@
                                               Unchecked="DistanceUnitChanged"
                                               IsChecked="{Binding DataContext.Settings.DisplayInMiles, ElementName=Root, Mode=TwoWay}" />
 
-                                    <TextBlock Grid.Row="2"
+                                    <TextBlock Grid.Row="1"
                                                Grid.Column="0"
                                                Margin="0,0,12,0"
                                                VerticalAlignment="Center"
                                                Text="Version" />
-                                    <TextBlock Grid.Row="2"
+                                    <TextBlock Grid.Row="1"
                                                Grid.Column="1"
                                                VerticalAlignment="Center"
                                                Text="{Binding DataContext.PluginVersionDisplay, ElementName=Root}" />

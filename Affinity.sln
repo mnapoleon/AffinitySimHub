@@ -7,6 +7,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Affinity", "Affinity\Affini
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Affinity.Tests", "Affinity.Tests\Affinity.Tests.csproj", "{D246FDB0-37F6-46C9-BAF1-542CBCE9A698}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "SdkStubs", "SdkStubs", "{8D63A799-3E20-C041-61B2-46DE333C4860}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SimHub.Logging", "SdkStubs\SimHub.Logging\SimHub.Logging.csproj", "{037D1C3D-DF72-41F6-8E86-6C9443C727C3}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -41,9 +45,24 @@ Global
 		{D246FDB0-37F6-46C9-BAF1-542CBCE9A698}.Release|x64.Build.0 = Release|Any CPU
 		{D246FDB0-37F6-46C9-BAF1-542CBCE9A698}.Release|x86.ActiveCfg = Release|Any CPU
 		{D246FDB0-37F6-46C9-BAF1-542CBCE9A698}.Release|x86.Build.0 = Release|Any CPU
+		{037D1C3D-DF72-41F6-8E86-6C9443C727C3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{037D1C3D-DF72-41F6-8E86-6C9443C727C3}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{037D1C3D-DF72-41F6-8E86-6C9443C727C3}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{037D1C3D-DF72-41F6-8E86-6C9443C727C3}.Debug|x64.Build.0 = Debug|Any CPU
+		{037D1C3D-DF72-41F6-8E86-6C9443C727C3}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{037D1C3D-DF72-41F6-8E86-6C9443C727C3}.Debug|x86.Build.0 = Debug|Any CPU
+		{037D1C3D-DF72-41F6-8E86-6C9443C727C3}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{037D1C3D-DF72-41F6-8E86-6C9443C727C3}.Release|Any CPU.Build.0 = Release|Any CPU
+		{037D1C3D-DF72-41F6-8E86-6C9443C727C3}.Release|x64.ActiveCfg = Release|Any CPU
+		{037D1C3D-DF72-41F6-8E86-6C9443C727C3}.Release|x64.Build.0 = Release|Any CPU
+		{037D1C3D-DF72-41F6-8E86-6C9443C727C3}.Release|x86.ActiveCfg = Release|Any CPU
+		{037D1C3D-DF72-41F6-8E86-6C9443C727C3}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{037D1C3D-DF72-41F6-8E86-6C9443C727C3} = {8D63A799-3E20-C041-61B2-46DE333C4860}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {C1BECA7C-90BB-4E4D-930A-558A1FF3D255}

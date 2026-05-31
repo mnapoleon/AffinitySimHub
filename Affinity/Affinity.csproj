@@ -49,6 +49,7 @@
 
   <ItemGroup Condition="'$(UseSimHubSdkStubs)' == 'true'">
     <ProjectReference Include="..\SdkStubs\SimHub.Plugins\SimHub.Plugins.csproj" />
+    <ProjectReference Include="..\SdkStubs\SimHub.Logging\SimHub.Logging.csproj" />
     <ProjectReference Include="..\SdkStubs\GameReaderCommon\GameReaderCommon.csproj" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
   </ItemGroup>

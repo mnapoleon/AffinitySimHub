@@ -1,6 +1,7 @@
 using System;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 using GameReaderCommon;
 using FormsControl = System.Windows.Forms.Control;
 using WpfControl = System.Windows.Controls.Control;
@@ -45,6 +46,8 @@ namespace SimHub.Plugins
 
     public interface IPlugin
     {
+        PluginManager PluginManager { set; }
+
         void Init(PluginManager pluginManager);
 
         void End(PluginManager pluginManager);
@@ -55,21 +58,31 @@ namespace SimHub.Plugins
         void DataUpdate(PluginManager pluginManager, ref GameData data);
     }
 
-    public interface IWPFSettingsV2
+    public interface IWPFSettings
     {
         WpfControl GetWPFSettingsControl(PluginManager pluginManager);
+    }
 
-        FormsControl GetSettingsControl(PluginManager pluginManager);
+    public interface IWPFSettingsV2
+    {
+        string LeftMenuTitle { get; }
+
+        ImageSource PictureIcon { get; }
     }
 
     public class PluginManager
     {
-        public virtual string GetCommonStoragePath(string fileName)
+        public virtual string GetCommonStoragePath(params string[] pathParts)
         {
-            return fileName ?? string.Empty;
+            return pathParts == null ? string.Empty : System.IO.Path.Combine(pathParts);
         }
 
-        public virtual void AddProperty(string propertyName, Type ownerType, object initialValue)
+        public virtual string GetCommonStoragePath(bool create, params string[] pathParts)
+        {
+            return GetCommonStoragePath(pathParts);
+        }
+
+        public virtual void AddProperty<T>(string propertyName, Type ownerType, T initialValue, string unit = null)
         {
         }
 
@@ -78,7 +91,6 @@ namespace SimHub.Plugins
         }
     }
 }
-
 namespace SimHub.Plugins.Styles
 {
     public class SHTabControl : WpfTabControl
@@ -110,59 +122,6 @@ namespace SimHub.Plugins.Styles
             {
                 section.Header = args.NewValue;
             }
-        }
-    }
-}
-
-namespace SimHub.Logging
-{
-    public interface ILogger
-    {
-        void Info(string message);
-
-        void Warn(string message);
-
-        void Error(string message);
-    }
-
-    public sealed class NullLogger : ILogger
-    {
-        public void Info(string message)
-        {
-        }
-
-        public void Warn(string message)
-        {
-        }
-
-        public void Error(string message)
-        {
-        }
-    }
-
-    public static class Current
-    {
-        private static ILogger _logger = new NullLogger();
-
-        public static ILogger Logger
-        {
-            get => _logger;
-            set => _logger = value ?? new NullLogger();
-        }
-
-        public static void Info(string message)
-        {
-            _logger.Info(message);
-        }
-
-        public static void Warn(string message)
-        {
-            _logger.Warn(message);
-        }
-
-        public static void Error(string message)
-        {
-            _logger.Error(message);
         }
     }
 }

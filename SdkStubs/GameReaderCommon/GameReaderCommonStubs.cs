@@ -10,7 +10,9 @@ namespace GameReaderCommon
 
         public string GameName { get; set; } = string.Empty;
 
-        public StatusDataBase NewData { get; set; }
+        public StatusDataBase NewData;
+
+        public StatusDataBase OldData;
     }
 
     public abstract class StatusDataBase

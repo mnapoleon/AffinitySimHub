@@ -49,6 +49,19 @@ namespace Affinity.Tests
                 "GameData.NewData must not be a property because SimHub does not expose get_NewData().");
         }
 
+        [TestMethod]
+        public void PluginManagerStubModelsCommonStoragePathAsStringArray()
+        {
+            Type pluginManagerType = typeof(PluginManager);
+
+            Assert.IsNotNull(
+                pluginManagerType.GetMethod("GetCommonStoragePath", new[] { typeof(string[]) }),
+                "PluginManager.GetCommonStoragePath must compile to the string[] overload exposed by SimHub.");
+            Assert.IsNull(
+                pluginManagerType.GetMethod("GetCommonStoragePath", new[] { typeof(string) }),
+                "PluginManager.GetCommonStoragePath(string) does not exist in SimHub and would fail at runtime.");
+        }
+
         private static void AssertReferenceVersion(AssemblyName[] references, string name, Version expectedVersion)
         {
             AssemblyName reference = references.SingleOrDefault(candidate => candidate.Name == name);

@@ -72,9 +72,14 @@ namespace SimHub.Plugins
 
     public class PluginManager
     {
-        public virtual string GetCommonStoragePath(string fileName)
+        public virtual string GetCommonStoragePath(params string[] pathParts)
         {
-            return fileName ?? string.Empty;
+            return pathParts == null ? string.Empty : System.IO.Path.Combine(pathParts);
+        }
+
+        public virtual string GetCommonStoragePath(bool create, params string[] pathParts)
+        {
+            return GetCommonStoragePath(pathParts);
         }
 
         public virtual void AddProperty(string propertyName, Type ownerType, object initialValue)

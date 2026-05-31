@@ -36,6 +36,19 @@ namespace Affinity.Tests
                 "The SDK stub must require IPlugin.PluginManager so release builds implement SimHub's runtime interface.");
         }
 
+        [TestMethod]
+        public void GameDataStubModelsNewDataAsField()
+        {
+            Type gameDataType = typeof(GameReaderCommon.GameData);
+
+            Assert.IsNotNull(
+                gameDataType.GetField("NewData"),
+                "GameData.NewData must be a field to match SimHub's runtime GameReaderCommon assembly.");
+            Assert.IsNull(
+                gameDataType.GetProperty("NewData"),
+                "GameData.NewData must not be a property because SimHub does not expose get_NewData().");
+        }
+
         private static void AssertReferenceVersion(AssemblyName[] references, string name, Version expectedVersion)
         {
             AssemblyName reference = references.SingleOrDefault(candidate => candidate.Name == name);

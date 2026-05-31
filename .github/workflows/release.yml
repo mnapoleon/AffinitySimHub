@@ -149,35 +149,50 @@ jobs:
         shell: pwsh
         run: dotnet build .\Affinity\Affinity.csproj --configuration Release --no-restore /p:UseSimHubSdkStubs=true /p:SimHubInstallPath=C:\does-not-exist /p:Version=${{ steps.version.outputs.version }} /p:InformationalVersion=${{ steps.version.outputs.version }}
 
-      - name: Package release asset
-        id: package
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --no-progress -y
+
+      - name: Build installer
+        id: installer
         shell: pwsh
         run: |
           $tag = '${{ steps.version.outputs.tag }}'
-          $stagingDir = Join-Path $env:RUNNER_TEMP 'affinity-release'
-          $assetName = "Affinity-$tag.zip"
-          $assetPath = Join-Path $env:RUNNER_TEMP $assetName
+          $version = '${{ steps.version.outputs.version }}'
+          $buildOutput = '.\Affinity\bin\Release\net48'
+          $installerDir = Join-Path $env:RUNNER_TEMP 'affinity-installer'
+          $assetName = "AffinitySetup-$tag.exe"
+          $assetPath = Join-Path $installerDir $assetName
 
-          Remove-Item -LiteralPath $stagingDir -Recurse -Force -ErrorAction SilentlyContinue
-          New-Item -ItemType Directory -Path $stagingDir | Out-Null
+          $requiredFiles = @(
+            'Affinity.dll'
+            'ac_track_id_map.json'
+            'System.Data.SQLite.dll'
+            'x64\SQLite.Interop.dll'
+            'x86\SQLite.Interop.dll'
+          )
 
-          Copy-Item -LiteralPath '.\Affinity\bin\Release\net48\Affinity.dll' -Destination $stagingDir
-          Copy-Item -LiteralPath '.\Affinity\bin\Release\net48\Affinity.pdb' -Destination $stagingDir -ErrorAction SilentlyContinue
-          Set-Content -Path (Join-Path $stagingDir 'README.txt') -Value @(
-            'Affinity SimHub Plugin'
-            ''
-            'Install:'
-            '1. Close SimHub.'
-            '2. Extract the zip.'
-            '3. Copy Affinity.dll into your SimHub install directory.'
-            '4. Start SimHub.'
-          ) -Encoding UTF8
-
-          if (Test-Path $assetPath) {
-            Remove-Item -LiteralPath $assetPath -Force
+          foreach ($requiredFile in $requiredFiles) {
+            $requiredPath = Join-Path $buildOutput $requiredFile
+            if (-not (Test-Path -LiteralPath $requiredPath)) {
+              throw "Release output is missing required installer file: $requiredPath"
+            }
           }
 
-          Compress-Archive -Path (Join-Path $stagingDir '*') -DestinationPath $assetPath
+          Remove-Item -LiteralPath $installerDir -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Path $installerDir | Out-Null
+
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path -LiteralPath $iscc)) {
+            throw "Inno Setup compiler not found at $iscc"
+          }
+
+          & $iscc '.\Installer\AffinitySetup.iss' "/DMyAppVersion=$version" "/DMyOutputDir=$installerDir"
+
+          if (-not (Test-Path -LiteralPath $assetPath)) {
+            throw "Installer was not created at $assetPath"
+          }
+
           "asset_name=$assetName" >> $env:GITHUB_OUTPUT
           "asset_path=$assetPath" >> $env:GITHUB_OUTPUT
 
@@ -233,12 +248,12 @@ jobs:
             core.setOutput("release_id", String(release.data.id));
             core.notice(`Created ${tag} and published a GitHub release.`);
 
-      - name: Upload plugin asset
+      - name: Upload installer asset
         uses: actions/github-script@v7
         env:
           RELEASE_ID: ${{ steps.release.outputs.release_id }}
-          ASSET_NAME: ${{ steps.package.outputs.asset_name }}
-          ASSET_PATH: ${{ steps.package.outputs.asset_path }}
+          ASSET_NAME: ${{ steps.installer.outputs.asset_name }}
+          ASSET_PATH: ${{ steps.installer.outputs.asset_path }}
         with:
           script: |
             const fs = require("fs");

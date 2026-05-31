@@ -207,6 +207,9 @@ The plugin project includes a post-build target that copies:
 - `Affinity.dll`
 - `Affinity.pdb`
 - `ac_track_id_map.json`
+- `System.Data.SQLite.dll`
+- `x64\SQLite.Interop.dll`
+- `x86\SQLite.Interop.dll`
 
 into the configured SimHub install path when that path exists.
 
@@ -221,6 +224,12 @@ dotnet build .\Affinity\Affinity.csproj
 ```
 
 If SimHub is open and the DLL is locked, close or restart SimHub and rebuild.
+
+### Release installer
+
+GitHub releases are built by [.github/workflows/release.yml](.github/workflows/release.yml). The release workflow builds the plugin, compiles the Inno Setup script at [Installer/AffinitySetup.iss](Installer/AffinitySetup.iss), and uploads `AffinitySetup-vX.Y.Z.exe` as the release asset.
+
+The installer copies the plugin and SQLite runtime dependencies into the selected SimHub install folder. Close SimHub before running the installer so `Affinity.dll` can be replaced.
 
 ### Stub-based development and tests
 

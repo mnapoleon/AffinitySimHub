@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Reflection;
 using Affinity;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
@@ -12,7 +13,6 @@ namespace Affinity.Tests
         {
             AffinitySettings settings = new AffinitySettings
             {
-                EnablePlugin = false,
                 DisplayInMiles = true,
                 EnableDebugLogging = true,
                 GameDebugLogging = new Dictionary<string, bool>
@@ -23,10 +23,15 @@ namespace Affinity.Tests
 
             settings.Reset();
 
-            Assert.IsTrue(settings.EnablePlugin);
             Assert.IsFalse(settings.DisplayInMiles);
             Assert.IsFalse(settings.EnableDebugLogging);
             Assert.AreEqual(0, settings.GameDebugLogging.Count);
+        }
+
+        [TestMethod]
+        public void AffinitySettings_DoesNotExposeEnablePluginProperty()
+        {
+            Assert.IsNull(typeof(AffinitySettings).GetProperty("EnablePlugin", BindingFlags.Public | BindingFlags.Instance));
         }
     }
 }

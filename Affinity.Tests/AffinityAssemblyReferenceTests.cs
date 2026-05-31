@@ -112,6 +112,14 @@ namespace Affinity.Tests
                 "SimHub.Logging.Current must use log4net.ILog like the real SimHub API.");
         }
 
+        [TestMethod]
+        public void PluginSource_DoesNotReferenceRemovedAffinityEnabledProperty()
+        {
+            string pluginSource = File.ReadAllText(GetRepoPath("Affinity", "AffinityPlugin.cs"));
+
+            StringAssert.DoesNotContain(pluginSource, "\"Affinity.Enabled\"");
+        }
+
         private static void AssertReferenceVersion(AssemblyName[] references, string name, Version expectedVersion)
         {
             AssemblyName reference = references.SingleOrDefault(candidate => candidate.Name == name);
@@ -121,6 +129,28 @@ namespace Affinity.Tests
                 expectedVersion,
                 reference.Version,
                 $"Affinity.dll must reference SimHub's runtime {name} identity so SimHub can discover the plugin.");
+        }
+
+        private static string GetRepoPath(params string[] parts)
+        {
+            string path = AppDomain.CurrentDomain.BaseDirectory;
+            while (!string.IsNullOrEmpty(path) && !Directory.Exists(Path.Combine(path, ".git")))
+            {
+                path = Path.GetDirectoryName(path);
+            }
+
+            Assert.IsFalse(string.IsNullOrEmpty(path), "Could not locate the repository root for source inspection tests.");
+            return parts.Aggregate(path, Path.Combine);
+        }
+    }
+
+    internal static class StringAssert
+    {
+        public static void DoesNotContain(string value, string substring)
+        {
+            Assert.IsFalse(
+                value?.Contains(substring) ?? false,
+                $"Expected the string to not contain '{substring}'.");
         }
     }
 }

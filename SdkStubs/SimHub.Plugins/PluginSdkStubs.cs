@@ -91,7 +91,6 @@ namespace SimHub.Plugins
         }
     }
 }
-
 namespace SimHub.Plugins.Styles
 {
     public class SHTabControl : WpfTabControl
@@ -123,59 +122,6 @@ namespace SimHub.Plugins.Styles
             {
                 section.Header = args.NewValue;
             }
-        }
-    }
-}
-
-namespace SimHub.Logging
-{
-    public interface ILogger
-    {
-        void Info(string message);
-
-        void Warn(string message);
-
-        void Error(string message);
-    }
-
-    public sealed class NullLogger : ILogger
-    {
-        public void Info(string message)
-        {
-        }
-
-        public void Warn(string message)
-        {
-        }
-
-        public void Error(string message)
-        {
-        }
-    }
-
-    public static class Current
-    {
-        private static ILogger _logger = new NullLogger();
-
-        public static ILogger Logger
-        {
-            get => _logger;
-            set => _logger = value ?? new NullLogger();
-        }
-
-        public static void Info(string message)
-        {
-            _logger.Info(message);
-        }
-
-        public static void Warn(string message)
-        {
-            _logger.Warn(message);
-        }
-
-        public static void Error(string message)
-        {
-            _logger.Error(message);
         }
     }
 }

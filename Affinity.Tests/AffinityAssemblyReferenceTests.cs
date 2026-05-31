@@ -17,6 +17,7 @@ namespace Affinity.Tests
             AssemblyName[] references = Assembly.ReflectionOnlyLoadFrom(affinityAssemblyPath).GetReferencedAssemblies();
 
             AssertReferenceVersion(references, "GameReaderCommon", new Version(1, 0, 0, 0));
+            AssertReferenceVersion(references, "SimHub.Logging", new Version(1, 0, 0, 0));
             AssertReferenceVersion(references, "SimHub.Plugins", new Version(1, 0, 9631, 22016));
         }
 
@@ -85,6 +86,19 @@ namespace Affinity.Tests
                         method.GetParameters().Select(parameter => parameter.ParameterType).SequenceEqual(
                             new[] { typeof(string), typeof(Type), typeof(object) })),
                 "PluginManager.AddProperty(string, Type, object) does not exist in SimHub and would fail at runtime.");
+        }
+
+        [TestMethod]
+        public void LoggingStubUsesSimHubLoggingAssembly()
+        {
+            Assert.AreEqual(
+                "SimHub.Logging",
+                typeof(SimHub.Logging).Assembly.GetName().Name,
+                "SimHub.Logging must come from the SimHub.Logging assembly, not the SimHub.Plugins stub assembly.");
+            Assert.AreEqual(
+                "log4net",
+                typeof(SimHub.Logging).GetProperty("Current").PropertyType.Assembly.GetName().Name,
+                "SimHub.Logging.Current must use log4net.ILog like the real SimHub API.");
         }
 
         private static void AssertReferenceVersion(AssemblyName[] references, string name, Version expectedVersion)

@@ -124,9 +124,7 @@ namespace Affinity.Tests
             Assert.IsFalse(string.IsNullOrEmpty(path), "Could not locate the repository root for source inspection tests.");
             string pluginSource = File.ReadAllText(Path.Combine(path, "Affinity", "AffinityPlugin.cs"));
 
-            Assert.IsFalse(
-                pluginSource.Contains("\"Affinity.Enabled\""),
-                "Expected AffinityPlugin.cs to stop referencing the removed Affinity.Enabled property.");
+            StringAssert.DoesNotContain(pluginSource, "\"Affinity.Enabled\"");
         }
 
         private static void AssertReferenceVersion(AssemblyName[] references, string name, Version expectedVersion)
@@ -140,5 +138,15 @@ namespace Affinity.Tests
                 $"Affinity.dll must reference SimHub's runtime {name} identity so SimHub can discover the plugin.");
         }
 
+    }
+
+    internal static class StringAssert
+    {
+        public static void DoesNotContain(string value, string substring)
+        {
+            Assert.IsFalse(
+                value?.Contains(substring) ?? false,
+                $"Expected the string to not contain '{substring}'.");
+        }
     }
 }

@@ -151,7 +151,6 @@ Affinity stores user settings separately from distance data.
 
 Settings currently include:
 
-- plugin enabled/disabled
 - distance unit preference
 - debug logging enabled/disabled
 - per-game debug logging toggles
@@ -167,8 +166,8 @@ Key files and folders:
 - [Affinity\AffinitySummaryBuilder.cs](Affinity/AffinitySummaryBuilder.cs): summary aggregation and UI-facing snapshot creation
 - [Affinity\AffinityGameLogic.cs](Affinity/AffinityGameLogic.cs): supported-game rules, normalization, telemetry helpers
 - [Affinity\AffinityDatabase.cs](Affinity/AffinityDatabase.cs): persisted storage and summary models
-- [Affinity\SettingsControl.xaml](Affinity/SettingsControl.xaml): SimHub settings/data UI
-- [Affinity\SettingsControl.xaml.cs](Affinity/SettingsControl.xaml.cs): save/reset/refresh handlers
+- [Affinity\AffinitySimHub.xaml](Affinity/AffinitySimHub.xaml): SimHub settings/data UI
+- [Affinity\AffinitySimHub.xaml.cs](Affinity/AffinitySimHub.xaml.cs): save/reset/refresh handlers
 - [Affinity.Tests](Affinity.Tests): MSTest coverage for summary building, settings, and game logic
 - [lib/SimHub](lib/SimHub): committed SimHub reference assemblies used by local builds and GitHub Actions
 
@@ -263,12 +262,11 @@ The Data tab is effectively the reporting surface for the plugin:
 
 The Settings tab controls:
 
-- plugin enablement
 - distance units
 - debug logging
 - per-game debug logging switches
 
-The UI implementation lives in [SettingsControl.xaml](Affinity/SettingsControl.xaml) and [SettingsControl.xaml.cs](Affinity/SettingsControl.xaml.cs).
+The UI implementation lives in [AffinitySimHub.xaml](Affinity/AffinitySimHub.xaml) and [AffinitySimHub.xaml.cs](Affinity/AffinitySimHub.xaml.cs).
 
 ## Testing Strategy
 

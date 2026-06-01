@@ -168,6 +168,49 @@ namespace Affinity.Tests
         }
 
         [TestMethod]
+        public void GetDistanceSummaries_FiltersByExactStartedUtcRange()
+        {
+            using (var repository = CreateRepository())
+            {
+                repository.UpsertSession(
+                    "may-evening-local-session",
+                    "Assetto Corsa",
+                    "BMW M3 GT2",
+                    "monza",
+                    "monza_gp",
+                    new DateTime(2026, 6, 1, 0, 30, 0, DateTimeKind.Utc),
+                    new DateTime(2026, 6, 1, 0, 45, 0, DateTimeKind.Utc),
+                    2000.0,
+                    900.0);
+                repository.UpsertSession(
+                    "june-local-session",
+                    "Assetto Corsa",
+                    "Ferrari 488 GT3",
+                    "spa",
+                    "spa",
+                    new DateTime(2026, 6, 1, 5, 0, 0, DateTimeKind.Utc),
+                    new DateTime(2026, 6, 1, 5, 15, 0, DateTimeKind.Utc),
+                    5000.0,
+                    900.0);
+
+                var previousLocalMonthSummaries = repository.GetDistanceSummaries(
+                    new DateTime(2026, 5, 1, 4, 0, 0, DateTimeKind.Utc),
+                    new DateTime(2026, 6, 1, 4, 0, 0, DateTimeKind.Utc));
+                var currentLocalMonthSummaries = repository.GetDistanceSummaries(
+                    new DateTime(2026, 6, 1, 4, 0, 0, DateTimeKind.Utc),
+                    new DateTime(2026, 7, 1, 4, 0, 0, DateTimeKind.Utc));
+
+                Assert.AreEqual(1, previousLocalMonthSummaries.Count);
+                Assert.AreEqual("BMW M3 GT2", previousLocalMonthSummaries.Single().CarModel);
+                Assert.AreEqual(2.0, previousLocalMonthSummaries.Single().TotalDistanceKm, 0.000001);
+
+                Assert.AreEqual(1, currentLocalMonthSummaries.Count);
+                Assert.AreEqual("Ferrari 488 GT3", currentLocalMonthSummaries.Single().CarModel);
+                Assert.AreEqual(5.0, currentLocalMonthSummaries.Single().TotalDistanceKm, 0.000001);
+            }
+        }
+
+        [TestMethod]
         public void ExistingDisplayNames_ArePreferredInDistanceSummaries()
         {
             using (var repository = CreateRepository())

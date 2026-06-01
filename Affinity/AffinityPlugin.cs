@@ -753,9 +753,9 @@ namespace Affinity
         internal void RefreshDistanceSummaries()
         {
             AffinitySummarySnapshot snapshot = AffinitySummaryBuilder.BuildSnapshot(_database, Settings.DisplayInMiles, _assettoCorsaTrackMap);
-            DateTime nowUtc = DateTime.UtcNow;
-            AffinitySummarySnapshot thisMonthSnapshot = BuildMonthlySummarySnapshot(nowUtc);
-            AffinitySummarySnapshot lastMonthSnapshot = BuildMonthlySummarySnapshot(nowUtc.AddMonths(-1));
+            DateTime nowLocal = DateTime.Now;
+            AffinitySummarySnapshot thisMonthSnapshot = BuildMonthlySummarySnapshot(nowLocal);
+            AffinitySummarySnapshot lastMonthSnapshot = BuildMonthlySummarySnapshot(nowLocal.AddMonths(-1));
             ExecuteOnUiThread(() => ApplySummarySnapshot(snapshot, thisMonthSnapshot, lastMonthSnapshot));
         }
 
@@ -1558,15 +1558,16 @@ namespace Affinity
             return $"{totalHours:D2}:{duration.Minutes:D2}:{duration.Seconds:D2}";
         }
 
-        private AffinitySummarySnapshot BuildMonthlySummarySnapshot(DateTime monthUtc)
+        private AffinitySummarySnapshot BuildMonthlySummarySnapshot(DateTime monthLocal)
         {
             if (_sqliteRepository == null)
             {
                 return new AffinitySummarySnapshot();
             }
 
-            DateTime monthStartUtc = new DateTime(monthUtc.Year, monthUtc.Month, 1, 0, 0, 0, DateTimeKind.Utc);
-            DateTime nextMonthStartUtc = monthStartUtc.AddMonths(1);
+            DateTime monthStartLocal = new DateTime(monthLocal.Year, monthLocal.Month, 1, 0, 0, 0, DateTimeKind.Local);
+            DateTime monthStartUtc = monthStartLocal.ToUniversalTime();
+            DateTime nextMonthStartUtc = monthStartLocal.AddMonths(1).ToUniversalTime();
             return AffinitySummaryBuilder.BuildSnapshot(
                 _sqliteRepository.GetDistanceSummaries(monthStartUtc, nextMonthStartUtc),
                 Settings.DisplayInMiles,

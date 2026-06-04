@@ -74,6 +74,7 @@ namespace Affinity
         private TrackDistanceSummary _featuredTrackSummary;
         private CarDistanceSummary _featuredCarSummary;
         private bool _isTelemetryActive;
+        private object _selectedTopLevelTab;
         private GameDistanceTab _selectedGameTab;
         private Guid _activeSessionId = Guid.Empty;
         private string _activeContextKey = string.Empty;
@@ -321,6 +322,30 @@ namespace Affinity
 
                 _selectedGameTab = value;
                 OnPropertyChanged();
+            }
+        }
+
+        public object SelectedTopLevelTab
+        {
+            get => _selectedTopLevelTab;
+            set
+            {
+                if (ReferenceEquals(_selectedTopLevelTab, value))
+                {
+                    return;
+                }
+
+                _selectedTopLevelTab = value;
+                OnPropertyChanged();
+
+                if (value is GameDistanceTab gameTab)
+                {
+                    SelectedGameTab = gameTab;
+                }
+                else if (!(value is AffinitySettingsTab) && !(value is AffinityOverviewTab))
+                {
+                    SelectedGameTab = null;
+                }
             }
         }
 
@@ -1593,30 +1618,17 @@ namespace Affinity
             TopSummarySections.Add(CreateTopSummarySection("Top This Month", thisMonthSnapshot));
             TopSummarySections.Add(CreateTopSummarySection("Top Last Month", lastMonthSnapshot));
 
-            string selectedGame = SelectedGameTab?.GameName;
-            bool canReuseTopLevelTabStructure = CanReuseTopLevelTabStructure(GameTabs, snapshot.GameTabs)
-                && TopLevelTabs.Count == GameTabs.Count + 2
-                && ReferenceEquals(TopLevelTabs[0], _overviewTab)
-                && ReferenceEquals(TopLevelTabs[TopLevelTabs.Count - 1], _settingsTab);
-
-            if (canReuseTopLevelTabStructure)
+            object previouslySelectedTopLevelTab = SelectedTopLevelTab;
+            GameTabs.Clear();
+            foreach (GameDistanceTab tab in snapshot.GameTabs)
             {
-                ReplaceGameTabsInCollections(GameTabs, TopLevelTabs, snapshot.GameTabs);
-            }
-            else
-            {
-                GameTabs.Clear();
-                foreach (GameDistanceTab tab in snapshot.GameTabs)
-                {
-                    GameTabs.Add(tab);
-                }
-
-                RebuildTopLevelTabs();
+                GameTabs.Add(tab);
             }
 
-            SelectedGameTab = GameTabs.FirstOrDefault(tab =>
-                string.Equals(tab.GameName, selectedGame, StringComparison.OrdinalIgnoreCase))
-                ?? GameTabs.FirstOrDefault();
+            RebuildTopLevelTabs();
+
+            SelectedTopLevelTab = ResolveSelectedTopLevelTab(previouslySelectedTopLevelTab, GameTabs, _overviewTab, _settingsTab);
+            SelectedGameTab = SelectedTopLevelTab as GameDistanceTab;
 
             foreach (GameDistanceTab tab in GameTabs)
             {
@@ -1654,52 +1666,36 @@ namespace Affinity
             IReadOnlyList<GameDistanceTab> existingTabs,
             IReadOnlyList<GameDistanceTab> refreshedTabs)
         {
-            if (existingTabs == null || refreshedTabs == null || existingTabs.Count != refreshedTabs.Count)
+            return false;
+        }
+
+        internal static object ResolveSelectedTopLevelTab(
+            object previousSelectedTopLevelTab,
+            IReadOnlyList<GameDistanceTab> refreshedTabs,
+            AffinityOverviewTab overviewTab,
+            AffinitySettingsTab settingsTab)
+        {
+            if (previousSelectedTopLevelTab is AffinityOverviewTab)
             {
-                return false;
+                return overviewTab;
             }
 
-            for (int i = 0; i < existingTabs.Count; i++)
+            if (previousSelectedTopLevelTab is AffinitySettingsTab)
             {
-                if (!string.Equals(existingTabs[i]?.GameName, refreshedTabs[i]?.GameName, StringComparison.OrdinalIgnoreCase))
+                return settingsTab;
+            }
+
+            if (previousSelectedTopLevelTab is GameDistanceTab previousGameTab)
+            {
+                GameDistanceTab matchingTab = refreshedTabs?.FirstOrDefault(tab =>
+                    string.Equals(tab.GameName, previousGameTab.GameName, StringComparison.OrdinalIgnoreCase));
+                if (matchingTab != null)
                 {
-                    return false;
+                    return matchingTab;
                 }
             }
 
-            return true;
-        }
-
-        internal static void ReplaceGameTabsInCollections(
-            ObservableCollection<GameDistanceTab> gameTabs,
-            ObservableCollection<object> topLevelTabs,
-            IReadOnlyList<GameDistanceTab> refreshedTabs)
-        {
-            if (gameTabs == null)
-            {
-                throw new ArgumentNullException(nameof(gameTabs));
-            }
-
-            if (topLevelTabs == null)
-            {
-                throw new ArgumentNullException(nameof(topLevelTabs));
-            }
-
-            if (refreshedTabs == null)
-            {
-                throw new ArgumentNullException(nameof(refreshedTabs));
-            }
-
-            if (gameTabs.Count != refreshedTabs.Count || topLevelTabs.Count != refreshedTabs.Count + 2)
-            {
-                throw new ArgumentException("Tab collections must already match the refreshed game-tab structure.");
-            }
-
-            for (int i = 0; i < refreshedTabs.Count; i++)
-            {
-                gameTabs[i] = refreshedTabs[i];
-                topLevelTabs[i + 1] = refreshedTabs[i];
-            }
+            return overviewTab;
         }
 
         private static void ExecuteOnUiThread(Action action)

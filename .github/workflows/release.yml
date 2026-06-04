@@ -241,6 +241,15 @@ jobs:
                 repo: context.repo.repo,
                 tag,
               });
+              await github.rest.repos.updateRelease({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                release_id: existingRelease.data.id,
+                tag_name: tag,
+                target_commitish: "${{ steps.release_meta.outputs.target_sha }}",
+                name: tag,
+                body: releaseBody,
+              });
               core.setOutput("release_id", String(existingRelease.data.id));
               return;
             } catch (error) {
@@ -288,6 +297,7 @@ jobs:
               { name: assetName, path: assetPath },
               { name: hashName, path: hashPath },
             ];
+            const legacyAssetPattern = /^AffinitySetup-.*\.exe$/i;
 
             const existingAssets = await github.rest.repos.listReleaseAssets({
               owner: context.repo.owner,
@@ -295,15 +305,17 @@ jobs:
               release_id: releaseId,
             });
 
-            for (const asset of assetsToUpload) {
-              const existingAsset = existingAssets.data.find(existing => existing.name === asset.name);
-              if (existingAsset) {
-                await github.rest.repos.deleteReleaseAsset({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  asset_id: existingAsset.id,
-                });
-              }
+            const assetsToDelete = existingAssets.data.filter(existing =>
+              assetsToUpload.some(asset => asset.name === existing.name) ||
+              legacyAssetPattern.test(existing.name)
+            );
+
+            for (const existingAsset of assetsToDelete) {
+              await github.rest.repos.deleteReleaseAsset({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                asset_id: existingAsset.id,
+              });
             }
 
             for (const asset of assetsToUpload) {

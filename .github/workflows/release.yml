@@ -250,18 +250,23 @@ jobs:
         env:
           NEXT_TAG: ${{ steps.version.outputs.tag }}
           RELEASE_NOTES_PATH: ${{ steps.notes.outputs.notes_path }}
+          TARGET_SHA: ${{ steps.release_meta.outputs.target_sha }}
         with:
           script: |
             const fs = require("fs");
             const tag = process.env.NEXT_TAG;
             const releaseBody = fs.readFileSync(process.env.RELEASE_NOTES_PATH, "utf8");
+            const targetSha = process.env.TARGET_SHA;
             let tagExists = false;
             try {
-              await github.rest.git.getRef({
+              const existingTagRef = await github.rest.git.getRef({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 ref: `tags/${tag}`,
               });
+              if (existingTagRef.data.object.sha !== targetSha) {
+                throw new Error(`Tag ${tag} points to ${existingTagRef.data.object.sha}, expected ${targetSha}. Refusing to reuse an existing tag for a different commit.`);
+              }
               tagExists = true;
             } catch (error) {
               if (error.status !== 404) {
@@ -337,7 +342,6 @@ jobs:
               { name: assetName, path: assetPath },
               { name: hashName, path: hashPath },
             ];
-            const legacyAssetPattern = /^AffinitySetup-.*\.exe$/i;
 
             const existingAssets = await github.rest.repos.listReleaseAssets({
               owner: context.repo.owner,
@@ -347,8 +351,7 @@ jobs:
             });
 
             const assetsToDelete = existingAssets.data.filter(existing =>
-              assetsToUpload.some(asset => asset.name === existing.name) ||
-              legacyAssetPattern.test(existing.name)
+              !assetsToUpload.some(asset => asset.name === existing.name)
             );
 
             for (const existingAsset of assetsToDelete) {

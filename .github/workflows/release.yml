@@ -50,6 +50,7 @@ jobs:
         shell: pwsh
         run: |
           $bump = '${{ steps.release_meta.outputs.bump }}'
+          $targetSha = '${{ steps.release_meta.outputs.target_sha }}'
           $tagNames = git tag --list | Where-Object { $_ -match '^v(\d+)\.(\d+)\.(\d+)$' }
 
           $versions = foreach ($tag in $tagNames) {
@@ -63,41 +64,68 @@ jobs:
             }
           }
 
-          if ($versions) {
-            $latest = $versions |
+          $targetTagNames = git tag --points-at $targetSha | Where-Object { $_ -match '^v(\d+)\.(\d+)\.(\d+)$' }
+          $targetVersions = foreach ($tag in $targetTagNames) {
+            if ($tag -match '^v(\d+)\.(\d+)\.(\d+)$') {
+              [pscustomobject]@{
+                Tag = $tag
+                Major = [int]$matches[1]
+                Minor = [int]$matches[2]
+                Patch = [int]$matches[3]
+              }
+            }
+          }
+
+          if ($targetVersions) {
+            $current = $targetVersions |
               Sort-Object Major, Minor, Patch |
               Select-Object -Last 1
-            $major = $latest.Major
-            $minor = $latest.Minor
-            $patch = $latest.Patch
-            $previousTag = $latest.Tag
-          } else {
-            $major = 0
-            $minor = 0
-            $patch = 0
-            $previousTag = ''
-          }
+            $nextTag = $current.Tag
+            $nextVersion = "$($current.Major).$($current.Minor).$($current.Patch)"
 
-          switch ($bump) {
-            'major' {
-              $major += 1
+            $previous = $versions |
+              Where-Object { $_.Tag -ne $nextTag } |
+              Sort-Object Major, Minor, Patch |
+              Select-Object -Last 1
+            $previousTag = if ($previous) { $previous.Tag } else { '' }
+          } else {
+            if ($versions) {
+              $latest = $versions |
+                Sort-Object Major, Minor, Patch |
+                Select-Object -Last 1
+              $major = $latest.Major
+              $minor = $latest.Minor
+              $patch = $latest.Patch
+              $previousTag = $latest.Tag
+            } else {
+              $major = 0
               $minor = 0
               $patch = 0
+              $previousTag = ''
             }
-            'minor' {
-              $minor += 1
-              $patch = 0
+
+            switch ($bump) {
+              'major' {
+                $major += 1
+                $minor = 0
+                $patch = 0
+              }
+              'minor' {
+                $minor += 1
+                $patch = 0
+              }
+              'patch' {
+                $patch += 1
+              }
+              default {
+                throw "Unsupported bump type: $bump"
+              }
             }
-            'patch' {
-              $patch += 1
-            }
-            default {
-              throw "Unsupported bump type: $bump"
-            }
+
+            $nextTag = "v$major.$minor.$patch"
+            $nextVersion = "$major.$minor.$patch"
           }
 
-          $nextTag = "v$major.$minor.$patch"
-          $nextVersion = "$major.$minor.$patch"
           "tag=$nextTag" >> $env:GITHUB_OUTPUT
           "version=$nextVersion" >> $env:GITHUB_OUTPUT
           "previous_tag=$previousTag" >> $env:GITHUB_OUTPUT
@@ -227,21 +255,39 @@ jobs:
             const fs = require("fs");
             const tag = process.env.NEXT_TAG;
             const releaseBody = fs.readFileSync(process.env.RELEASE_NOTES_PATH, "utf8");
-
+            let tagExists = false;
             try {
               await github.rest.git.getRef({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 ref: `tags/${tag}`,
               });
+              tagExists = true;
+            } catch (error) {
+              if (error.status !== 404) {
+                throw error;
+              }
+            }
 
-              core.notice(`Tag ${tag} already exists; skipping tag and release creation.`);
+            if (!tagExists) {
+              await github.rest.git.createRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: `refs/tags/${tag}`,
+                sha: "${{ steps.release_meta.outputs.target_sha }}",
+              });
+              core.notice(`Created tag ${tag}.`);
+            } else {
+              core.notice(`Tag ${tag} already exists; reusing it.`);
+            }
+
+            try {
               const existingRelease = await github.rest.repos.getReleaseByTag({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 tag,
               });
-              await github.rest.repos.updateRelease({
+              const updatedRelease = await github.rest.repos.updateRelease({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 release_id: existingRelease.data.id,
@@ -250,20 +296,14 @@ jobs:
                 name: tag,
                 body: releaseBody,
               });
-              core.setOutput("release_id", String(existingRelease.data.id));
+              core.setOutput("release_id", String(updatedRelease.data.id));
+              core.notice(`Updated existing release for ${tag}.`);
               return;
             } catch (error) {
               if (error.status !== 404) {
                 throw error;
               }
             }
-
-            await github.rest.git.createRef({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              ref: `refs/tags/${tag}`,
-              sha: "${{ steps.release_meta.outputs.target_sha }}",
-            });
 
             const release = await github.rest.repos.createRelease({
               owner: context.repo.owner,
@@ -275,7 +315,7 @@ jobs:
             });
 
             core.setOutput("release_id", String(release.data.id));
-            core.notice(`Created ${tag} and published a GitHub release.`);
+            core.notice(`Created release for ${tag}.`);
 
       - name: Upload release assets
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
@@ -303,6 +343,7 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               release_id: releaseId,
+              per_page: 100,
             });
 
             const assetsToDelete = existingAssets.data.filter(existing =>

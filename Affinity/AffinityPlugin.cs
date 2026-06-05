@@ -784,6 +784,11 @@ namespace Affinity
             ExecuteOnUiThread(() => ApplySummarySnapshot(snapshot, thisMonthSnapshot, lastMonthSnapshot));
         }
 
+        internal void ClearSelectedGameTabFilter()
+        {
+            SelectedGameTab?.ClearFilter();
+        }
+
         private AffinitySettings LoadSettings()
         {
             try

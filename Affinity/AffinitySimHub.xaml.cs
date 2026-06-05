@@ -32,5 +32,10 @@ namespace Affinity
         {
             _plugin.RefreshDisplaySettings();
         }
+
+        private void ClearFilterButton_Click(object sender, RoutedEventArgs e)
+        {
+            _plugin.ClearSelectedGameTabFilter();
+        }
     }
 }

@@ -360,13 +360,30 @@
                                    FontWeight="SemiBold"
                                    Text="Cars" />
 
+                        <StackPanel Grid.Row="2"
+                                    Grid.ColumnSpan="3"
+                                    Margin="0,28,0,8"
+                                    Orientation="Horizontal">
+                            <TextBlock VerticalAlignment="Center"
+                                       Foreground="#B8B8B8"
+                                       Text="{Binding ActiveFilterDescription}" />
+                            <Button Width="90"
+                                    Height="24"
+                                    Margin="12,0,0,0"
+                                    Padding="6,2"
+                                    Click="ClearFilterButton_Click"
+                                    Content="Clear filter"
+                                    IsEnabled="{Binding HasActiveFilter}" />
+                        </StackPanel>
+
                         <DataGrid Grid.Row="3"
                                   Grid.Column="0"
                                   AutoGenerateColumns="False"
                                   CanUserAddRows="False"
                                   CanUserDeleteRows="False"
                                   IsReadOnly="True"
-                                  ItemsSource="{Binding TrackSummaries}">
+                                  ItemsSource="{Binding VisibleTrackSummaries}"
+                                  SelectedItem="{Binding SelectedTrackSummary, Mode=TwoWay}">
                             <DataGrid.Columns>
                                 <DataGridTextColumn Width="*" Binding="{Binding TrackDisplayName}" Header="Track" />
                                 <DataGridTextColumn Width="120" Binding="{Binding DistanceDisplay, StringFormat=F2}">
@@ -384,7 +401,8 @@
                                   CanUserAddRows="False"
                                   CanUserDeleteRows="False"
                                   IsReadOnly="True"
-                                  ItemsSource="{Binding CarSummaries}">
+                                  ItemsSource="{Binding VisibleCarSummaries}"
+                                  SelectedItem="{Binding SelectedCarSummary, Mode=TwoWay}">
                             <DataGrid.Columns>
                                 <DataGridTextColumn Width="*" Binding="{Binding CarModel}" Header="Car" />
                                 <DataGridTextColumn Width="120" Binding="{Binding DistanceDisplay, StringFormat=F2}">

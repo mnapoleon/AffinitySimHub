@@ -38,6 +38,21 @@ namespace Affinity
             IReadOnlyDictionary<string, string> assettoCorsaTrackMap)
         {
             List<DistanceSummary> summaries = (distanceSummaries ?? Enumerable.Empty<DistanceSummary>())
+                .Select(summary => new DistanceSummary
+                {
+                    GameName = summary.GameName,
+                    CarModel = summary.CarModel,
+                    TrackName = summary.TrackName,
+                    TrackNameWithConfig = summary.TrackNameWithConfig,
+                    TrackDisplayName = AffinityGameLogic.GetDisplayTrackNameWithConfig(
+                        summary.GameName,
+                        string.IsNullOrWhiteSpace(summary.TrackDisplayName) ? summary.TrackNameWithConfig : summary.TrackDisplayName,
+                        assettoCorsaTrackMap),
+                    TotalDistanceKm = summary.TotalDistanceKm,
+                    TotalDistanceMiles = summary.TotalDistanceMiles,
+                    UsedTime = summary.UsedTime,
+                    LastUpdatedUtc = summary.LastUpdatedUtc
+                })
                 .OrderBy(summary => summary.GameName)
                 .ThenBy(summary => summary.CarModel)
                 .ThenBy(summary => summary.TrackNameWithConfig)
@@ -47,46 +62,14 @@ namespace Affinity
                 .GroupBy(summary => summary.GameName)
                 .Select(group =>
                 {
-                    List<TrackDistanceSummary> trackSummaries = group
-                        .GroupBy(summary => summary.TrackNameWithConfig)
-                        .Select(trackGroup => new TrackDistanceSummary
-                        {
-                            GameName = group.Key,
-                            TrackName = trackGroup.Key,
-                            TrackDisplayName = AffinityGameLogic.GetDisplayTrackNameWithConfig(group.Key, trackGroup.Key, assettoCorsaTrackMap),
-                            DistanceKm = trackGroup.Sum(summary => summary.TotalDistanceKm),
-                            DistanceMiles = trackGroup.Sum(summary => summary.TotalDistanceMiles),
-                            DistanceDisplay = displayInMiles
-                                ? trackGroup.Sum(summary => summary.TotalDistanceMiles)
-                                : trackGroup.Sum(summary => summary.TotalDistanceKm),
-                            UsedTime = trackGroup.Sum(summary => summary.UsedTime),
-                            UsedTimeDisplay = FormatUsedTime(trackGroup.Sum(summary => summary.UsedTime))
-                        })
-                        .OrderByDescending(summary => summary.DistanceDisplay)
-                        .ThenBy(summary => summary.TrackName)
-                        .ToList();
+                    List<DistanceSummary> gameRows = group.ToList();
+                    List<TrackDistanceSummary> trackSummaries = BuildTrackSummaries(gameRows, displayInMiles);
+                    List<CarDistanceSummary> carSummaries = BuildCarSummaries(gameRows, displayInMiles);
 
-                    List<CarDistanceSummary> carSummaries = group
-                        .GroupBy(summary => summary.CarModel)
-                        .Select(carGroup => new CarDistanceSummary
-                        {
-                            GameName = group.Key,
-                            CarModel = carGroup.Key,
-                            DistanceKm = carGroup.Sum(summary => summary.TotalDistanceKm),
-                            DistanceMiles = carGroup.Sum(summary => summary.TotalDistanceMiles),
-                            DistanceDisplay = displayInMiles
-                                ? carGroup.Sum(summary => summary.TotalDistanceMiles)
-                                : carGroup.Sum(summary => summary.TotalDistanceKm),
-                            UsedTime = carGroup.Sum(summary => summary.UsedTime),
-                            UsedTimeDisplay = FormatUsedTime(carGroup.Sum(summary => summary.UsedTime))
-                        })
-                        .OrderByDescending(summary => summary.DistanceDisplay)
-                        .ThenBy(summary => summary.CarModel)
-                        .ToList();
-
-                    return new GameDistanceTab
+                    GameDistanceTab tab = new GameDistanceTab
                     {
                         GameName = group.Key,
+                        DisplayInMiles = displayInMiles,
                         TotalDistanceKm = group.Sum(summary => summary.TotalDistanceKm),
                         TotalDistanceMiles = group.Sum(summary => summary.TotalDistanceMiles),
                         TotalDistanceDisplay = displayInMiles
@@ -97,8 +80,12 @@ namespace Affinity
                         TopTrackSummary = trackSummaries.FirstOrDefault(),
                         TopCarSummary = carSummaries.FirstOrDefault(),
                         TrackSummaries = trackSummaries,
-                        CarSummaries = carSummaries
+                        CarSummaries = carSummaries,
+                        RawSummaries = gameRows
                     };
+
+                    tab.InitializeVisibleSummaries();
+                    return tab;
                 })
                 .OrderBy(tab => tab.GameName)
                 .ToList();
@@ -115,7 +102,7 @@ namespace Affinity
                 {
                     GameName = trackGroup.Key.GameName,
                     TrackName = trackGroup.Key.TrackNameWithConfig,
-                    TrackDisplayName = AffinityGameLogic.GetDisplayTrackNameWithConfig(trackGroup.Key.GameName, trackGroup.Key.TrackNameWithConfig, assettoCorsaTrackMap),
+                    TrackDisplayName = trackGroup.First().TrackDisplayName,
                     DistanceKm = trackGroup.Sum(summary => summary.TotalDistanceKm),
                     DistanceMiles = trackGroup.Sum(summary => summary.TotalDistanceMiles),
                     DistanceDisplay = displayInMiles
@@ -196,6 +183,7 @@ namespace Affinity
                             CarModel = carEntry.Key,
                             TrackName = track.TrackName,
                             TrackNameWithConfig = track.TrackNameWithConfig,
+                            TrackDisplayName = track.TrackNameWithConfig,
                             TotalDistanceKm = track.TotalDistanceMeters / MetersPerKilometer,
                             TotalDistanceMiles = track.TotalDistanceMeters / MetersPerMile,
                             UsedTime = track.UsedTime,
@@ -204,6 +192,53 @@ namespace Affinity
                     }
                 }
             }
+        }
+
+        internal static List<TrackDistanceSummary> BuildTrackSummaries(
+            IEnumerable<DistanceSummary> summaries,
+            bool displayInMiles)
+        {
+            return (summaries ?? Enumerable.Empty<DistanceSummary>())
+                .GroupBy(summary => summary.TrackNameWithConfig)
+                .Select(trackGroup => new TrackDistanceSummary
+                {
+                    GameName = trackGroup.First().GameName,
+                    TrackName = trackGroup.Key,
+                    TrackDisplayName = trackGroup.First().TrackDisplayName,
+                    DistanceKm = trackGroup.Sum(summary => summary.TotalDistanceKm),
+                    DistanceMiles = trackGroup.Sum(summary => summary.TotalDistanceMiles),
+                    DistanceDisplay = displayInMiles
+                        ? trackGroup.Sum(summary => summary.TotalDistanceMiles)
+                        : trackGroup.Sum(summary => summary.TotalDistanceKm),
+                    UsedTime = trackGroup.Sum(summary => summary.UsedTime),
+                    UsedTimeDisplay = FormatUsedTime(trackGroup.Sum(summary => summary.UsedTime))
+                })
+                .OrderByDescending(summary => summary.DistanceDisplay)
+                .ThenBy(summary => summary.TrackDisplayName)
+                .ToList();
+        }
+
+        internal static List<CarDistanceSummary> BuildCarSummaries(
+            IEnumerable<DistanceSummary> summaries,
+            bool displayInMiles)
+        {
+            return (summaries ?? Enumerable.Empty<DistanceSummary>())
+                .GroupBy(summary => summary.CarModel)
+                .Select(carGroup => new CarDistanceSummary
+                {
+                    GameName = carGroup.First().GameName,
+                    CarModel = carGroup.Key,
+                    DistanceKm = carGroup.Sum(summary => summary.TotalDistanceKm),
+                    DistanceMiles = carGroup.Sum(summary => summary.TotalDistanceMiles),
+                    DistanceDisplay = displayInMiles
+                        ? carGroup.Sum(summary => summary.TotalDistanceMiles)
+                        : carGroup.Sum(summary => summary.TotalDistanceKm),
+                    UsedTime = carGroup.Sum(summary => summary.UsedTime),
+                    UsedTimeDisplay = FormatUsedTime(carGroup.Sum(summary => summary.UsedTime))
+                })
+                .OrderByDescending(summary => summary.DistanceDisplay)
+                .ThenBy(summary => summary.CarModel)
+                .ToList();
         }
 
         private static string FormatUsedTime(double usedTimeSeconds)

@@ -224,11 +224,19 @@ dotnet build .\Affinity\Affinity.csproj
 
 If SimHub is open and the DLL is locked, close or restart SimHub and rebuild.
 
-### Release installer
+### Release ZIP
 
-GitHub releases are built by [.github/workflows/release.yml](.github/workflows/release.yml). The release workflow builds the plugin, compiles the Inno Setup script at [Installer/AffinitySetup.iss](Installer/AffinitySetup.iss), and uploads `AffinitySetup-vX.Y.Z.exe` as the release asset.
+GitHub releases are built by [.github/workflows/release.yml](.github/workflows/release.yml). The release workflow builds the plugin and uploads a ZIP payload plus a matching `.sha256` file as release assets.
 
-The installer copies the plugin and SQLite runtime dependencies into the selected SimHub install folder. Close SimHub before running the installer so `Affinity.dll` can be replaced.
+### Verify and install a release
+
+Before extracting the ZIP into your SimHub installation folder, verify its SHA-256 value in PowerShell:
+
+```powershell
+Get-FileHash .\Affinity-v0.1.2.zip -Algorithm SHA256
+```
+
+Compare that hash with `Affinity-v0.1.2.zip.sha256`, then extract the ZIP into `C:\Program Files (x86)\SimHub\` and restart SimHub.
 
 ### Stub-based development and tests
 

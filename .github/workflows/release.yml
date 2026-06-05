@@ -350,11 +350,7 @@ jobs:
               per_page: 100,
             });
 
-            const assetsToDelete = existingAssets.data.filter(existing =>
-              !assetsToUpload.some(asset => asset.name === existing.name)
-            );
-
-            for (const existingAsset of assetsToDelete) {
+            for (const existingAsset of existingAssets.data) {
               await github.rest.repos.deleteReleaseAsset({
                 owner: context.repo.owner,
                 repo: context.repo.repo,

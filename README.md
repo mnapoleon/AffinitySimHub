@@ -307,6 +307,14 @@ This README is the top-level guide. The deeper repo notes are useful when you ne
 - [simhub-plugin-data-storage-guide.md](simhub-plugin-data-storage-guide.md): persistence patterns and storage tradeoffs for SimHub plugins
 - [simhub-plugin-everything-else.md](simhub-plugin-everything-else.md): packaging, debugging, performance, compatibility, and release considerations
 
+## GitHub Pages
+
+The repository includes a dedicated GitHub Pages site under [site](site).
+
+- The deployment workflow is [.github/workflows/pages.yml](.github/workflows/pages.yml).
+- It publishes only `site/`, which keeps the existing internal planning notes under `docs/` out of the public Pages output.
+- Future screenshots for the landing page should be added under `site/assets/screenshots/`.
+
 ## Contributing Notes
 
 A few repo conventions matter when working here:

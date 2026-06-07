@@ -344,21 +344,13 @@ code {
     padding: 14px;
 }
 
-.shot-placeholder {
-    display: grid;
-    place-items: center;
-    min-height: 230px;
-    border: 1px dashed rgba(86, 211, 255, 0.35);
+.shot-image {
+    display: block;
+    width: 100%;
+    height: auto;
+    border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 18px;
-    background:
-        linear-gradient(180deg, rgba(86, 211, 255, 0.08), rgba(255, 255, 255, 0.02)),
-        repeating-linear-gradient(
-            135deg,
-            rgba(255, 255, 255, 0.03),
-            rgba(255, 255, 255, 0.03) 14px,
-            transparent 14px,
-            transparent 28px
-        );
+    background: #050a0d;
 }
 
 .shot-card figcaption {

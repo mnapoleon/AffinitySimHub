@@ -199,7 +199,6 @@ code {
 
 .panel-row,
 .feature-grid,
-.screenshot-grid,
 .install-grid {
     display: grid;
     gap: 18px;
@@ -337,21 +336,25 @@ code {
 }
 
 .screenshot-grid {
-    grid-template-columns: 1fr;
-    max-width: 1180px;
-    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-width: none;
+    margin: 0;
     gap: 28px;
 }
 
 .shot-card {
+    width: 100%;
     padding: 18px;
 }
 
 .shot-image {
     display: block;
     width: 100%;
-    max-height: 720px;
-    object-fit: contain;
+    height: auto;
+    max-height: none;
+    object-fit: initial;
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 18px;
     background: #050a0d;

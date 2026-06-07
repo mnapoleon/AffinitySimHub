@@ -1,5 +1,7 @@
 # AffinitySimHub
 
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20me%20a%20coffee-support-5F7FFF?logo=buymeacoffee&logoColor=white)](https://www.buymeacoffee.com/mnapoleon)
+
 `Affinity` is a SimHub plugin for tracking cumulative driving distance and driving time across multiple racing sims.
 
 It keeps long-lived totals by:

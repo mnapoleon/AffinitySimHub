@@ -339,14 +339,15 @@ code {
     display: flex;
     flex-direction: column;
     width: 100%;
-    max-width: none;
-    margin: 0;
+    max-width: 1180px;
+    margin: 0 auto;
     gap: 28px;
 }
 
 .shot-card {
     width: 100%;
     padding: 18px;
+    overflow: hidden;
 }
 
 .shot-image {

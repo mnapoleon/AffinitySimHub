@@ -2,113 +2,152 @@
 
 ## Goal
 
-Move Affinity-owned runtime files into a dedicated `Affinity` subfolder under SimHub common storage so SimHub updates are less likely to delete the plugin's SQLite database.
+Move Affinity-owned runtime data out of `PluginsData\Common` and into a dedicated `PluginsData\Affinity` folder, with a rolling SQLite backup written each time SimHub shuts down cleanly.
 
 ## Scope
 
 This design covers:
 
-- Moving the SQLite database path from the shared common root into `PluginsData\Common\Affinity\`.
-- Moving the settings JSON path into the same `Affinity` subfolder.
-- Moving the debug log path into the same `Affinity` subfolder.
-- Preserving existing user data by migrating from the old shared-root file locations on startup.
+- Moving the SQLite database path from `PluginsData\Common` into `PluginsData\Affinity`.
+- Moving the settings JSON path into `PluginsData\Affinity`.
+- Moving the debug log path into `PluginsData\Affinity`.
+- Preserving existing user data by migrating from older Affinity file locations on startup.
 - Preserving legacy JSON-to-SQLite import behavior during the transition.
+- Writing a single rolling `.bak` copy of the SQLite database during plugin shutdown.
 
 This design does not cover:
 
-- Moving Affinity storage outside SimHub's `PluginsData\Common` area.
+- Moving SQLite runtime DLLs out of the SimHub plugin load location.
 - Changing the SQLite schema or session aggregation logic.
-- Introducing backup/export UI for the database.
+- Introducing timestamped backup retention or backup UI.
 
 ## Current State
 
-The plugin currently resolves these files directly from the shared SimHub common storage root:
+The plugin currently resolves these files directly from SimHub common storage:
 
-- `Affinity.settings.json`
-- `Affinity.distance.db`
-- `Affinity.distance.json`
-- `Affinity.distance.debug.log`
+- `PluginsData\Common\Affinity.settings.json`
+- `PluginsData\Common\Affinity.distance.db`
+- `PluginsData\Common\Affinity.distance.json`
+- `PluginsData\Common\Affinity.distance.debug.log`
 
-That keeps the code simple, but it also means Affinity's files live beside unrelated shared data instead of in a plugin-owned directory. If a SimHub update removes or recreates files in that shared root, the Affinity database is exposed.
+That leaves Affinity's mutable data in SimHub's shared common-data area instead of in a plugin-owned folder. If a SimHub update removes or recreates files in `Common`, the Affinity database is exposed.
+
+The SQLite runtime binaries are separate from this problem:
+
+- `System.Data.SQLite.dll`
+- `x64\SQLite.Interop.dll`
+- `x86\SQLite.Interop.dll`
+
+Those are runtime dependencies and should remain in the normal plugin deployment location beside the plugin binaries rather than moving into a data folder.
 
 ## Proposed Changes
 
-### 1. Dedicated Affinity storage root
+### 1. Dedicated Affinity storage root under PluginsData
 
-Resolve a plugin-owned storage directory with `PluginManager.GetCommonStoragePath("Affinity")`, then build the runtime file paths under that directory:
+Resolve a plugin-owned storage directory under `PluginsData\Affinity`, then build the runtime file paths under that directory:
 
-- `Affinity\Affinity.settings.json`
-- `Affinity\Affinity.distance.db`
-- `Affinity\Affinity.distance.debug.log`
-- `Affinity\Affinity.distance.json` for transition-time legacy probing only
+- `PluginsData\Affinity\Affinity.settings.json`
+- `PluginsData\Affinity\Affinity.distance.db`
+- `PluginsData\Affinity\Affinity.distance.debug.log`
+- `PluginsData\Affinity\Affinity.distance.json` for transition-time legacy probing only
 
-This keeps all Affinity-owned files together while staying inside SimHub's supported common storage area.
+This keeps all mutable Affinity data together while avoiding any ongoing reliance on `PluginsData\Common`.
 
-### 2. One-time file migration from old shared-root paths
+### 2. Transition-aware startup migration
 
-On startup, if a new-path file is missing and the corresponding old shared-root file exists, copy or move the old file into the new `Affinity` subfolder before normal use.
+On startup, if a new-path file is missing and an older-path copy exists, move the older file into `PluginsData\Affinity` before normal use.
+
+Migration precedence:
+
+- First preference: existing file already present in `PluginsData\Affinity`
+- Second preference: file in `PluginsData\Common\Affinity\...`
+- Third preference: file in the old shared-root `PluginsData\Common\...`
 
 Migration rules:
 
-- Settings JSON: move from `Common\Affinity.settings.json` to `Common\Affinity\Affinity.settings.json` only when the new file does not already exist.
-- SQLite DB: move from `Common\Affinity.distance.db` to `Common\Affinity\Affinity.distance.db` only when the new file does not already exist.
-- Debug log: do not migrate old log content eagerly; just begin writing to the new path.
+- Settings JSON: move only when the new file does not already exist.
+- SQLite DB: move only when the new file does not already exist.
+- Debug log: do not migrate old log contents eagerly; just begin writing to the new path.
 
-This keeps user data automatically while avoiding overwriting newer files that may already exist in the subfolder.
+This keeps user data automatically while avoiding overwriting a newer file that may already exist in the final location.
 
 ### 3. Transition-aware legacy JSON import
 
 The plugin already imports old JSON distance totals into SQLite when the SQLite database has no session data. That behavior should remain, but the JSON lookup should become transition-aware:
 
-- Prefer `Common\Affinity\Affinity.distance.json` if it exists.
-- Otherwise fall back to the old shared-root `Common\Affinity.distance.json`.
+- Prefer `PluginsData\Affinity\Affinity.distance.json` if it exists.
+- Otherwise fall back to `PluginsData\Common\Affinity\Affinity.distance.json` if it exists.
+- Otherwise fall back to the old shared-root `PluginsData\Common\Affinity.distance.json`.
 
 After a successful import, back up the source JSON file in place by renaming it to `.bak`, matching the current behavior.
 
-### 4. Visible runtime path updates
+### 4. Rolling SQLite backup on clean shutdown
 
-Any plugin property or UI element that exposes the resolved database or debug-log path should reflect the new subfolder path so runtime diagnostics stay accurate.
+During `End()`, after the plugin closes and disposes the SQLite connection, copy:
+
+- `PluginsData\Affinity\Affinity.distance.db`
+
+to:
+
+- `PluginsData\Affinity\Affinity.distance.db.bak`
+
+Backup rules:
+
+- Overwrite the existing `.bak` file on each clean shutdown.
+- If the live database file does not exist, skip backup silently.
+- If the backup copy fails, log a warning but do not crash plugin shutdown.
+
+This gives the plugin one last-known-good local backup without introducing retention management or extra UI.
+
+### 5. Visible runtime path updates
+
+Any plugin property or UI element that exposes the resolved database or debug-log path should reflect the new `PluginsData\Affinity` location so runtime diagnostics stay accurate.
 
 ## File Changes
 
 - Modify `Affinity/AffinityPlugin.cs`
-  - Resolve a dedicated Affinity storage root under SimHub common storage.
-  - Build settings, SQLite, debug-log, and transition legacy JSON paths from that root.
-  - Add startup migration logic from old shared-root files to the new subfolder.
-  - Keep legacy JSON import behavior working across both old and new locations.
+  - Resolve a dedicated `PluginsData\Affinity` storage root.
+  - Build settings, SQLite, debug-log, backup, and transition legacy JSON paths from that root.
+  - Add startup migration logic from older file locations to the new folder.
+  - Keep legacy JSON import behavior working across old and new locations.
+  - Write a rolling SQLite `.bak` file during `End()` after the repository is disposed.
 
 - Add or modify tests under `Affinity.Tests/`
-  - Verify the plugin resolves the new `Affinity` subfolder path.
-  - Verify migration prefers an existing new-path file over an old-path file.
-  - Verify legacy JSON lookup still falls back to the old shared-root location during transition.
+  - Verify the plugin resolves the new `PluginsData\Affinity` paths.
+  - Verify migration prefers an existing new-path file over older-path files.
+  - Verify startup migration accepts both `Common\Affinity\...` and old `Common\...` file locations.
+  - Verify legacy JSON lookup still falls back across older locations during transition.
+  - Verify shutdown backup behavior handles missing live DB and overwrite semantics.
 
 ## Error Handling
 
-- If the `Affinity` storage subfolder cannot be created or the SQLite file cannot be moved, log the failure and continue using the resolved new path so initialization still attempts to start cleanly.
+- If the `PluginsData\Affinity` folder cannot be created or a file cannot be moved, log the failure and continue using the resolved new path so initialization still attempts to start cleanly.
 - If both old and new copies of a file exist, keep the new-path file and leave the old one untouched.
 - If legacy JSON import fails, keep the current behavior of logging a warning and continuing with an empty in-memory store or empty SQLite database state.
+- If SQLite backup creation fails during shutdown, log a warning and continue shutdown without surfacing an unhandled exception.
 
 ## Testing
 
 Local validation for this change set should include:
 
-- Unit tests covering the path resolution and migration decision logic.
+- Unit tests covering path resolution, migration precedence, legacy JSON fallback, and shutdown backup behavior.
 - `dotnet test .\Affinity.Tests\Affinity.Tests.csproj /p:SimHubInstallPath=C:\does-not-exist`
 - `dotnet build .\Affinity\Affinity.csproj /p:SimHubInstallPath=C:\does-not-exist`
 
-If practical after the build, the plugin should also be copied into SimHub so the new runtime storage path can be verified in the Settings UI and in actual generated files.
+If practical after the build, the plugin should also be copied into SimHub so the new runtime storage path and generated `.bak` file can be verified in a real install.
 
 ## Risks And Tradeoffs
 
-- Moving settings and database files together makes the storage layout cleaner, but it adds startup migration logic that must avoid overwriting existing files.
-- Keeping the debug log in the new subfolder improves consistency, but historical logs will remain split across old and new locations unless the user cleans them up manually.
-- Staying inside `PluginsData\Common` preserves SimHub compatibility, but it assumes the `Affinity` subfolder is treated more safely by updates than loose files in the root.
+- Moving out of `PluginsData\Common` lowers exposure to shared-root cleanup, but it adds more startup migration paths to support older users safely.
+- A single rolling backup is simple and low-maintenance, but it preserves only one previous copy of the database.
+- Keeping SQLite runtime DLLs in the plugin load directory avoids loader risk, but it means mutable data and runtime dependencies remain intentionally separated.
 
 ## Success Criteria
 
 This work is successful when:
 
-- Affinity resolves its runtime settings, SQLite database, and debug log under `PluginsData\Common\Affinity\`.
+- Affinity resolves its runtime settings, SQLite database, and debug log under `PluginsData\Affinity`.
 - Existing users keep their settings and SQLite data automatically after upgrading.
-- Legacy JSON import still works for users who have not yet migrated to SQLite or still have only the old shared-root JSON file.
-- Runtime diagnostics show the new subfolder paths rather than the old shared-root paths.
+- Legacy JSON import still works for users who only have older Common-based files.
+- Each clean SimHub shutdown refreshes `Affinity.distance.db.bak` when a live SQLite database exists.
+- Runtime diagnostics show the new `PluginsData\Affinity` paths rather than the old Common-based paths.

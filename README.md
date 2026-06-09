@@ -57,7 +57,7 @@ At runtime, the plugin follows this loop:
 3. SimHub repeatedly calls `DataUpdate()` with live telemetry.
 4. Affinity resolves the active `game / car / track` context.
 5. It computes session progress, adds only valid forward distance deltas, and accumulates used time.
-6. It periodically saves the JSON database and refreshes UI summaries.
+6. It periodically upserts SQLite session totals, refreshes UI summaries, and writes a rolling database backup when SimHub shuts down cleanly.
 
 The main entry point is [AffinityPlugin.cs](Affinity/AffinityPlugin.cs).
 
@@ -255,9 +255,9 @@ During normal SimHub use, the important files are typically:
 Common locations:
 
 - SimHub log: `C:\Program Files (x86)\SimHub\Logs\simhub.txt`
-- plugin data: `C:\Program Files (x86)\SimHub\PluginsData\Common\`
+- plugin data: `C:\Program Files (x86)\SimHub\PluginsData\Affinity\`
 
-Affinity uses SimHub common storage APIs to resolve its settings and database paths at runtime.
+Affinity resolves its runtime data under `PluginsData\Affinity\` and migrates older Common-based files automatically when they are found.
 
 ## UI Overview
 

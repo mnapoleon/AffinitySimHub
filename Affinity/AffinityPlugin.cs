@@ -416,10 +416,7 @@ namespace Affinity
         public void Init(PluginManager pluginManager)
         {
             PluginManager = pluginManager;
-            _settingsPath = pluginManager.GetCommonStoragePath(SettingsFileName);
-            _databasePath = pluginManager.GetCommonStoragePath(SqliteDataFileName);
-            _legacyDatabasePath = pluginManager.GetCommonStoragePath(LegacyDataFileName);
-            _debugLogPath = pluginManager.GetCommonStoragePath(DebugLogFileName);
+            InitializeStoragePaths(pluginManager);
             _acTrackMapPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ac_track_id_map.json");
             Settings = LoadSettings();
             EnsureDefaultGameDebugLoggingSettings();
@@ -722,8 +719,88 @@ namespace Affinity
             FinalizeActiveSession(refreshSummaries: false);
             _sqliteRepository?.Dispose();
             _sqliteRepository = null;
+            BackupDatabaseFile();
             SaveSettings();
             SimHub.Logging.Current.Info("Affinity - Shutting down");
+        }
+
+        internal static string GetAffinityStorageRoot(string commonStorageRoot)
+        {
+            if (string.IsNullOrWhiteSpace(commonStorageRoot))
+            {
+                return Path.Combine("PluginsData", "Affinity");
+            }
+
+            string trimmedPath = commonStorageRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            string pluginsDataRoot = Directory.GetParent(trimmedPath)?.FullName ?? trimmedPath;
+            return Path.Combine(pluginsDataRoot, "Affinity");
+        }
+
+        internal static void MigrateFileIfNeeded(string targetPath, params string[] candidatePaths)
+        {
+            if (string.IsNullOrWhiteSpace(targetPath) || File.Exists(targetPath) || candidatePaths == null)
+            {
+                return;
+            }
+
+            string directory = Path.GetDirectoryName(targetPath);
+            if (!string.IsNullOrWhiteSpace(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+
+            foreach (string candidatePath in candidatePaths)
+            {
+                if (string.IsNullOrWhiteSpace(candidatePath) || !File.Exists(candidatePath))
+                {
+                    continue;
+                }
+
+                File.Move(candidatePath, targetPath);
+                return;
+            }
+        }
+
+        internal static string ResolveLegacyDataPath(string affinityStorageRoot, string commonStorageRoot)
+        {
+            string affinityPath = Path.Combine(affinityStorageRoot ?? string.Empty, LegacyDataFileName);
+            string commonAffinityPath = Path.Combine(commonStorageRoot ?? string.Empty, "Affinity", LegacyDataFileName);
+            string commonRootPath = Path.Combine(commonStorageRoot ?? string.Empty, LegacyDataFileName);
+
+            if (File.Exists(affinityPath))
+            {
+                return affinityPath;
+            }
+
+            if (File.Exists(commonAffinityPath))
+            {
+                return commonAffinityPath;
+            }
+
+            if (File.Exists(commonRootPath))
+            {
+                return commonRootPath;
+            }
+
+            return affinityPath;
+        }
+
+        internal static void BackupFileIfPresent(string sourcePath, string backupPath)
+        {
+            if (string.IsNullOrWhiteSpace(sourcePath) ||
+                string.IsNullOrWhiteSpace(backupPath) ||
+                !File.Exists(sourcePath))
+            {
+                return;
+            }
+
+            string directory = Path.GetDirectoryName(backupPath);
+            if (!string.IsNullOrWhiteSpace(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+
+            File.Copy(sourcePath, backupPath, overwrite: true);
         }
 
         public Control GetWPFSettingsControl(PluginManager pluginManager)
@@ -755,6 +832,52 @@ namespace Affinity
             catch (Exception ex)
             {
                 SimHub.Logging.Current.Error($"Affinity - Failed to save settings: {ex.Message}");
+            }
+        }
+
+        private void InitializeStoragePaths(PluginManager pluginManager)
+        {
+            string commonStorageRoot = pluginManager.GetCommonStoragePath();
+            string affinityStorageRoot = GetAffinityStorageRoot(commonStorageRoot);
+            string commonAffinityStorageRoot = Path.Combine(commonStorageRoot, "Affinity");
+
+            _settingsPath = Path.Combine(affinityStorageRoot, SettingsFileName);
+            _databasePath = Path.Combine(affinityStorageRoot, SqliteDataFileName);
+            _debugLogPath = Path.Combine(affinityStorageRoot, DebugLogFileName);
+
+            TryMigrateStorageFile(
+                _settingsPath,
+                Path.Combine(commonAffinityStorageRoot, SettingsFileName),
+                Path.Combine(commonStorageRoot, SettingsFileName));
+            TryMigrateStorageFile(
+                _databasePath,
+                Path.Combine(commonAffinityStorageRoot, SqliteDataFileName),
+                Path.Combine(commonStorageRoot, SqliteDataFileName));
+
+            _legacyDatabasePath = ResolveLegacyDataPath(affinityStorageRoot, commonStorageRoot);
+        }
+
+        private void TryMigrateStorageFile(string targetPath, params string[] candidatePaths)
+        {
+            try
+            {
+                MigrateFileIfNeeded(targetPath, candidatePaths);
+            }
+            catch (Exception ex)
+            {
+                SimHub.Logging.Current.Warn($"Affinity - Failed to migrate storage file to {targetPath}: {ex.Message}");
+            }
+        }
+
+        private void BackupDatabaseFile()
+        {
+            try
+            {
+                BackupFileIfPresent(_databasePath, _databasePath + ".bak");
+            }
+            catch (Exception ex)
+            {
+                SimHub.Logging.Current.Warn($"Affinity - Failed to back up database: {ex.Message}");
             }
         }
 

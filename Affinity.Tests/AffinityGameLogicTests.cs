@@ -27,6 +27,7 @@ namespace Affinity.Tests
         public void IsSupportedGame_RecognizesConfiguredTitlesAndAliases()
         {
             Assert.IsTrue(AffinityGameLogic.IsSupportedGame("Assetto Corsa EVO"));
+            Assert.IsTrue(AffinityGameLogic.IsSupportedGame("LMU"));
             Assert.IsTrue(AffinityGameLogic.IsSupportedGame("r3e"));
             Assert.IsFalse(AffinityGameLogic.IsSupportedGame("BeamNG.drive"));
         }
@@ -55,6 +56,15 @@ namespace Affinity.Tests
             Assert.AreEqual(1000.0, AffinityGameLogic.GetTrackPositionWithinLapMeters(percentFallbackStatus, 4000.0), 0.001);
             Assert.AreEqual(4000.0, AffinityGameLogic.GetTrackPositionWithinLapMeters(clampStatus, 4000.0), 0.001);
             Assert.AreEqual(4505.0, AffinityGameLogic.GetTrackPositionWithinLapMeters(passthroughStatus, 4000.0), 0.001);
+        }
+
+        [TestMethod]
+        public void HasReliableTelemetryContext_RequiresKnownCarAndTrackForLmu()
+        {
+            Assert.IsFalse(AffinityGameLogic.HasReliableTelemetryContext("LMU", "Unknown Car", "Fuji Speedway"));
+            Assert.IsFalse(AffinityGameLogic.HasReliableTelemetryContext("LMU", "Akkodis ASP Team 2026", "Unknown Track"));
+            Assert.IsTrue(AffinityGameLogic.HasReliableTelemetryContext("LMU", "Akkodis ASP Team 2026", "Fuji Speedway"));
+            Assert.IsTrue(AffinityGameLogic.HasReliableTelemetryContext("Assetto Corsa", "Unknown Car", "Unknown Track"));
         }
 
         private static void SetTrackPositionPercent(StatusDataBase status, double value)

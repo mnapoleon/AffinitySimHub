@@ -38,6 +38,8 @@ namespace Affinity
         private const double MetersPerMile = 1609.344;
         private const double SaveThresholdMeters = 50.0;
         private const double SaveThresholdUsedTimeSeconds = 30.0;
+        private const double MinimumPersistedSessionMeters = 1.0;
+        private const double MinimumPersistedSessionSeconds = 1.0;
         private const double MaxCountedTelemetryGapSeconds = 5.0;
         private static readonly string Version = ResolvePluginVersion();
         private static readonly KeyValuePair<string, string>[] DefaultGameDebugLoggingEntries =
@@ -46,6 +48,7 @@ namespace Affinity
             new KeyValuePair<string, string>("assettocorsaevo", "Assetto Corsa EVO"),
             new KeyValuePair<string, string>("automobilista2", "Automobilista 2"),
             new KeyValuePair<string, string>("iracing", "iRacing"),
+            new KeyValuePair<string, string>("lmu", "Le Mans Ultimate"),
             new KeyValuePair<string, string>("rfactor2", "rFactor 2"),
             new KeyValuePair<string, string>("raceroomracingexperience", "RaceRoom Racing Experience")
         };
@@ -84,6 +87,7 @@ namespace Affinity
         private double _lastTrackPositionWithinLapMeters = -1.0;
         private double _sessionDistanceOriginMeters;
         private double _lastObservedSessionMeters = -1.0;
+        private double _lastIgnoredSessionMeters = -1.0;
         private int _lastObservedCompletedLaps = -1;
         private string _activeStorageSessionUid = string.Empty;
         private DateTime _activeSessionStartedUtc = DateTime.MinValue;
@@ -479,6 +483,18 @@ namespace Affinity
                     return;
                 }
 
+                if (!HasReliableTelemetryContext(gameName, carModel, trackNameWithConfig))
+                {
+                    DataStatus = $"Waiting for {gameName} car/track telemetry";
+                    IsTelemetryActive = false;
+                    bool finalizedTime = AccumulateActiveSessionTime(now);
+                    FinalizeActiveSession(refreshSummaries: finalizedTime);
+                    ResetActiveSession(clearContext: false);
+                    PublishProperties(pluginManager, gameName, string.Empty, string.Empty, 0.0, 0.0);
+                    _hasLoggedDataError = false;
+                    return;
+                }
+
                 if (EnsureGameDebugLoggingConfigured(gameName))
                 {
                     RefreshGameDebugLoggingOptions();
@@ -497,6 +513,25 @@ namespace Affinity
                     data.NewData.IsSessionRestart)
                 {
                     FinalizeActiveSession(refreshSummaries: bucketTimeUpdated);
+
+                    if (ShouldIgnorePlaceholderSessionStart(gameName, data.NewData, completedLaps))
+                    {
+                        double lastIgnoredSessionMeters = _lastIgnoredSessionMeters;
+                        ResetActiveSession(clearContext: false);
+                        _lastIgnoredSessionMeters = lastIgnoredSessionMeters;
+                        DataStatus = "Waiting for LMU telemetry reset after exit";
+                        IsTelemetryActive = false;
+
+                        PublishProperties(
+                            pluginManager,
+                            CurrentGameName,
+                            CurrentTrackName,
+                            CurrentCarModel,
+                            CurrentContextDistanceKm,
+                            SessionDistanceKm);
+                        return;
+                    }
+
                     _activeContextKey = contextKey;
                     _activeSessionId = sessionId;
                     _activeStorageSessionUid = Guid.NewGuid().ToString("N");
@@ -568,6 +603,14 @@ namespace Affinity
                     double sessionMeters = Math.Max(0.0, absoluteSessionMeters - _sessionDistanceOriginMeters);
                     double deltaMeters = sessionMeters - _lastObservedSessionMeters;
                     int lapDelta = completedLaps - _lastObservedCompletedLaps;
+                    bool shouldIgnoreDistanceJumpForIgnoredLapIncrement = ShouldIgnoreDistanceJumpForIgnoredLapIncrement(
+                        gameName,
+                        data.NewData,
+                        completedLaps,
+                        lapDelta,
+                        trackLengthMeters,
+                        deltaMeters);
+                    bool shouldIgnoreRepeatedIgnoredDistanceJump = ShouldIgnoreRepeatedIgnoredDistanceJump(sessionMeters);
                     bool looksLikeDerivedLapBoundaryWrap = _sessionDistanceSource == SessionDistanceSource.Derived &&
                         trackLengthMeters > 0.0 &&
                         lapDelta == 0 &&
@@ -586,6 +629,7 @@ namespace Affinity
 
                     if (looksLikeDerivedLapBoundaryWrap)
                     {
+                        _lastIgnoredSessionMeters = -1.0;
                         SessionDistanceKm = _lastObservedSessionMeters / MetersPerKilometer;
                         DataStatus = "Waiting for telemetry sync at line";
                         IsTelemetryActive = true;
@@ -597,6 +641,7 @@ namespace Affinity
                     }
                     else if (looksLikeInitialPositionSnap)
                     {
+                        _lastIgnoredSessionMeters = -1.0;
                         _lastObservedSessionMeters = sessionMeters;
                         SessionDistanceKm = sessionMeters / MetersPerKilometer;
                         DataStatus = "Ignoring initial telemetry position snap";
@@ -607,8 +652,21 @@ namespace Affinity
                             LogTelemetryDebugSnapshot("initial-snap", gameName, carModel, trackNameWithConfig, sessionId, data.NewData, deltaMeters, sessionMeters, lapDelta, true);
                         }
                     }
+                    else if (shouldIgnoreDistanceJumpForIgnoredLapIncrement || shouldIgnoreRepeatedIgnoredDistanceJump)
+                    {
+                        _lastIgnoredSessionMeters = sessionMeters;
+                        SessionDistanceKm = _lastObservedSessionMeters / MetersPerKilometer;
+                        DataStatus = "Ignoring low-speed telemetry distance jump at line";
+                        IsTelemetryActive = true;
+
+                        if (shouldDebugTelemetry)
+                        {
+                            LogTelemetryDebugSnapshot("lap-distance-ignored", gameName, carModel, trackNameWithConfig, sessionId, data.NewData, deltaMeters, sessionMeters, lapDelta, false);
+                        }
+                    }
                     else if (deltaMeters > 0.0)
                     {
+                        _lastIgnoredSessionMeters = -1.0;
                         bucket.TotalDistanceMeters += deltaMeters;
                         bucket.LastUpdatedUtc = DateTime.UtcNow;
                         _pendingMetersSinceSave += deltaMeters;
@@ -623,6 +681,7 @@ namespace Affinity
                     }
                     else if (sessionMeters + 1.0 < _lastObservedSessionMeters)
                     {
+                        _lastIgnoredSessionMeters = -1.0;
                         _lastObservedSessionMeters = sessionMeters;
                         SessionDistanceKm = sessionMeters / MetersPerKilometer;
                         DataStatus = "Session distance reset detected";
@@ -1071,7 +1130,7 @@ namespace Affinity
 
         private SessionDistanceSource ResolveSessionDistanceSource(string gameName, StatusDataBase status)
         {
-            if (IsAssettoCorsaGame(gameName) || IsRaceRoomGame(gameName) || IsAutomobilista2Game(gameName) || IsIRacingGame(gameName) || IsRFactor2Game(gameName))
+            if (IsAssettoCorsaGame(gameName) || IsRaceRoomGame(gameName) || IsAutomobilista2Game(gameName) || IsIRacingGame(gameName) || IsRFactor2Game(gameName) || IsLmuGame(gameName))
             {
                 return SessionDistanceSource.Derived;
             }
@@ -1336,6 +1395,7 @@ namespace Affinity
             _lastTrackPositionWithinLapMeters = -1.0;
             _sessionDistanceOriginMeters = 0.0;
             _lastObservedSessionMeters = -1.0;
+            _lastIgnoredSessionMeters = -1.0;
             _lastObservedCompletedLaps = -1;
             _pendingMetersSinceSave = 0.0;
             _pendingUsedTimeSecondsSinceSave = 0.0;
@@ -1353,6 +1413,11 @@ namespace Affinity
         private bool IsSupportedGame(string gameName)
         {
             return AffinityGameLogic.IsSupportedGame(gameName);
+        }
+
+        private bool HasReliableTelemetryContext(string gameName, string carModel, string trackNameWithConfig)
+        {
+            return AffinityGameLogic.HasReliableTelemetryContext(gameName, carModel, trackNameWithConfig);
         }
 
         private bool IsAssettoCorsaGame(string gameName)
@@ -1378,6 +1443,11 @@ namespace Affinity
         private bool IsRFactor2Game(string gameName)
         {
             return AffinityGameLogic.IsRFactor2Game(gameName);
+        }
+
+        private bool IsLmuGame(string gameName)
+        {
+            return AffinityGameLogic.IsLmuGame(gameName);
         }
 
         private bool UsesStatefulDerivedDistance(string gameName)
@@ -1425,7 +1495,7 @@ namespace Affinity
 
         private bool LooksLikeIgnoredLapIncrement(string gameName, StatusDataBase status, int completedLaps, int lapDelta, double trackLengthMeters)
         {
-            if (!IsRFactor2Game(gameName) ||
+            if ((!IsRFactor2Game(gameName) && !IsLmuGame(gameName)) ||
                 status == null ||
                 lapDelta <= 0 ||
                 trackLengthMeters <= 0.0)
@@ -1434,12 +1504,69 @@ namespace Affinity
             }
 
             double trackPositionMeters = GetTrackPositionWithinLapMeters(status, trackLengthMeters);
+            if (IsLmuGame(gameName))
+            {
+                bool nearLineAtExit = trackPositionMeters <= Math.Max(100.0, trackLengthMeters * 0.025) ||
+                    trackPositionMeters >= trackLengthMeters - 5.0;
+
+                return completedLaps > 0 &&
+                    status.SpeedKmh < 1.0 &&
+                    nearLineAtExit &&
+                    _lastObservedSessionMeters >= trackLengthMeters;
+            }
+
             bool nearLine = trackPositionMeters <= 5.0 || trackPositionMeters >= trackLengthMeters - 5.0;
 
             return completedLaps > 0 &&
                 status.SpeedKmh < 5.0 &&
                 nearLine &&
                 _lastObservedSessionMeters >= trackLengthMeters;
+        }
+
+        private bool ShouldIgnoreDistanceJumpForIgnoredLapIncrement(string gameName, StatusDataBase status, int completedLaps, int lapDelta, double trackLengthMeters, double deltaMeters)
+        {
+            if (deltaMeters <= 0.0 ||
+                !LooksLikeIgnoredLapIncrement(gameName, status, completedLaps, lapDelta, trackLengthMeters) ||
+                trackLengthMeters <= 0.0)
+            {
+                return false;
+            }
+
+            return deltaMeters >= trackLengthMeters * 0.5;
+        }
+
+        private bool ShouldIgnorePlaceholderSessionStart(string gameName, StatusDataBase status, int completedLaps)
+        {
+            if (!IsLmuGame(gameName) ||
+                status == null ||
+                completedLaps <= 0)
+            {
+                return false;
+            }
+
+            double trackLengthMeters = status.TrackLength > 0.0 ? status.TrackLength : status.ReportedTrackLength;
+            if (trackLengthMeters <= 0.0)
+            {
+                return false;
+            }
+
+            double trackPositionMeters = GetTrackPositionWithinLapMeters(status, trackLengthMeters);
+            bool nearLineAtExit = trackPositionMeters <= Math.Max(100.0, trackLengthMeters * 0.025) ||
+                trackPositionMeters >= trackLengthMeters - 5.0;
+            bool looksLikeNegativeLapBoundarySentinel = trackPositionMeters <= (-trackLengthMeters + 5.0) ||
+                status.TrackPositionPercent <= -0.99;
+            bool hasIgnoredSessionMarker = _lastIgnoredSessionMeters >= 0.0;
+            bool looksLikeResetSessionOdo = status.SessionOdo >= 0.0 && status.SessionOdo <= 0.01;
+
+            return status.SpeedKmh < 1.0 &&
+                (nearLineAtExit || looksLikeNegativeLapBoundarySentinel) &&
+                (hasIgnoredSessionMarker || looksLikeResetSessionOdo);
+        }
+
+        private bool ShouldIgnoreRepeatedIgnoredDistanceJump(double sessionMeters)
+        {
+            return _lastIgnoredSessionMeters >= 0.0 &&
+                Math.Abs(sessionMeters - _lastIgnoredSessionMeters) <= 1.0;
         }
 
         private void EnsureDefaultGameDebugLoggingSettings()
@@ -1583,6 +1710,8 @@ namespace Affinity
                     return "Automobilista 2";
                 case "iracing":
                     return "iRacing";
+                case "lmu":
+                    return "Le Mans Ultimate";
                 case "rfactor2":
                     return "rFactor 2";
                 case "raceroomracingexperience":
@@ -1677,7 +1806,7 @@ namespace Affinity
 
             double sessionDistanceMeters = Math.Max(0.0, SessionDistanceKm * MetersPerKilometer);
             double sessionTimeDrivenSeconds = Math.Max(0.0, _activeSessionUsedTimeSeconds);
-            if (sessionDistanceMeters <= 0.0 && sessionTimeDrivenSeconds <= 0.0)
+            if (!ShouldPersistFinalizedSession(sessionDistanceMeters, sessionTimeDrivenSeconds))
             {
                 _pendingMetersSinceSave = 0.0;
                 _pendingUsedTimeSecondsSinceSave = 0.0;
@@ -1702,6 +1831,12 @@ namespace Affinity
 
             _pendingMetersSinceSave = 0.0;
             _pendingUsedTimeSecondsSinceSave = 0.0;
+        }
+
+        private static bool ShouldPersistFinalizedSession(double sessionDistanceMeters, double sessionTimeDrivenSeconds)
+        {
+            return sessionDistanceMeters >= MinimumPersistedSessionMeters ||
+                sessionTimeDrivenSeconds >= MinimumPersistedSessionSeconds;
         }
 
         private static string FormatUsedTime(double usedTimeSeconds)

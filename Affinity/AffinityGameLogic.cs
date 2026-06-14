@@ -76,13 +76,20 @@ namespace Affinity
             return string.Equals(normalized, "rfactor2", StringComparison.Ordinal);
         }
 
+        public static bool IsLmuGame(string gameName)
+        {
+            string normalized = NormalizeGameName(gameName);
+            return string.Equals(normalized, "lmu", StringComparison.Ordinal);
+        }
+
         public static bool IsSupportedGame(string gameName)
         {
             return IsAssettoCorsaGame(gameName) ||
                 IsRaceRoomGame(gameName) ||
                 IsAutomobilista2Game(gameName) ||
                 IsIRacingGame(gameName) ||
-                IsRFactor2Game(gameName);
+                IsRFactor2Game(gameName) ||
+                IsLmuGame(gameName);
         }
 
         public static string GetDisplayTrackNameWithConfig(string gameName, string rawTrackNameWithConfig, IReadOnlyDictionary<string, string> assettoCorsaTrackMap)
@@ -128,6 +135,23 @@ namespace Affinity
             }
 
             return Math.Max(0.0, Math.Min(trackPositionMeters, trackLengthMeters));
+        }
+
+        public static bool HasReliableTelemetryContext(string gameName, string carModel, string trackNameWithConfig)
+        {
+            if (!IsLmuGame(gameName))
+            {
+                return true;
+            }
+
+            return !IsUnknownContextValue(carModel, "Unknown Car") &&
+                !IsUnknownContextValue(trackNameWithConfig, "Unknown Track");
+        }
+
+        private static bool IsUnknownContextValue(string value, string fallback)
+        {
+            return string.IsNullOrWhiteSpace(value) ||
+                string.Equals(value.Trim(), fallback, StringComparison.OrdinalIgnoreCase);
         }
     }
 }

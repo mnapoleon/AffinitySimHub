@@ -257,7 +257,7 @@ Common locations:
 - SimHub log: `C:\Program Files (x86)\SimHub\Logs\simhub.txt`
 - plugin data: `C:\Program Files (x86)\SimHub\PluginsData\Affinity\`
 
-Affinity resolves its runtime data under `PluginsData\Affinity\` and migrates older Common-based files automatically when they are found.
+Affinity resolves its runtime data under `PluginsData\Affinity\` and migrates older Common-based files automatically when they are found. On clean shutdown, it keeps up to five SQLite backups as `Affinity.distance.db.bak.1` through `.bak.5`, where `.bak.1` is the latest backup.
 
 ## UI Overview
 

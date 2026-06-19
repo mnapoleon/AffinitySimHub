@@ -859,7 +859,35 @@ namespace Affinity
                 Directory.CreateDirectory(directory);
             }
 
-            File.Copy(sourcePath, backupPath, overwrite: true);
+            const int backupCount = 5;
+            for (int index = backupCount; index >= 2; index--)
+            {
+                string olderBackupPath = backupPath + "." + index;
+                string newerBackupPath = backupPath + "." + (index - 1);
+
+                if (File.Exists(olderBackupPath))
+                {
+                    File.Delete(olderBackupPath);
+                }
+
+                if (File.Exists(newerBackupPath))
+                {
+                    File.Move(newerBackupPath, olderBackupPath);
+                }
+            }
+
+            string previousSingleBackupPath = backupPath;
+            string previousLatestBackupPath = backupPath + ".2";
+            if (File.Exists(previousSingleBackupPath) && !File.Exists(previousLatestBackupPath))
+            {
+                File.Move(previousSingleBackupPath, previousLatestBackupPath);
+            }
+            else if (File.Exists(previousSingleBackupPath))
+            {
+                File.Delete(previousSingleBackupPath);
+            }
+
+            File.Copy(sourcePath, backupPath + ".1", overwrite: true);
         }
 
         public Control GetWPFSettingsControl(PluginManager pluginManager)

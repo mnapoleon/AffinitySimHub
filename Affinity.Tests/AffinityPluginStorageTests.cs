@@ -93,17 +93,55 @@ namespace Affinity.Tests
         }
 
         [TestMethod]
-        public void BackupFileIfPresent_CreatesAndOverwritesRollingBackup()
+        public void BackupFileIfPresent_CreatesLatestNumberedBackup()
         {
             string databasePath = Path.Combine(_tempDirectory, "PluginsData", "Affinity", "Affinity.distance.db");
             string backupPath = databasePath + ".bak";
             Directory.CreateDirectory(Path.GetDirectoryName(databasePath));
             File.WriteAllText(databasePath, "fresh-db");
-            File.WriteAllText(backupPath, "stale-db");
 
             AffinityPlugin.BackupFileIfPresent(databasePath, backupPath);
 
-            Assert.AreEqual("fresh-db", File.ReadAllText(backupPath));
+            Assert.AreEqual("fresh-db", File.ReadAllText(backupPath + ".1"));
+        }
+
+        [TestMethod]
+        public void BackupFileIfPresent_RotatesNumberedBackupsAndKeepsFive()
+        {
+            string databasePath = Path.Combine(_tempDirectory, "PluginsData", "Affinity", "Affinity.distance.db");
+            string backupPath = databasePath + ".bak";
+            Directory.CreateDirectory(Path.GetDirectoryName(databasePath));
+            File.WriteAllText(databasePath, "fresh-db");
+            File.WriteAllText(backupPath + ".1", "backup-1");
+            File.WriteAllText(backupPath + ".2", "backup-2");
+            File.WriteAllText(backupPath + ".3", "backup-3");
+            File.WriteAllText(backupPath + ".4", "backup-4");
+            File.WriteAllText(backupPath + ".5", "backup-5");
+
+            AffinityPlugin.BackupFileIfPresent(databasePath, backupPath);
+
+            Assert.AreEqual("fresh-db", File.ReadAllText(backupPath + ".1"));
+            Assert.AreEqual("backup-1", File.ReadAllText(backupPath + ".2"));
+            Assert.AreEqual("backup-2", File.ReadAllText(backupPath + ".3"));
+            Assert.AreEqual("backup-3", File.ReadAllText(backupPath + ".4"));
+            Assert.AreEqual("backup-4", File.ReadAllText(backupPath + ".5"));
+            Assert.IsFalse(File.Exists(backupPath + ".6"));
+        }
+
+        [TestMethod]
+        public void BackupFileIfPresent_MigratesExistingUnnumberedBackupIntoRotation()
+        {
+            string databasePath = Path.Combine(_tempDirectory, "PluginsData", "Affinity", "Affinity.distance.db");
+            string backupPath = databasePath + ".bak";
+            Directory.CreateDirectory(Path.GetDirectoryName(databasePath));
+            File.WriteAllText(databasePath, "fresh-db");
+            File.WriteAllText(backupPath, "old-single-backup");
+
+            AffinityPlugin.BackupFileIfPresent(databasePath, backupPath);
+
+            Assert.AreEqual("fresh-db", File.ReadAllText(backupPath + ".1"));
+            Assert.AreEqual("old-single-backup", File.ReadAllText(backupPath + ".2"));
+            Assert.IsFalse(File.Exists(backupPath));
         }
     }
 }

@@ -13,7 +13,7 @@ This design covers:
 - Moving the debug log path into `PluginsData\Affinity`.
 - Preserving existing user data by migrating from older Affinity file locations on startup.
 - Preserving legacy JSON-to-SQLite import behavior during the transition.
-- Writing a single rolling `.bak` copy of the SQLite database during plugin shutdown.
+- Writing a rolling set of numbered SQLite `.bak` copies during plugin shutdown.
 
 This design does not cover:
 
@@ -89,15 +89,18 @@ During `End()`, after the plugin closes and disposes the SQLite connection, copy
 
 to:
 
-- `PluginsData\Affinity\Affinity.distance.db.bak`
+- `PluginsData\Affinity\Affinity.distance.db.bak.1`
 
 Backup rules:
 
-- Overwrite the existing `.bak` file on each clean shutdown.
+- Keep up to five numbered backups, `Affinity.distance.db.bak.1` through `.bak.5`.
+- Treat `.bak.1` as the latest backup and `.bak.5` as the oldest backup.
+- Rotate existing numbered backups before writing the new `.bak.1`.
+- If an older unnumbered `.bak` exists from a previous version, preserve it as the previous backup in the numbered rotation when possible.
 - If the live database file does not exist, skip backup silently.
 - If the backup copy fails, log a warning but do not crash plugin shutdown.
 
-This gives the plugin one last-known-good local backup without introducing retention management or extra UI.
+This gives the plugin five last-known-good local backups without introducing settings or extra UI.
 
 ### 5. Visible runtime path updates
 
@@ -110,14 +113,14 @@ Any plugin property or UI element that exposes the resolved database or debug-lo
   - Build settings, SQLite, debug-log, backup, and transition legacy JSON paths from that root.
   - Add startup migration logic from older file locations to the new folder.
   - Keep legacy JSON import behavior working across old and new locations.
-  - Write a rolling SQLite `.bak` file during `End()` after the repository is disposed.
+  - Write rolling numbered SQLite `.bak` files during `End()` after the repository is disposed.
 
 - Add or modify tests under `Affinity.Tests/`
   - Verify the plugin resolves the new `PluginsData\Affinity` paths.
   - Verify migration prefers an existing new-path file over older-path files.
   - Verify startup migration accepts both `Common\Affinity\...` and old `Common\...` file locations.
   - Verify legacy JSON lookup still falls back across older locations during transition.
-  - Verify shutdown backup behavior handles missing live DB and overwrite semantics.
+  - Verify shutdown backup behavior handles missing live DB and five-backup rotation semantics.
 
 ## Error Handling
 
@@ -134,12 +137,12 @@ Local validation for this change set should include:
 - `dotnet test .\Affinity.Tests\Affinity.Tests.csproj /p:SimHubInstallPath=C:\does-not-exist`
 - `dotnet build .\Affinity\Affinity.csproj /p:SimHubInstallPath=C:\does-not-exist`
 
-If practical after the build, the plugin should also be copied into SimHub so the new runtime storage path and generated `.bak` file can be verified in a real install.
+If practical after the build, the plugin should also be copied into SimHub so the new runtime storage path and generated numbered `.bak` files can be verified in a real install.
 
 ## Risks And Tradeoffs
 
 - Moving out of `PluginsData\Common` lowers exposure to shared-root cleanup, but it adds more startup migration paths to support older users safely.
-- A single rolling backup is simple and low-maintenance, but it preserves only one previous copy of the database.
+- Five numbered rolling backups preserve more recent shutdown states, but still avoid timestamp cleanup and configuration UI.
 - Keeping SQLite runtime DLLs in the plugin load directory avoids loader risk, but it means mutable data and runtime dependencies remain intentionally separated.
 
 ## Success Criteria
@@ -149,5 +152,5 @@ This work is successful when:
 - Affinity resolves its runtime settings, SQLite database, and debug log under `PluginsData\Affinity`.
 - Existing users keep their settings and SQLite data automatically after upgrading.
 - Legacy JSON import still works for users who only have older Common-based files.
-- Each clean SimHub shutdown refreshes `Affinity.distance.db.bak` when a live SQLite database exists.
+- Each clean SimHub shutdown refreshes `Affinity.distance.db.bak.1` and rotates older backups through `.bak.5` when a live SQLite database exists.
 - Runtime diagnostics show the new `PluginsData\Affinity` paths rather than the old Common-based paths.

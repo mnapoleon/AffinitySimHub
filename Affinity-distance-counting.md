@@ -251,6 +251,45 @@ Why:
 - rFactor 2 can bounce between just-before-line and just-after-line positions at low speed before the real telemetry flow stabilizes.
 - It can also report extra counter changes when the car is effectively stopped on the line at the end of a run.
 
+### Le Mans Ultimate
+
+Games matched:
+
+- `lmu`
+
+Distance source:
+
+- always `Derived`
+
+Why:
+
+- LMU is exposed by SimHub as its own game (`LMU`), but its telemetry behavior around pit exit and session shutdown is close to rFactor 2.
+- The SimHub `SessionOdo` value does not behave like a trustworthy per-session distance source for Affinity's cumulative totals.
+
+Session origin:
+
+- not based on a fixed lap-derived starting point
+- distance is integrated from forward track-position movement across line wraps
+
+Why:
+
+- LMU can start the car away from the timing line and can delay or jitter lap-related counters around line crossings.
+- Affinity therefore measures forward path traveled from successive track-position updates instead of reconstructing cumulative distance from lap count.
+
+Extra guards:
+
+- ignores low-speed timing-line lap increments that appear during session exit
+- ignores repeated copies of the same inflated post-exit derived distance
+- ignores placeholder LMU session starts when telemetry has not stabilized yet
+- skips persistence for effectively empty finalized sessions
+- ignores `Unknown` LMU car/track contexts
+
+Why:
+
+- LMU can report a fake extra lap while quitting a session after the real driven distance has already been captured.
+- It can also emit short startup or teardown placeholder sessions that would otherwise create zero-distance rows.
+- Blocking `Unknown` LMU contexts keeps incomplete telemetry handshakes from polluting the saved totals.
+
 ### Other Games
 
 For other games, Affinity currently auto-selects a source at session start:
@@ -288,6 +327,8 @@ Affinity has a few protections for bad telemetry transitions:
   - if session distance drops materially, Affinity updates its local baseline instead of adding negative distance
 - derived line-wrap guard
   - for derived-source sims, if track position wraps by about one lap before the sim's counters settle, Affinity waits for telemetry sync instead of treating that wrap as a real reset
+- empty-session persistence guard
+  - if a finalized session has less than `1 meter` of distance and less than `1 second` of driven time, Affinity does not save it
 
 ## What The UI Shows
 
@@ -326,13 +367,15 @@ The car table is grouped by car only, across all tracks in that game.
 
 When enabled in the current build, targeted debug logging writes to:
 
-- `C:\Program Files (x86)\SimHub\PluginsData\Common\Affinity.distance.debug.log`
+- `C:\Program Files (x86)\SimHub\PluginsData\Affinity\Affinity.distance.debug.<game>.log`
 
 The debug log is especially useful for:
 
 - `RaceRoom`
 - `AssettoCorsaEVO`
 - `Automobilista2`
+- `rFactor2`
+- `LMU`
 
 It records:
 

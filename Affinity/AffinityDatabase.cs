@@ -166,6 +166,8 @@ namespace Affinity
         private string _selectedTimePeriodFilterKey = TimePeriodAllTime;
         private string _selectedSortModeKey = SortByDistance;
         private string _selectedResultLimitKey = ResultLimitAll;
+        private string _trackSearchText = string.Empty;
+        private string _carSearchText = string.Empty;
         private bool _isUpdatingFilterState;
 
         public event PropertyChangedEventHandler PropertyChanged;
@@ -244,6 +246,40 @@ namespace Affinity
             }
         }
 
+        public string TrackSearchText
+        {
+            get => _trackSearchText;
+            set
+            {
+                string normalizedValue = value ?? string.Empty;
+                if (string.Equals(_trackSearchText, normalizedValue, StringComparison.Ordinal))
+                {
+                    return;
+                }
+
+                _trackSearchText = normalizedValue;
+                OnPropertyChanged();
+                ApplyActiveFilters();
+            }
+        }
+
+        public string CarSearchText
+        {
+            get => _carSearchText;
+            set
+            {
+                string normalizedValue = value ?? string.Empty;
+                if (string.Equals(_carSearchText, normalizedValue, StringComparison.Ordinal))
+                {
+                    return;
+                }
+
+                _carSearchText = normalizedValue;
+                OnPropertyChanged();
+                ApplyActiveFilters();
+            }
+        }
+
         public TrackDistanceSummary TopTrackSummary
         {
             get => _topTrackSummary;
@@ -287,6 +323,8 @@ namespace Affinity
             {
                 _visibleTrackSummaries = value ?? new List<TrackDistanceSummary>();
                 OnPropertyChanged();
+                OnPropertyChanged(nameof(HasVisibleTrackSummaries));
+                OnPropertyChanged(nameof(TrackEmptyStateText));
             }
         }
 
@@ -297,8 +335,18 @@ namespace Affinity
             {
                 _visibleCarSummaries = value ?? new List<CarDistanceSummary>();
                 OnPropertyChanged();
+                OnPropertyChanged(nameof(HasVisibleCarSummaries));
+                OnPropertyChanged(nameof(CarEmptyStateText));
             }
         }
+
+        public bool HasVisibleTrackSummaries => VisibleTrackSummaries.Count > 0;
+
+        public bool HasVisibleCarSummaries => VisibleCarSummaries.Count > 0;
+
+        public string TrackEmptyStateText => BuildEmptyStateText("tracks");
+
+        public string CarEmptyStateText => BuildEmptyStateText("cars");
 
         public TrackDistanceSummary SelectedTrackSummary
         {
@@ -384,6 +432,8 @@ namespace Affinity
         public bool HasActiveFilter =>
             SelectedTrackSummary != null ||
             SelectedCarSummary != null ||
+            !string.IsNullOrWhiteSpace(TrackSearchText) ||
+            !string.IsNullOrWhiteSpace(CarSearchText) ||
             !string.Equals(SelectedTimePeriodFilterKey, TimePeriodAllTime, StringComparison.Ordinal) ||
             !string.Equals(SelectedSortModeKey, SortByDistance, StringComparison.Ordinal) ||
             !string.Equals(SelectedResultLimitKey, ResultLimitAll, StringComparison.Ordinal);
@@ -472,12 +522,16 @@ namespace Affinity
                 _selectedTimePeriodFilterKey = TimePeriodAllTime;
                 _selectedSortModeKey = SortByDistance;
                 _selectedResultLimitKey = ResultLimitAll;
+                _trackSearchText = string.Empty;
+                _carSearchText = string.Empty;
                 _timePeriodSummaries = RawSummaries.ToList();
                 OnPropertyChanged(nameof(SelectedTrackSummary));
                 OnPropertyChanged(nameof(SelectedCarSummary));
                 OnPropertyChanged(nameof(SelectedTimePeriodFilterKey));
                 OnPropertyChanged(nameof(SelectedSortModeKey));
                 OnPropertyChanged(nameof(SelectedResultLimitKey));
+                OnPropertyChanged(nameof(TrackSearchText));
+                OnPropertyChanged(nameof(CarSearchText));
                 ApplyActiveFilters();
             }
             finally
@@ -518,18 +572,22 @@ namespace Affinity
         private void RebuildVisibleSummaries()
         {
             List<DistanceSummary> activeRows = GetActiveTimePeriodRows().ToList();
+            List<TrackDistanceSummary> unfilteredTrackSummaries =
+                AffinitySummaryBuilder.BuildTrackSummaries(activeRows, DisplayInMiles);
+            List<CarDistanceSummary> unfilteredCarSummaries =
+                AffinitySummaryBuilder.BuildCarSummaries(activeRows, DisplayInMiles);
             List<TrackDistanceSummary> trackSummaries = ApplyResultLimit(SortTrackSummaries(
-                AffinitySummaryBuilder.BuildTrackSummaries(activeRows, DisplayInMiles))).ToList();
+                FilterTrackSummaries(unfilteredTrackSummaries))).ToList();
             List<CarDistanceSummary> carSummaries = ApplyResultLimit(SortCarSummaries(
-                AffinitySummaryBuilder.BuildCarSummaries(activeRows, DisplayInMiles))).ToList();
+                FilterCarSummaries(unfilteredCarSummaries))).ToList();
 
             TrackDistanceSummary selectedTrack = _selectedTrackSummary == null
                 ? null
-                : trackSummaries.FirstOrDefault(summary =>
+                : unfilteredTrackSummaries.FirstOrDefault(summary =>
                     string.Equals(summary.TrackName, _selectedTrackSummary.TrackName, StringComparison.OrdinalIgnoreCase));
             CarDistanceSummary selectedCar = _selectedCarSummary == null
                 ? null
-                : carSummaries.FirstOrDefault(summary =>
+                : unfilteredCarSummaries.FirstOrDefault(summary =>
                     string.Equals(summary.CarModel, _selectedCarSummary.CarModel, StringComparison.OrdinalIgnoreCase));
 
             if (_selectedTrackSummary != null && selectedTrack == null)
@@ -551,7 +609,7 @@ namespace Affinity
                     .ToList();
                 VisibleTrackSummaries = trackSummaries;
                 VisibleCarSummaries = ApplyResultLimit(SortCarSummaries(
-                    AffinitySummaryBuilder.BuildCarSummaries(filteredRows, DisplayInMiles))).ToList();
+                    FilterCarSummaries(AffinitySummaryBuilder.BuildCarSummaries(filteredRows, DisplayInMiles)))).ToList();
                 TopTrackSummary = selectedTrack;
                 TopCarSummary = VisibleCarSummaries.FirstOrDefault();
             }
@@ -562,7 +620,7 @@ namespace Affinity
                     .ToList();
                 VisibleCarSummaries = carSummaries;
                 VisibleTrackSummaries = ApplyResultLimit(SortTrackSummaries(
-                    AffinitySummaryBuilder.BuildTrackSummaries(filteredRows, DisplayInMiles))).ToList();
+                    FilterTrackSummaries(AffinitySummaryBuilder.BuildTrackSummaries(filteredRows, DisplayInMiles)))).ToList();
                 TopTrackSummary = VisibleTrackSummaries.FirstOrDefault();
                 TopCarSummary = selectedCar;
             }
@@ -625,6 +683,30 @@ namespace Affinity
             }
         }
 
+        private IEnumerable<TrackDistanceSummary> FilterTrackSummaries(IEnumerable<TrackDistanceSummary> summaries)
+        {
+            string searchText = (TrackSearchText ?? string.Empty).Trim();
+            if (searchText.Length == 0)
+            {
+                return summaries;
+            }
+
+            return summaries.Where(summary =>
+                (summary.TrackDisplayName ?? string.Empty).IndexOf(searchText, StringComparison.OrdinalIgnoreCase) >= 0);
+        }
+
+        private IEnumerable<CarDistanceSummary> FilterCarSummaries(IEnumerable<CarDistanceSummary> summaries)
+        {
+            string searchText = (CarSearchText ?? string.Empty).Trim();
+            if (searchText.Length == 0)
+            {
+                return summaries;
+            }
+
+            return summaries.Where(summary =>
+                (summary.CarModel ?? string.Empty).IndexOf(searchText, StringComparison.OrdinalIgnoreCase) >= 0);
+        }
+
         private IEnumerable<T> ApplyResultLimit<T>(IEnumerable<T> summaries)
         {
             switch (SelectedResultLimitKey)
@@ -651,11 +733,36 @@ namespace Affinity
                 descriptions.Add($"Filtered by car: {_selectedCarSummary.CarModel}");
             }
 
+            AddSearchDescription(descriptions, TrackSearchText, "Track search");
+            AddSearchDescription(descriptions, CarSearchText, "Car search");
             AddFilterDescription(descriptions, SelectedTimePeriodFilterKey, TimePeriodAllTime, "Period", TimePeriodFilterOptions);
             AddFilterDescription(descriptions, SelectedSortModeKey, SortByDistance, "Sort", SortModeOptions);
             AddFilterDescription(descriptions, SelectedResultLimitKey, ResultLimitAll, "Limit", ResultLimitOptions);
 
             ActiveFilterDescription = descriptions.Count == 0 ? "No filter" : string.Join("; ", descriptions);
+            OnPropertyChanged(nameof(TrackEmptyStateText));
+            OnPropertyChanged(nameof(CarEmptyStateText));
+        }
+
+        private string BuildEmptyStateText(string summaryType)
+        {
+            if (HasActiveFilter)
+            {
+                return $"No {summaryType} match the current filters ({ActiveFilterDescription})";
+            }
+
+            return $"No {summaryType} to show";
+        }
+
+        private static void AddSearchDescription(List<string> descriptions, string searchText, string label)
+        {
+            string trimmedSearchText = (searchText ?? string.Empty).Trim();
+            if (trimmedSearchText.Length == 0)
+            {
+                return;
+            }
+
+            descriptions.Add($"{label}: {trimmedSearchText}");
         }
 
         private static void AddFilterDescription(

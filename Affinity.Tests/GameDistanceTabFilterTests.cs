@@ -61,6 +61,98 @@ namespace Affinity.Tests
             Assert.AreEqual(tab.CarSummaries[0].CarModel, tab.TopCarSummary.CarModel);
         }
 
+        [TestMethod]
+        public void TrackSearchText_FiltersVisibleTracksAndUpdatesDescription()
+        {
+            GameDistanceTab tab = BuildSnapshot().GameTabs.Single();
+
+            tab.TrackSearchText = "monza";
+
+            Assert.AreEqual("Track search: monza", tab.ActiveFilterDescription);
+            Assert.IsTrue(tab.HasActiveFilter);
+            Assert.AreEqual(1, tab.VisibleTrackSummaries.Count);
+            Assert.AreEqual("Monza GP", tab.VisibleTrackSummaries.Single().TrackDisplayName);
+            CollectionAssert.AreEqual(
+                tab.CarSummaries.Select(summary => summary.CarModel).ToList(),
+                tab.VisibleCarSummaries.Select(summary => summary.CarModel).ToList());
+            Assert.IsTrue(tab.HasVisibleTrackSummaries);
+            Assert.IsTrue(tab.HasVisibleCarSummaries);
+        }
+
+        [TestMethod]
+        public void CarSearchText_FiltersVisibleCarsAndUpdatesDescription()
+        {
+            GameDistanceTab tab = BuildSnapshot().GameTabs.Single();
+
+            tab.CarSearchText = "ferrari";
+
+            Assert.AreEqual("Car search: ferrari", tab.ActiveFilterDescription);
+            Assert.IsTrue(tab.HasActiveFilter);
+            Assert.AreEqual(1, tab.VisibleCarSummaries.Count);
+            Assert.AreEqual("Ferrari 488 GT3", tab.VisibleCarSummaries.Single().CarModel);
+            CollectionAssert.AreEqual(
+                tab.TrackSummaries.Select(summary => summary.TrackName).ToList(),
+                tab.VisibleTrackSummaries.Select(summary => summary.TrackName).ToList());
+            Assert.IsTrue(tab.HasVisibleTrackSummaries);
+            Assert.IsTrue(tab.HasVisibleCarSummaries);
+        }
+
+        [TestMethod]
+        public void ClearFilter_ClearsTrackAndCarSearchText()
+        {
+            GameDistanceTab tab = BuildSnapshot().GameTabs.Single();
+            tab.TrackSearchText = "monza";
+            tab.CarSearchText = "ferrari";
+
+            tab.ClearFilter();
+
+            Assert.AreEqual(string.Empty, tab.TrackSearchText);
+            Assert.AreEqual(string.Empty, tab.CarSearchText);
+            Assert.AreEqual("No filter", tab.ActiveFilterDescription);
+            Assert.IsFalse(tab.HasActiveFilter);
+        }
+
+        [TestMethod]
+        public void SearchText_IsTrimmedInDescriptionAndWhitespaceDoesNotActivateFilter()
+        {
+            GameDistanceTab tab = BuildSnapshot().GameTabs.Single();
+
+            tab.TrackSearchText = "  monza  ";
+            tab.CarSearchText = "   ";
+
+            Assert.AreEqual("Track search: monza", tab.ActiveFilterDescription);
+            Assert.IsTrue(tab.HasActiveFilter);
+            Assert.AreEqual(1, tab.VisibleTrackSummaries.Count);
+            Assert.AreEqual("Monza GP", tab.VisibleTrackSummaries.Single().TrackDisplayName);
+
+            tab.TrackSearchText = "   ";
+
+            Assert.AreEqual("No filter", tab.ActiveFilterDescription);
+            Assert.IsFalse(tab.HasActiveFilter);
+            CollectionAssert.AreEqual(
+                tab.TrackSummaries.Select(summary => summary.TrackName).ToList(),
+                tab.VisibleTrackSummaries.Select(summary => summary.TrackName).ToList());
+        }
+
+        [TestMethod]
+        public void SearchEmptyStateFlags_ReflectEmptyVisibleLists()
+        {
+            GameDistanceTab tab = BuildSnapshot().GameTabs.Single();
+
+            tab.TrackSearchText = "zz-no-track";
+
+            Assert.IsFalse(tab.HasVisibleTrackSummaries);
+            Assert.IsTrue(tab.HasVisibleCarSummaries);
+            Assert.IsTrue(tab.TrackEmptyStateText.Contains("Track search: zz-no-track"));
+
+            tab.TrackSearchText = string.Empty;
+            tab.CarSearchText = "zz-no-car";
+
+            Assert.IsTrue(tab.HasVisibleTrackSummaries);
+            Assert.IsFalse(tab.HasVisibleCarSummaries);
+            Assert.IsTrue(tab.CarEmptyStateText.Contains("Car search: zz-no-car"));
+        }
+
         private static AffinitySummarySnapshot BuildSnapshot()
         {
             List<DistanceSummary> rows = new List<DistanceSummary>

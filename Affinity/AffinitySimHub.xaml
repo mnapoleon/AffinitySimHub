@@ -527,22 +527,42 @@
                                     IsEnabled="{Binding HasActiveFilter}" />
                         </StackPanel>
 
-                        <TextBlock Grid.Row="4"
-                                   Grid.Column="0"
-                                   Margin="0,0,0,8"
-                                   FontSize="14"
-                                   FontWeight="SemiBold"
-                                   Text="Tracks" />
-                        <TextBlock Grid.Row="4"
-                                   Grid.Column="2"
-                                   Margin="0,0,0,8"
-                                   FontSize="14"
-                                   FontWeight="SemiBold"
-                                   Text="Cars" />
+                        <StackPanel Grid.Row="4"
+                                    Grid.Column="0"
+                                    Margin="0,0,0,8">
+                            <TextBlock FontSize="14"
+                                       FontWeight="SemiBold"
+                                       Text="Tracks" />
+                            <StackPanel Margin="0,8,0,0"
+                                        Orientation="Horizontal">
+                                <TextBlock Margin="0,0,6,0"
+                                           VerticalAlignment="Center"
+                                           Foreground="#B8B8B8"
+                                           Text="Search" />
+                                <TextBox Width="220"
+                                         Text="{Binding TrackSearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                            </StackPanel>
+                        </StackPanel>
+                        <StackPanel Grid.Row="4"
+                                    Grid.Column="2"
+                                    Margin="0,0,0,8">
+                            <TextBlock FontSize="14"
+                                       FontWeight="SemiBold"
+                                       Text="Cars" />
+                            <StackPanel Margin="0,8,0,0"
+                                        Orientation="Horizontal">
+                                <TextBlock Margin="0,0,6,0"
+                                           VerticalAlignment="Center"
+                                           Foreground="#B8B8B8"
+                                           Text="Search" />
+                                <TextBox Width="220"
+                                         Text="{Binding CarSearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                            </StackPanel>
+                        </StackPanel>
 
                         <StackPanel Grid.Row="4"
                                     Grid.ColumnSpan="3"
-                                    Margin="0,28,0,8"
+                                    Margin="0,58,0,8"
                                     Orientation="Horizontal">
                             <TextBlock VerticalAlignment="Center"
                                        Foreground="#B8B8B8"
@@ -568,6 +588,27 @@
                             </DataGrid.Columns>
                         </DataGrid>
 
+                        <TextBlock Grid.Row="5"
+                                   Grid.Column="0"
+                                   Margin="12,36,12,0"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Top"
+                                   Foreground="#B8B8B8"
+                                   Text="{Binding TrackEmptyStateText}"
+                                   TextAlignment="Center"
+                                   TextWrapping="Wrap">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding HasVisibleTrackSummaries}" Value="False">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+
                         <DataGrid Grid.Row="5"
                                   Grid.Column="2"
                                   AutoGenerateColumns="False"
@@ -586,6 +627,27 @@
                                 <DataGridTextColumn Width="100" Binding="{Binding UsedTimeDisplay}" Header="Time" />
                             </DataGrid.Columns>
                         </DataGrid>
+
+                        <TextBlock Grid.Row="5"
+                                   Grid.Column="2"
+                                   Margin="12,36,12,0"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Top"
+                                   Foreground="#B8B8B8"
+                                   Text="{Binding CarEmptyStateText}"
+                                   TextAlignment="Center"
+                                   TextWrapping="Wrap">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding HasVisibleCarSummaries}" Value="False">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
                     </Grid>
                 </DataTemplate>
 

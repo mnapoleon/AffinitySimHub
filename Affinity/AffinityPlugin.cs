@@ -68,6 +68,7 @@ namespace Affinity
         private string _currentTrackName = "Unknown track";
         private string _currentTrackNameWithConfig = "Unknown track variation";
         private string _dataStatus = "Waiting for telemetry";
+        private string _settingsStatus = "Settings not saved in this session";
         private double _currentContextDistanceKm;
         private double _sessionDistanceKm;
         private double _totalDistanceKm;
@@ -115,6 +116,21 @@ namespace Affinity
         public string LeftMenuTitle => "Affinity";
 
         public string DatabasePath => _databasePath;
+
+        public string SettingsStatus
+        {
+            get => _settingsStatus;
+            private set
+            {
+                if (_settingsStatus == value)
+                {
+                    return;
+                }
+
+                _settingsStatus = value;
+                OnPropertyChanged();
+            }
+        }
 
         public string PluginVersionDisplay
         {
@@ -929,9 +945,11 @@ namespace Affinity
 
                 string json = JsonConvert.SerializeObject(Settings, Formatting.Indented);
                 File.WriteAllText(_settingsPath, json, Encoding.UTF8);
+                SettingsStatus = $"Settings saved at {DateTime.Now.ToShortTimeString()}";
             }
             catch (Exception ex)
             {
+                SettingsStatus = "Settings save failed; see SimHub log";
                 SimHub.Logging.Current.Error($"Affinity - Failed to save settings: {ex.Message}");
             }
         }

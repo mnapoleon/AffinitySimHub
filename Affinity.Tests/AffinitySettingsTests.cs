@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using Affinity;
@@ -93,6 +95,60 @@ namespace Affinity.Tests
         public void AffinitySettings_DoesNotExposeEnablePluginProperty()
         {
             Assert.IsNull(typeof(AffinitySettings).GetProperty("EnablePlugin", BindingFlags.Public | BindingFlags.Instance));
+        }
+
+        [TestMethod]
+        public void NewPlugin_ExposesUnsavedSettingsStatus()
+        {
+            AffinityPlugin plugin = new AffinityPlugin();
+
+            Assert.AreEqual("Settings not saved in this session", plugin.SettingsStatus);
+        }
+
+        [TestMethod]
+        public void SaveSettings_SetsSavedStatusAfterSuccessfulWrite()
+        {
+            AffinityPlugin plugin = new AffinityPlugin();
+            string settingsPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"), "Affinity.settings.json");
+            SetSettingsPath(plugin, settingsPath);
+
+            plugin.SaveSettings();
+
+            Assert.IsTrue(plugin.SettingsStatus.StartsWith("Settings saved at "));
+        }
+
+        [TestMethod]
+        public void SaveSettings_RaisesPropertyChangedWhenSettingsStatusChanges()
+        {
+            AffinityPlugin plugin = new AffinityPlugin();
+            string settingsPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"), "Affinity.settings.json");
+            SetSettingsPath(plugin, settingsPath);
+            List<string> changedProperties = new List<string>();
+            plugin.PropertyChanged += (sender, args) => changedProperties.Add(args.PropertyName);
+
+            plugin.SaveSettings();
+
+            Assert.IsTrue(changedProperties.Contains(nameof(AffinityPlugin.SettingsStatus)));
+        }
+
+        [TestMethod]
+        public void SaveSettings_SetsFailedStatusWhenWriteFails()
+        {
+            AffinityPlugin plugin = new AffinityPlugin();
+            string directoryPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(directoryPath);
+            SetSettingsPath(plugin, directoryPath);
+
+            plugin.SaveSettings();
+
+            Assert.AreEqual("Settings save failed; see SimHub log", plugin.SettingsStatus);
+        }
+
+        private static void SetSettingsPath(AffinityPlugin plugin, string settingsPath)
+        {
+            FieldInfo settingsPathField = typeof(AffinityPlugin).GetField("_settingsPath", BindingFlags.Instance | BindingFlags.NonPublic);
+
+            settingsPathField.SetValue(plugin, settingsPath);
         }
     }
 }

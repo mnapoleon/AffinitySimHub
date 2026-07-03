@@ -759,6 +759,7 @@
                                     <Grid.RowDefinitions>
                                         <RowDefinition Height="Auto" />
                                         <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
                                     </Grid.RowDefinitions>
 
                                     <TextBlock Grid.Row="0"
@@ -784,12 +785,27 @@
                                                Grid.Column="1"
                                                VerticalAlignment="Center"
                                                Text="{Binding DataContext.PluginVersionDisplay, ElementName=Root}" />
+
+                                    <TextBlock Grid.Row="2"
+                                               Grid.Column="0"
+                                               Margin="0,8,12,0"
+                                               VerticalAlignment="Top"
+                                               Text="Database" />
+                                    <TextBlock Grid.Row="2"
+                                               Grid.Column="1"
+                                               Margin="0,8,0,0"
+                                               VerticalAlignment="Top"
+                                               Text="{Binding DataContext.DatabasePath, ElementName=Root}"
+                                               TextWrapping="Wrap" />
                                 </Grid>
 
                                 <StackPanel Orientation="Horizontal">
                                     <Button Width="90" Click="SaveButton_Click" Content="Save" />
-                                    <Button Width="110" Margin="8,0,0,0" Click="ResetButton_Click" Content="Reset Settings" />
+                                    <Button Width="120" Margin="8,0,0,0" Click="ResetButton_Click" Content="Restore Defaults" />
                                 </StackPanel>
+                                <TextBlock Margin="0,8,0,0"
+                                           Text="{Binding DataContext.SettingsStatus, ElementName=Root}"
+                                           TextWrapping="Wrap" />
                             </StackPanel>
                         </styles:SHSection>
 
@@ -812,10 +828,11 @@
                                 </Grid>
 
                                 <TextBlock Margin="0,0,0,8" TextWrapping="Wrap">
-                                    Debug logs are written to separate files per game. Use the checkboxes below to control which games produce telemetry logs when debug logging is enabled.
+                                    Debug logs are written to separate files per game. Per-game logging options are available when debug logging is enabled.
                                 </TextBlock>
 
-                                <ItemsControl ItemsSource="{Binding DataContext.GameDebugLoggingOptions, ElementName=Root}">
+                                <ItemsControl IsEnabled="{Binding DataContext.Settings.EnableDebugLogging, ElementName=Root}"
+                                              ItemsSource="{Binding DataContext.GameDebugLoggingOptions, ElementName=Root}">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
                                             <CheckBox Margin="0,0,0,6"

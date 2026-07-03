@@ -1691,7 +1691,7 @@ namespace Affinity
             {
                 if (!Settings.GameDebugLogging.ContainsKey(entry.Key))
                 {
-                    Settings.GameDebugLogging[entry.Key] = true;
+                    Settings.GameDebugLogging[entry.Key] = false;
                 }
             }
         }
@@ -1711,7 +1711,7 @@ namespace Affinity
 
             if (!Settings.GameDebugLogging.ContainsKey(settingsKey))
             {
-                Settings.GameDebugLogging[settingsKey] = true;
+                Settings.GameDebugLogging[settingsKey] = false;
                 return true;
             }
 
@@ -1745,7 +1745,7 @@ namespace Affinity
             GameDebugLoggingOptions.Clear();
             foreach (KeyValuePair<string, string> entry in entries.OrderBy(item => item.Value))
             {
-                bool isEnabled = !Settings.GameDebugLogging.TryGetValue(entry.Key, out bool configuredEnabled) || configuredEnabled;
+                bool isEnabled = Settings.GameDebugLogging.TryGetValue(entry.Key, out bool configuredEnabled) && configuredEnabled;
                 GameDebugLoggingOptions.Add(new GameDebugLoggingOption(entry.Key, entry.Value, isEnabled, UpdateGameDebugLoggingSetting));
             }
         }

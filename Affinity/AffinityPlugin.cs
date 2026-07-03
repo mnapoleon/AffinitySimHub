@@ -68,6 +68,7 @@ namespace Affinity
         private string _currentTrackName = "Unknown track";
         private string _currentTrackNameWithConfig = "Unknown track variation";
         private string _dataStatus = "Waiting for telemetry";
+        private string _settingsStatus = "Settings not saved in this session";
         private double _currentContextDistanceKm;
         private double _sessionDistanceKm;
         private double _totalDistanceKm;
@@ -116,6 +117,36 @@ namespace Affinity
 
         public string DatabasePath => _databasePath;
 
+        public bool IsDebugLoggingEnabled
+        {
+            get => Settings.EnableDebugLogging;
+            set
+            {
+                if (Settings.EnableDebugLogging == value)
+                {
+                    return;
+                }
+
+                Settings.EnableDebugLogging = value;
+                OnPropertyChanged();
+            }
+        }
+
+        public string SettingsStatus
+        {
+            get => _settingsStatus;
+            private set
+            {
+                if (_settingsStatus == value)
+                {
+                    return;
+                }
+
+                _settingsStatus = value;
+                OnPropertyChanged();
+            }
+        }
+
         public string PluginVersionDisplay
         {
             get
@@ -128,6 +159,11 @@ namespace Affinity
         }
 
         public ObservableCollection<GameDistanceTab> GameTabs { get; } = new ObservableCollection<GameDistanceTab>();
+
+        public AffinityTopSummarySection OverallTopSummarySection { get; private set; } =
+            new AffinityTopSummarySection { Header = "Top Overall" };
+
+        public ObservableCollection<AffinityTopSummarySection> MonthlyTopSummarySections { get; } = new ObservableCollection<AffinityTopSummarySection>();
 
         public ObservableCollection<AffinityTopSummarySection> TopSummarySections { get; } = new ObservableCollection<AffinityTopSummarySection>();
 
@@ -182,17 +218,23 @@ namespace Affinity
 
         public string CurrentContext => $"{CurrentGameName} / {CurrentCarModel} / {GetDisplayTrackNameWithConfig(CurrentGameName, CurrentTrackNameWithConfig)}";
 
-        public string DistanceUnitLabel => Settings.DisplayInMiles ? "Miles" : "KM";
+        public string DistanceUnitLabel => Settings.DisplayInMiles ? "mi" : "km";
 
         public string DistanceColumnHeader => Settings.DisplayInMiles ? "Distance (mi)" : "Distance (km)";
+
+        public string LiveStatusLabel => IsTelemetryActive ? "Tracking" : "Standby";
 
         public double CurrentContextDistanceDisplay => Settings.DisplayInMiles
             ? CurrentContextDistanceKm * MetersPerKilometer / MetersPerMile
             : CurrentContextDistanceKm;
 
+        public string CurrentContextTotalDisplay => $"{CurrentContextDistanceDisplay:F2} {DistanceUnitLabel}";
+
         public double SessionDistanceDisplay => Settings.DisplayInMiles
             ? SessionDistanceKm * MetersPerKilometer / MetersPerMile
             : SessionDistanceKm;
+
+        public string CurrentSessionDistanceDisplay => $"{SessionDistanceDisplay:F2} {DistanceUnitLabel}";
 
         public double TotalDistanceDisplay => Settings.DisplayInMiles
             ? TotalDistanceKm * MetersPerKilometer / MetersPerMile
@@ -295,6 +337,7 @@ namespace Affinity
                 _currentContextDistanceKm = value;
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(CurrentContextDistanceDisplay));
+                OnPropertyChanged(nameof(CurrentContextTotalDisplay));
             }
         }
 
@@ -311,6 +354,7 @@ namespace Affinity
                 _sessionDistanceKm = value;
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(SessionDistanceDisplay));
+                OnPropertyChanged(nameof(CurrentSessionDistanceDisplay));
             }
         }
 
@@ -381,6 +425,7 @@ namespace Affinity
 
                 _isTelemetryActive = value;
                 OnPropertyChanged();
+                OnPropertyChanged(nameof(LiveStatusLabel));
                 OnPropertyChanged(nameof(StatusSectionForeground));
             }
         }
@@ -915,9 +960,11 @@ namespace Affinity
 
                 string json = JsonConvert.SerializeObject(Settings, Formatting.Indented);
                 File.WriteAllText(_settingsPath, json, Encoding.UTF8);
+                SettingsStatus = $"Settings saved at {DateTime.Now.ToShortTimeString()}";
             }
             catch (Exception ex)
             {
+                SettingsStatus = "Settings save failed; see SimHub log";
                 SimHub.Logging.Current.Error($"Affinity - Failed to save settings: {ex.Message}");
             }
         }
@@ -975,6 +1022,7 @@ namespace Affinity
             SaveSettings();
             RefreshGameDebugLoggingOptions();
             OnPropertyChanged(nameof(Settings));
+            OnPropertyChanged(nameof(IsDebugLoggingEnabled));
             RefreshDistanceSummaries();
             NotifyDistanceDisplayChanged();
         }
@@ -1691,7 +1739,7 @@ namespace Affinity
             {
                 if (!Settings.GameDebugLogging.ContainsKey(entry.Key))
                 {
-                    Settings.GameDebugLogging[entry.Key] = true;
+                    Settings.GameDebugLogging[entry.Key] = false;
                 }
             }
         }
@@ -1711,7 +1759,7 @@ namespace Affinity
 
             if (!Settings.GameDebugLogging.ContainsKey(settingsKey))
             {
-                Settings.GameDebugLogging[settingsKey] = true;
+                Settings.GameDebugLogging[settingsKey] = false;
                 return true;
             }
 
@@ -1745,7 +1793,7 @@ namespace Affinity
             GameDebugLoggingOptions.Clear();
             foreach (KeyValuePair<string, string> entry in entries.OrderBy(item => item.Value))
             {
-                bool isEnabled = !Settings.GameDebugLogging.TryGetValue(entry.Key, out bool configuredEnabled) || configuredEnabled;
+                bool isEnabled = Settings.GameDebugLogging.TryGetValue(entry.Key, out bool configuredEnabled) && configuredEnabled;
                 GameDebugLoggingOptions.Add(new GameDebugLoggingOption(entry.Key, entry.Value, isEnabled, UpdateGameDebugLoggingSetting));
             }
         }
@@ -1860,7 +1908,9 @@ namespace Affinity
             OnPropertyChanged(nameof(DistanceUnitLabel));
             OnPropertyChanged(nameof(DistanceColumnHeader));
             OnPropertyChanged(nameof(CurrentContextDistanceDisplay));
+            OnPropertyChanged(nameof(CurrentContextTotalDisplay));
             OnPropertyChanged(nameof(SessionDistanceDisplay));
+            OnPropertyChanged(nameof(CurrentSessionDistanceDisplay));
             OnPropertyChanged(nameof(TotalDistanceDisplay));
             OnPropertyChanged(nameof(CurrentContextUsedTimeDisplay));
             OnPropertyChanged(nameof(TotalUsedTimeDisplay));
@@ -1984,6 +2034,13 @@ namespace Affinity
             FeaturedGameTab = snapshot.FeaturedGameTab;
             FeaturedTrackSummary = snapshot.FeaturedTrackSummary;
             FeaturedCarSummary = snapshot.FeaturedCarSummary;
+
+            OverallTopSummarySection = CreateTopSummarySection("Top Overall", snapshot);
+            OnPropertyChanged(nameof(OverallTopSummarySection));
+
+            MonthlyTopSummarySections.Clear();
+            MonthlyTopSummarySections.Add(CreateTopSummarySection("This Month", thisMonthSnapshot));
+            MonthlyTopSummarySections.Add(CreateTopSummarySection("Last Month", lastMonthSnapshot));
 
             TopSummarySections.Clear();
             TopSummarySections.Add(CreateTopSummarySection("Top Overall", snapshot));

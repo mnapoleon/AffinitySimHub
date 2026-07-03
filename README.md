@@ -267,18 +267,22 @@ The plugin uses `IWPFSettingsV2` and a WPF-based settings view.
 
 The Data tab is effectively the reporting surface for the plugin:
 
-- featured summary cards across all games
+- live tracking status with current game, car, and track context
+- current-session and current-context distance totals
+- featured all-time summary cards across all games
+- compact monthly highlights
 - per-game tabs for track/car detail
 - current-tab track/car cross-filtering
-- current-tab filters for period, sort order, and result limit
+- current-tab track/car search, period, sort order, and result limit controls
 - all-games totals footer
-- live status text showing current context and data file path
 
 The Settings tab controls:
 
 - distance units
-- debug logging
-- per-game debug logging switches
+- settings save/reset with status feedback
+- storage path visibility
+- debug logging master switch
+- per-game debug logging switches, disabled unless debug logging is enabled
 
 The UI implementation lives in [AffinitySimHub.xaml](Affinity/AffinitySimHub.xaml) and [AffinitySimHub.xaml.cs](Affinity/AffinitySimHub.xaml.cs).
 

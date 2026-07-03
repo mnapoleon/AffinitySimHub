@@ -78,6 +78,8 @@ namespace Affinity
         public double UsedTime { get; set; }
 
         public string UsedTimeDisplay { get; set; } = string.Empty;
+
+        public DateTime LastUpdatedUtc { get; set; }
     }
 
     public class CarDistanceSummary
@@ -95,17 +97,75 @@ namespace Affinity
         public double UsedTime { get; set; }
 
         public string UsedTimeDisplay { get; set; } = string.Empty;
+
+        public DateTime LastUpdatedUtc { get; set; }
+    }
+
+    public class GameTabFilterOption
+    {
+        public GameTabFilterOption(string key, string displayName)
+        {
+            Key = key;
+            DisplayName = displayName;
+        }
+
+        public string Key { get; }
+
+        public string DisplayName { get; }
     }
 
     public class GameDistanceTab : INotifyPropertyChanged
     {
+        public const string TimePeriodAllTime = "AllTime";
+        public const string TimePeriodThisMonth = "ThisMonth";
+        public const string TimePeriodLastMonth = "LastMonth";
+        public const string TimePeriodLast7Days = "Last7Days";
+        public const string TimePeriodLast30Days = "Last30Days";
+        public const string TimePeriodThisYear = "ThisYear";
+
+        public const string SortByDistance = "Distance";
+        public const string SortByTimeDriven = "TimeDriven";
+        public const string SortByRecentlyDriven = "RecentlyDriven";
+
+        public const string ResultLimitAll = "All";
+        public const string ResultLimitTop5 = "Top5";
+        public const string ResultLimitTop10 = "Top10";
+
+        private static readonly IReadOnlyList<GameTabFilterOption> TimePeriodFilterOptionsValue = new List<GameTabFilterOption>
+        {
+            new GameTabFilterOption(TimePeriodAllTime, "All time"),
+            new GameTabFilterOption(TimePeriodThisMonth, "This month"),
+            new GameTabFilterOption(TimePeriodLastMonth, "Last month"),
+            new GameTabFilterOption(TimePeriodLast7Days, "Last 7 days"),
+            new GameTabFilterOption(TimePeriodLast30Days, "Last 30 days"),
+            new GameTabFilterOption(TimePeriodThisYear, "This year")
+        };
+
+        private static readonly IReadOnlyList<GameTabFilterOption> SortModeOptionsValue = new List<GameTabFilterOption>
+        {
+            new GameTabFilterOption(SortByDistance, "Distance"),
+            new GameTabFilterOption(SortByTimeDriven, "Time driven"),
+            new GameTabFilterOption(SortByRecentlyDriven, "Recently driven")
+        };
+
+        private static readonly IReadOnlyList<GameTabFilterOption> ResultLimitOptionsValue = new List<GameTabFilterOption>
+        {
+            new GameTabFilterOption(ResultLimitAll, "All"),
+            new GameTabFilterOption(ResultLimitTop5, "Top 5"),
+            new GameTabFilterOption(ResultLimitTop10, "Top 10")
+        };
+
         private List<TrackDistanceSummary> _visibleTrackSummaries = new List<TrackDistanceSummary>();
         private List<CarDistanceSummary> _visibleCarSummaries = new List<CarDistanceSummary>();
+        private List<DistanceSummary> _timePeriodSummaries = new List<DistanceSummary>();
         private TrackDistanceSummary _topTrackSummary;
         private CarDistanceSummary _topCarSummary;
         private TrackDistanceSummary _selectedTrackSummary;
         private CarDistanceSummary _selectedCarSummary;
         private string _activeFilterDescription = "No filter";
+        private string _selectedTimePeriodFilterKey = TimePeriodAllTime;
+        private string _selectedSortModeKey = SortByDistance;
+        private string _selectedResultLimitKey = ResultLimitAll;
         private bool _isUpdatingFilterState;
 
         public event PropertyChangedEventHandler PropertyChanged;
@@ -125,6 +185,64 @@ namespace Affinity
         public string TotalUsedTimeDisplay { get; set; } = string.Empty;
 
         public bool DisplayInMiles { get; set; }
+
+        public IReadOnlyList<GameTabFilterOption> TimePeriodFilterOptions => TimePeriodFilterOptionsValue;
+
+        public IReadOnlyList<GameTabFilterOption> SortModeOptions => SortModeOptionsValue;
+
+        public IReadOnlyList<GameTabFilterOption> ResultLimitOptions => ResultLimitOptionsValue;
+
+        public string SelectedTimePeriodFilterKey
+        {
+            get => _selectedTimePeriodFilterKey;
+            set
+            {
+                string normalizedValue = NormalizeFilterKey(value, TimePeriodAllTime);
+                if (string.Equals(_selectedTimePeriodFilterKey, normalizedValue, StringComparison.Ordinal))
+                {
+                    return;
+                }
+
+                _selectedTimePeriodFilterKey = normalizedValue;
+                OnPropertyChanged();
+                UpdateActiveFilterDescription();
+                OnPropertyChanged(nameof(HasActiveFilter));
+            }
+        }
+
+        public string SelectedSortModeKey
+        {
+            get => _selectedSortModeKey;
+            set
+            {
+                string normalizedValue = NormalizeFilterKey(value, SortByDistance);
+                if (string.Equals(_selectedSortModeKey, normalizedValue, StringComparison.Ordinal))
+                {
+                    return;
+                }
+
+                _selectedSortModeKey = normalizedValue;
+                OnPropertyChanged();
+                ApplyActiveFilters();
+            }
+        }
+
+        public string SelectedResultLimitKey
+        {
+            get => _selectedResultLimitKey;
+            set
+            {
+                string normalizedValue = NormalizeFilterKey(value, ResultLimitAll);
+                if (string.Equals(_selectedResultLimitKey, normalizedValue, StringComparison.Ordinal))
+                {
+                    return;
+                }
+
+                _selectedResultLimitKey = normalizedValue;
+                OnPropertyChanged();
+                ApplyActiveFilters();
+            }
+        }
 
         public TrackDistanceSummary TopTrackSummary
         {
@@ -263,16 +381,23 @@ namespace Affinity
             }
         }
 
-        public bool HasActiveFilter => SelectedTrackSummary != null || SelectedCarSummary != null;
+        public bool HasActiveFilter =>
+            SelectedTrackSummary != null ||
+            SelectedCarSummary != null ||
+            !string.Equals(SelectedTimePeriodFilterKey, TimePeriodAllTime, StringComparison.Ordinal) ||
+            !string.Equals(SelectedSortModeKey, SortByDistance, StringComparison.Ordinal) ||
+            !string.Equals(SelectedResultLimitKey, ResultLimitAll, StringComparison.Ordinal);
 
         public void InitializeVisibleSummaries()
         {
-            VisibleTrackSummaries = TrackSummaries.ToList();
-            VisibleCarSummaries = CarSummaries.ToList();
-            TopTrackSummary = TrackSummaries.FirstOrDefault();
-            TopCarSummary = CarSummaries.FirstOrDefault();
-            ActiveFilterDescription = "No filter";
-            OnPropertyChanged(nameof(HasActiveFilter));
+            _timePeriodSummaries = RawSummaries.ToList();
+            ApplyActiveFilters();
+        }
+
+        public void SetTimePeriodSummaries(IEnumerable<DistanceSummary> summaries)
+        {
+            _timePeriodSummaries = (summaries ?? Enumerable.Empty<DistanceSummary>()).ToList();
+            ApplyActiveFilters();
         }
 
         public void ApplyTrackFilter(string trackNameWithConfig)
@@ -291,10 +416,6 @@ namespace Affinity
                 return;
             }
 
-            List<DistanceSummary> filteredRows = RawSummaries
-                .Where(summary => string.Equals(summary.TrackNameWithConfig, trackNameWithConfig, StringComparison.OrdinalIgnoreCase))
-                .ToList();
-
             _isUpdatingFilterState = true;
             try
             {
@@ -302,12 +423,7 @@ namespace Affinity
                 _selectedCarSummary = null;
                 OnPropertyChanged(nameof(SelectedTrackSummary));
                 OnPropertyChanged(nameof(SelectedCarSummary));
-                VisibleTrackSummaries = TrackSummaries.ToList();
-                VisibleCarSummaries = AffinitySummaryBuilder.BuildCarSummaries(filteredRows, DisplayInMiles);
-                TopTrackSummary = selectedTrack;
-                TopCarSummary = VisibleCarSummaries.FirstOrDefault();
-                ActiveFilterDescription = $"Filtered by track: {selectedTrack.TrackDisplayName}";
-                OnPropertyChanged(nameof(HasActiveFilter));
+                ApplyActiveFilters();
             }
             finally
             {
@@ -331,10 +447,6 @@ namespace Affinity
                 return;
             }
 
-            List<DistanceSummary> filteredRows = RawSummaries
-                .Where(summary => string.Equals(summary.CarModel, carModel, StringComparison.OrdinalIgnoreCase))
-                .ToList();
-
             _isUpdatingFilterState = true;
             try
             {
@@ -342,12 +454,7 @@ namespace Affinity
                 _selectedTrackSummary = null;
                 OnPropertyChanged(nameof(SelectedCarSummary));
                 OnPropertyChanged(nameof(SelectedTrackSummary));
-                VisibleCarSummaries = CarSummaries.ToList();
-                VisibleTrackSummaries = AffinitySummaryBuilder.BuildTrackSummaries(filteredRows, DisplayInMiles);
-                TopTrackSummary = VisibleTrackSummaries.FirstOrDefault();
-                TopCarSummary = selectedCar;
-                ActiveFilterDescription = $"Filtered by car: {selectedCar.CarModel}";
-                OnPropertyChanged(nameof(HasActiveFilter));
+                ApplyActiveFilters();
             }
             finally
             {
@@ -362,9 +469,16 @@ namespace Affinity
             {
                 _selectedTrackSummary = null;
                 _selectedCarSummary = null;
+                _selectedTimePeriodFilterKey = TimePeriodAllTime;
+                _selectedSortModeKey = SortByDistance;
+                _selectedResultLimitKey = ResultLimitAll;
+                _timePeriodSummaries = RawSummaries.ToList();
                 OnPropertyChanged(nameof(SelectedTrackSummary));
                 OnPropertyChanged(nameof(SelectedCarSummary));
-                InitializeVisibleSummaries();
+                OnPropertyChanged(nameof(SelectedTimePeriodFilterKey));
+                OnPropertyChanged(nameof(SelectedSortModeKey));
+                OnPropertyChanged(nameof(SelectedResultLimitKey));
+                ApplyActiveFilters();
             }
             finally
             {
@@ -380,6 +494,190 @@ namespace Affinity
         private void OnPropertyChanged([CallerMemberName] string propertyName = null)
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        }
+
+        private void ApplyActiveFilters()
+        {
+            if (_isUpdatingFilterState)
+            {
+                RebuildVisibleSummaries();
+                return;
+            }
+
+            _isUpdatingFilterState = true;
+            try
+            {
+                RebuildVisibleSummaries();
+            }
+            finally
+            {
+                _isUpdatingFilterState = false;
+            }
+        }
+
+        private void RebuildVisibleSummaries()
+        {
+            List<DistanceSummary> activeRows = GetActiveTimePeriodRows().ToList();
+            List<TrackDistanceSummary> trackSummaries = ApplyResultLimit(SortTrackSummaries(
+                AffinitySummaryBuilder.BuildTrackSummaries(activeRows, DisplayInMiles))).ToList();
+            List<CarDistanceSummary> carSummaries = ApplyResultLimit(SortCarSummaries(
+                AffinitySummaryBuilder.BuildCarSummaries(activeRows, DisplayInMiles))).ToList();
+
+            TrackDistanceSummary selectedTrack = _selectedTrackSummary == null
+                ? null
+                : trackSummaries.FirstOrDefault(summary =>
+                    string.Equals(summary.TrackName, _selectedTrackSummary.TrackName, StringComparison.OrdinalIgnoreCase));
+            CarDistanceSummary selectedCar = _selectedCarSummary == null
+                ? null
+                : carSummaries.FirstOrDefault(summary =>
+                    string.Equals(summary.CarModel, _selectedCarSummary.CarModel, StringComparison.OrdinalIgnoreCase));
+
+            if (_selectedTrackSummary != null && selectedTrack == null)
+            {
+                _selectedTrackSummary = null;
+                OnPropertyChanged(nameof(SelectedTrackSummary));
+            }
+
+            if (_selectedCarSummary != null && selectedCar == null)
+            {
+                _selectedCarSummary = null;
+                OnPropertyChanged(nameof(SelectedCarSummary));
+            }
+
+            if (selectedTrack != null)
+            {
+                List<DistanceSummary> filteredRows = activeRows
+                    .Where(summary => string.Equals(summary.TrackNameWithConfig, selectedTrack.TrackName, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+                VisibleTrackSummaries = trackSummaries;
+                VisibleCarSummaries = ApplyResultLimit(SortCarSummaries(
+                    AffinitySummaryBuilder.BuildCarSummaries(filteredRows, DisplayInMiles))).ToList();
+                TopTrackSummary = selectedTrack;
+                TopCarSummary = VisibleCarSummaries.FirstOrDefault();
+            }
+            else if (selectedCar != null)
+            {
+                List<DistanceSummary> filteredRows = activeRows
+                    .Where(summary => string.Equals(summary.CarModel, selectedCar.CarModel, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+                VisibleCarSummaries = carSummaries;
+                VisibleTrackSummaries = ApplyResultLimit(SortTrackSummaries(
+                    AffinitySummaryBuilder.BuildTrackSummaries(filteredRows, DisplayInMiles))).ToList();
+                TopTrackSummary = VisibleTrackSummaries.FirstOrDefault();
+                TopCarSummary = selectedCar;
+            }
+            else
+            {
+                VisibleTrackSummaries = trackSummaries;
+                VisibleCarSummaries = carSummaries;
+                TopTrackSummary = VisibleTrackSummaries.FirstOrDefault();
+                TopCarSummary = VisibleCarSummaries.FirstOrDefault();
+            }
+
+            UpdateActiveFilterDescription();
+            OnPropertyChanged(nameof(HasActiveFilter));
+        }
+
+        private IEnumerable<DistanceSummary> GetActiveTimePeriodRows()
+        {
+            return _timePeriodSummaries ?? RawSummaries ?? Enumerable.Empty<DistanceSummary>();
+        }
+
+        private IEnumerable<TrackDistanceSummary> SortTrackSummaries(IEnumerable<TrackDistanceSummary> summaries)
+        {
+            switch (SelectedSortModeKey)
+            {
+                case SortByTimeDriven:
+                    return summaries
+                        .OrderByDescending(summary => summary.UsedTime)
+                        .ThenByDescending(summary => summary.DistanceDisplay)
+                        .ThenBy(summary => summary.TrackDisplayName);
+                case SortByRecentlyDriven:
+                    return summaries
+                        .OrderByDescending(summary => summary.LastUpdatedUtc)
+                        .ThenByDescending(summary => summary.DistanceDisplay)
+                        .ThenBy(summary => summary.TrackDisplayName);
+                default:
+                    return summaries
+                        .OrderByDescending(summary => summary.DistanceDisplay)
+                        .ThenBy(summary => summary.TrackDisplayName);
+            }
+        }
+
+        private IEnumerable<CarDistanceSummary> SortCarSummaries(IEnumerable<CarDistanceSummary> summaries)
+        {
+            switch (SelectedSortModeKey)
+            {
+                case SortByTimeDriven:
+                    return summaries
+                        .OrderByDescending(summary => summary.UsedTime)
+                        .ThenByDescending(summary => summary.DistanceDisplay)
+                        .ThenBy(summary => summary.CarModel);
+                case SortByRecentlyDriven:
+                    return summaries
+                        .OrderByDescending(summary => summary.LastUpdatedUtc)
+                        .ThenByDescending(summary => summary.DistanceDisplay)
+                        .ThenBy(summary => summary.CarModel);
+                default:
+                    return summaries
+                        .OrderByDescending(summary => summary.DistanceDisplay)
+                        .ThenBy(summary => summary.CarModel);
+            }
+        }
+
+        private IEnumerable<T> ApplyResultLimit<T>(IEnumerable<T> summaries)
+        {
+            switch (SelectedResultLimitKey)
+            {
+                case ResultLimitTop5:
+                    return summaries.Take(5);
+                case ResultLimitTop10:
+                    return summaries.Take(10);
+                default:
+                    return summaries;
+            }
+        }
+
+        private void UpdateActiveFilterDescription()
+        {
+            var descriptions = new List<string>();
+
+            if (_selectedTrackSummary != null)
+            {
+                descriptions.Add($"Filtered by track: {_selectedTrackSummary.TrackDisplayName}");
+            }
+            else if (_selectedCarSummary != null)
+            {
+                descriptions.Add($"Filtered by car: {_selectedCarSummary.CarModel}");
+            }
+
+            AddFilterDescription(descriptions, SelectedTimePeriodFilterKey, TimePeriodAllTime, "Period", TimePeriodFilterOptions);
+            AddFilterDescription(descriptions, SelectedSortModeKey, SortByDistance, "Sort", SortModeOptions);
+            AddFilterDescription(descriptions, SelectedResultLimitKey, ResultLimitAll, "Limit", ResultLimitOptions);
+
+            ActiveFilterDescription = descriptions.Count == 0 ? "No filter" : string.Join("; ", descriptions);
+        }
+
+        private static void AddFilterDescription(
+            List<string> descriptions,
+            string selectedKey,
+            string defaultKey,
+            string label,
+            IEnumerable<GameTabFilterOption> options)
+        {
+            if (string.Equals(selectedKey, defaultKey, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            GameTabFilterOption option = options.FirstOrDefault(item =>
+                string.Equals(item.Key, selectedKey, StringComparison.Ordinal));
+            descriptions.Add($"{label}: {option?.DisplayName ?? selectedKey}");
+        }
+
+        private static string NormalizeFilterKey(string value, string defaultValue)
+        {
+            return string.IsNullOrWhiteSpace(value) ? defaultValue : value;
         }
     }
 

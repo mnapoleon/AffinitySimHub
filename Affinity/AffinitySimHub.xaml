@@ -272,6 +272,8 @@
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="12" />
                             <RowDefinition Height="Auto" />
+                            <RowDefinition Height="8" />
+                            <RowDefinition Height="Auto" />
                             <RowDefinition Height="*" />
                         </Grid.RowDefinitions>
 
@@ -347,36 +349,77 @@
                             </StackPanel>
                         </Border>
 
-                        <TextBlock Grid.Row="2"
-                                   Grid.Column="0"
-                                   Margin="0,0,0,8"
-                                   FontSize="14"
-                                   FontWeight="SemiBold"
-                                   Text="Tracks" />
-                        <TextBlock Grid.Row="2"
-                                   Grid.Column="2"
-                                   Margin="0,0,0,8"
-                                   FontSize="14"
-                                   FontWeight="SemiBold"
-                                   Text="Cars" />
-
                         <StackPanel Grid.Row="2"
                                     Grid.ColumnSpan="3"
-                                    Margin="0,28,0,8"
                                     Orientation="Horizontal">
-                            <TextBlock VerticalAlignment="Center"
-                                       Foreground="#B8B8B8"
-                                       Text="{Binding ActiveFilterDescription}" />
-                            <Button Width="90"
+                                <TextBlock Margin="0,0,6,0"
+                                           VerticalAlignment="Center"
+                                           Foreground="#B8B8B8"
+                                           Text="Period" />
+                                <ComboBox Width="130"
+                                          Margin="0,0,12,0"
+                                          DisplayMemberPath="DisplayName"
+                                          ItemsSource="{Binding TimePeriodFilterOptions}"
+                                          SelectedValue="{Binding SelectedTimePeriodFilterKey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                          SelectedValuePath="Key"
+                                          SelectionChanged="GameTabFilterSelectionChanged" />
+
+                                <TextBlock Margin="0,0,6,0"
+                                           VerticalAlignment="Center"
+                                           Foreground="#B8B8B8"
+                                           Text="Sort" />
+                                <ComboBox Width="130"
+                                          Margin="0,0,12,0"
+                                          DisplayMemberPath="DisplayName"
+                                          ItemsSource="{Binding SortModeOptions}"
+                                          SelectedValue="{Binding SelectedSortModeKey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                          SelectedValuePath="Key"
+                                          SelectionChanged="GameTabFilterSelectionChanged" />
+
+                                <TextBlock Margin="0,0,6,0"
+                                           VerticalAlignment="Center"
+                                           Foreground="#B8B8B8"
+                                           Text="Limit" />
+                                <ComboBox Width="90"
+                                          Margin="0,0,12,0"
+                                          DisplayMemberPath="DisplayName"
+                                          ItemsSource="{Binding ResultLimitOptions}"
+                                          SelectedValue="{Binding SelectedResultLimitKey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                          SelectedValuePath="Key"
+                                          SelectionChanged="GameTabFilterSelectionChanged" />
+
+                            <Button
+                                    Width="90"
                                     Height="24"
-                                    Margin="12,0,0,0"
                                     Padding="6,2"
                                     Click="ClearFilterButton_Click"
                                     Content="Clear filter"
                                     IsEnabled="{Binding HasActiveFilter}" />
                         </StackPanel>
 
-                        <DataGrid Grid.Row="3"
+                        <TextBlock Grid.Row="4"
+                                   Grid.Column="0"
+                                   Margin="0,0,0,8"
+                                   FontSize="14"
+                                   FontWeight="SemiBold"
+                                   Text="Tracks" />
+                        <TextBlock Grid.Row="4"
+                                   Grid.Column="2"
+                                   Margin="0,0,0,8"
+                                   FontSize="14"
+                                   FontWeight="SemiBold"
+                                   Text="Cars" />
+
+                        <StackPanel Grid.Row="4"
+                                    Grid.ColumnSpan="3"
+                                    Margin="0,28,0,8"
+                                    Orientation="Horizontal">
+                            <TextBlock VerticalAlignment="Center"
+                                       Foreground="#B8B8B8"
+                                       Text="{Binding ActiveFilterDescription}" />
+                        </StackPanel>
+
+                        <DataGrid Grid.Row="5"
                                   Grid.Column="0"
                                   AutoGenerateColumns="False"
                                   CanUserAddRows="False"
@@ -395,7 +438,7 @@
                             </DataGrid.Columns>
                         </DataGrid>
 
-                        <DataGrid Grid.Row="3"
+                        <DataGrid Grid.Row="5"
                                   Grid.Column="2"
                                   AutoGenerateColumns="False"
                                   CanUserAddRows="False"

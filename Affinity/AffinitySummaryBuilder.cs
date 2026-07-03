@@ -109,7 +109,8 @@ namespace Affinity
                         ? trackGroup.Sum(summary => summary.TotalDistanceMiles)
                         : trackGroup.Sum(summary => summary.TotalDistanceKm),
                     UsedTime = trackGroup.Sum(summary => summary.UsedTime),
-                    UsedTimeDisplay = FormatUsedTime(trackGroup.Sum(summary => summary.UsedTime))
+                    UsedTimeDisplay = FormatUsedTime(trackGroup.Sum(summary => summary.UsedTime)),
+                    LastUpdatedUtc = trackGroup.Max(summary => summary.LastUpdatedUtc)
                 })
                 .OrderByDescending(summary => summary.DistanceKm)
                 .ThenByDescending(summary => summary.UsedTime)
@@ -129,7 +130,8 @@ namespace Affinity
                         ? carGroup.Sum(summary => summary.TotalDistanceMiles)
                         : carGroup.Sum(summary => summary.TotalDistanceKm),
                     UsedTime = carGroup.Sum(summary => summary.UsedTime),
-                    UsedTimeDisplay = FormatUsedTime(carGroup.Sum(summary => summary.UsedTime))
+                    UsedTimeDisplay = FormatUsedTime(carGroup.Sum(summary => summary.UsedTime)),
+                    LastUpdatedUtc = carGroup.Max(summary => summary.LastUpdatedUtc)
                 })
                 .OrderByDescending(summary => summary.DistanceKm)
                 .ThenByDescending(summary => summary.UsedTime)
@@ -211,7 +213,8 @@ namespace Affinity
                         ? trackGroup.Sum(summary => summary.TotalDistanceMiles)
                         : trackGroup.Sum(summary => summary.TotalDistanceKm),
                     UsedTime = trackGroup.Sum(summary => summary.UsedTime),
-                    UsedTimeDisplay = FormatUsedTime(trackGroup.Sum(summary => summary.UsedTime))
+                    UsedTimeDisplay = FormatUsedTime(trackGroup.Sum(summary => summary.UsedTime)),
+                    LastUpdatedUtc = trackGroup.Max(summary => summary.LastUpdatedUtc)
                 })
                 .OrderByDescending(summary => summary.DistanceDisplay)
                 .ThenBy(summary => summary.TrackDisplayName)
@@ -234,7 +237,8 @@ namespace Affinity
                         ? carGroup.Sum(summary => summary.TotalDistanceMiles)
                         : carGroup.Sum(summary => summary.TotalDistanceKm),
                     UsedTime = carGroup.Sum(summary => summary.UsedTime),
-                    UsedTimeDisplay = FormatUsedTime(carGroup.Sum(summary => summary.UsedTime))
+                    UsedTimeDisplay = FormatUsedTime(carGroup.Sum(summary => summary.UsedTime)),
+                    LastUpdatedUtc = carGroup.Max(summary => summary.LastUpdatedUtc)
                 })
                 .OrderByDescending(summary => summary.DistanceDisplay)
                 .ThenBy(summary => summary.CarModel)

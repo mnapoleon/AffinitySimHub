@@ -31,6 +31,8 @@ The current SimHub UI includes:
 - a featured card for the most-driven car, including its game
 - per-game tabs with top-track and top-car highlights
 - per-game track and car tables
+- per-game track/car cross-filtering
+- per-game period, sort, and top-count filters with a clear action
 - an all-games totals summary
 
 ## Supported Games
@@ -267,6 +269,8 @@ The Data tab is effectively the reporting surface for the plugin:
 
 - featured summary cards across all games
 - per-game tabs for track/car detail
+- current-tab track/car cross-filtering
+- current-tab filters for period, sort order, and result limit
 - all-games totals footer
 - live status text showing current context and data file path
 

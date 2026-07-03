@@ -37,5 +37,10 @@ namespace Affinity
         {
             _plugin.ClearSelectedGameTabFilter();
         }
+
+        private void GameTabFilterSelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            _plugin.ApplySelectedGameTabTimeFilter();
+        }
     }
 }

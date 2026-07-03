@@ -999,6 +999,87 @@ namespace Affinity
             SelectedGameTab?.ClearFilter();
         }
 
+        internal void ApplySelectedGameTabTimeFilter()
+        {
+            GameDistanceTab selectedTab = SelectedGameTab;
+            if (selectedTab == null)
+            {
+                return;
+            }
+
+            if (!TryGetGameTabTimePeriodUtcRange(
+                selectedTab.SelectedTimePeriodFilterKey,
+                DateTime.Now,
+                out DateTime? startUtc,
+                out DateTime? endUtc))
+            {
+                selectedTab.SetTimePeriodSummaries(selectedTab.RawSummaries);
+                return;
+            }
+
+            if (_sqliteRepository == null)
+            {
+                selectedTab.SetTimePeriodSummaries(Enumerable.Empty<DistanceSummary>());
+                return;
+            }
+
+            List<DistanceSummary> periodRows = _sqliteRepository
+                .GetDistanceSummaries(startUtc, endUtc)
+                .Where(summary => string.Equals(summary.GameName, selectedTab.GameName, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            GameDistanceTab periodTab = AffinitySummaryBuilder
+                .BuildSnapshot(periodRows, Settings.DisplayInMiles, _assettoCorsaTrackMap)
+                .GameTabs
+                .FirstOrDefault(tab => string.Equals(tab.GameName, selectedTab.GameName, StringComparison.OrdinalIgnoreCase));
+
+            selectedTab.SetTimePeriodSummaries(periodTab?.RawSummaries ?? Enumerable.Empty<DistanceSummary>());
+        }
+
+        internal static bool TryGetGameTabTimePeriodUtcRange(
+            string periodKey,
+            DateTime referenceLocal,
+            out DateTime? startUtc,
+            out DateTime? endUtc)
+        {
+            DateTime localReference = referenceLocal.Kind == DateTimeKind.Utc
+                ? referenceLocal.ToLocalTime()
+                : referenceLocal;
+            DateTime localStart;
+            DateTime localEnd;
+
+            switch (periodKey)
+            {
+                case GameDistanceTab.TimePeriodThisMonth:
+                    localStart = new DateTime(localReference.Year, localReference.Month, 1, 0, 0, 0, DateTimeKind.Local);
+                    localEnd = localStart.AddMonths(1);
+                    break;
+                case GameDistanceTab.TimePeriodLastMonth:
+                    localEnd = new DateTime(localReference.Year, localReference.Month, 1, 0, 0, 0, DateTimeKind.Local);
+                    localStart = localEnd.AddMonths(-1);
+                    break;
+                case GameDistanceTab.TimePeriodLast7Days:
+                    localStart = localReference.AddDays(-7);
+                    localEnd = localReference;
+                    break;
+                case GameDistanceTab.TimePeriodLast30Days:
+                    localStart = localReference.AddDays(-30);
+                    localEnd = localReference;
+                    break;
+                case GameDistanceTab.TimePeriodThisYear:
+                    localStart = new DateTime(localReference.Year, 1, 1, 0, 0, 0, DateTimeKind.Local);
+                    localEnd = localStart.AddYears(1);
+                    break;
+                default:
+                    startUtc = null;
+                    endUtc = null;
+                    return false;
+            }
+
+            startUtc = localStart.ToUniversalTime();
+            endUtc = localEnd.ToUniversalTime();
+            return true;
+        }
+
         private AffinitySettings LoadSettings()
         {
             try

@@ -182,17 +182,23 @@ namespace Affinity
 
         public string CurrentContext => $"{CurrentGameName} / {CurrentCarModel} / {GetDisplayTrackNameWithConfig(CurrentGameName, CurrentTrackNameWithConfig)}";
 
-        public string DistanceUnitLabel => Settings.DisplayInMiles ? "Miles" : "KM";
+        public string DistanceUnitLabel => Settings.DisplayInMiles ? "mi" : "km";
 
         public string DistanceColumnHeader => Settings.DisplayInMiles ? "Distance (mi)" : "Distance (km)";
+
+        public string LiveStatusLabel => IsTelemetryActive ? "Tracking" : "Standby";
 
         public double CurrentContextDistanceDisplay => Settings.DisplayInMiles
             ? CurrentContextDistanceKm * MetersPerKilometer / MetersPerMile
             : CurrentContextDistanceKm;
 
+        public string CurrentContextTotalDisplay => $"{CurrentContextDistanceDisplay:F2} {DistanceUnitLabel}";
+
         public double SessionDistanceDisplay => Settings.DisplayInMiles
             ? SessionDistanceKm * MetersPerKilometer / MetersPerMile
             : SessionDistanceKm;
+
+        public string CurrentSessionDistanceDisplay => $"{SessionDistanceDisplay:F2} {DistanceUnitLabel}";
 
         public double TotalDistanceDisplay => Settings.DisplayInMiles
             ? TotalDistanceKm * MetersPerKilometer / MetersPerMile
@@ -295,6 +301,7 @@ namespace Affinity
                 _currentContextDistanceKm = value;
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(CurrentContextDistanceDisplay));
+                OnPropertyChanged(nameof(CurrentContextTotalDisplay));
             }
         }
 
@@ -311,6 +318,7 @@ namespace Affinity
                 _sessionDistanceKm = value;
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(SessionDistanceDisplay));
+                OnPropertyChanged(nameof(CurrentSessionDistanceDisplay));
             }
         }
 
@@ -381,6 +389,7 @@ namespace Affinity
 
                 _isTelemetryActive = value;
                 OnPropertyChanged();
+                OnPropertyChanged(nameof(LiveStatusLabel));
                 OnPropertyChanged(nameof(StatusSectionForeground));
             }
         }
@@ -1860,7 +1869,9 @@ namespace Affinity
             OnPropertyChanged(nameof(DistanceUnitLabel));
             OnPropertyChanged(nameof(DistanceColumnHeader));
             OnPropertyChanged(nameof(CurrentContextDistanceDisplay));
+            OnPropertyChanged(nameof(CurrentContextTotalDisplay));
             OnPropertyChanged(nameof(SessionDistanceDisplay));
+            OnPropertyChanged(nameof(CurrentSessionDistanceDisplay));
             OnPropertyChanged(nameof(TotalDistanceDisplay));
             OnPropertyChanged(nameof(CurrentContextUsedTimeDisplay));
             OnPropertyChanged(nameof(TotalUsedTimeDisplay));

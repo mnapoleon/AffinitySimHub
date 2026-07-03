@@ -690,11 +690,19 @@ namespace Affinity
     {
         public string Header { get; set; } = string.Empty;
 
+        public string EmptyStateText => "No driving history yet";
+
         public GameDistanceTab FeaturedGameTab { get; set; }
+
+        public bool HasFeaturedGame => FeaturedGameTab != null;
 
         public TrackDistanceSummary FeaturedTrackSummary { get; set; }
 
+        public bool HasFeaturedTrack => FeaturedTrackSummary != null;
+
         public CarDistanceSummary FeaturedCarSummary { get; set; }
+
+        public bool HasFeaturedCar => FeaturedCarSummary != null;
     }
 
     public class AffinitySettingsTab

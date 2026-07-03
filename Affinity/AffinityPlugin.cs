@@ -129,6 +129,11 @@ namespace Affinity
 
         public ObservableCollection<GameDistanceTab> GameTabs { get; } = new ObservableCollection<GameDistanceTab>();
 
+        public AffinityTopSummarySection OverallTopSummarySection { get; private set; } =
+            new AffinityTopSummarySection { Header = "Top Overall" };
+
+        public ObservableCollection<AffinityTopSummarySection> MonthlyTopSummarySections { get; } = new ObservableCollection<AffinityTopSummarySection>();
+
         public ObservableCollection<AffinityTopSummarySection> TopSummarySections { get; } = new ObservableCollection<AffinityTopSummarySection>();
 
         public ObservableCollection<object> TopLevelTabs { get; } = new ObservableCollection<object>();
@@ -1995,6 +2000,13 @@ namespace Affinity
             FeaturedGameTab = snapshot.FeaturedGameTab;
             FeaturedTrackSummary = snapshot.FeaturedTrackSummary;
             FeaturedCarSummary = snapshot.FeaturedCarSummary;
+
+            OverallTopSummarySection = CreateTopSummarySection("Top Overall", snapshot);
+            OnPropertyChanged(nameof(OverallTopSummarySection));
+
+            MonthlyTopSummarySections.Clear();
+            MonthlyTopSummarySections.Add(CreateTopSummarySection("This Month", thisMonthSnapshot));
+            MonthlyTopSummarySections.Add(CreateTopSummarySection("Last Month", lastMonthSnapshot));
 
             TopSummarySections.Clear();
             TopSummarySections.Add(CreateTopSummarySection("Top Overall", snapshot));

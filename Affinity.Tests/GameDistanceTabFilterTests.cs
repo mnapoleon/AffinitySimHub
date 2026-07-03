@@ -176,6 +176,40 @@ namespace Affinity.Tests
             Assert.AreEqual("No matching cars", tab.TopCarEmptyStateText);
         }
 
+        [TestMethod]
+        public void SelectedTrackSummary_WhenTrackSearchExcludesSelection_ClearsSelectedTrackAndUsesSearchedTrackList()
+        {
+            GameDistanceTab tab = BuildSnapshot().GameTabs.Single();
+            tab.SelectedTrackSummary = tab.TrackSummaries.Single(summary => summary.TrackName == "monza_gp");
+
+            tab.TrackSearchText = "spa";
+
+            Assert.IsNull(tab.SelectedTrackSummary);
+            Assert.AreEqual("Track search: spa", tab.ActiveFilterDescription);
+            Assert.AreEqual(1, tab.VisibleTrackSummaries.Count);
+            Assert.AreEqual("spa", tab.VisibleTrackSummaries.Single().TrackDisplayName);
+            Assert.AreEqual(3, tab.VisibleCarSummaries.Count);
+            CollectionAssert.Contains(tab.VisibleCarSummaries.Select(summary => summary.CarModel).ToList(), "Porsche 911 GT3 R");
+            Assert.AreEqual("spa", tab.TopTrackSummary.TrackDisplayName);
+        }
+
+        [TestMethod]
+        public void SelectedCarSummary_WhenCarSearchExcludesSelection_ClearsSelectedCarAndUsesSearchedCarList()
+        {
+            GameDistanceTab tab = BuildSnapshot().GameTabs.Single();
+            tab.SelectedCarSummary = tab.CarSummaries.Single(summary => summary.CarModel == "Ferrari 488 GT3");
+
+            tab.CarSearchText = "porsche";
+
+            Assert.IsNull(tab.SelectedCarSummary);
+            Assert.AreEqual("Car search: porsche", tab.ActiveFilterDescription);
+            Assert.AreEqual(1, tab.VisibleCarSummaries.Count);
+            Assert.AreEqual("Porsche 911 GT3 R", tab.VisibleCarSummaries.Single().CarModel);
+            Assert.AreEqual(3, tab.VisibleTrackSummaries.Count);
+            CollectionAssert.Contains(tab.VisibleTrackSummaries.Select(summary => summary.TrackName).ToList(), "nurburgring");
+            Assert.AreEqual("Porsche 911 GT3 R", tab.TopCarSummary.CarModel);
+        }
+
         private static AffinitySummarySnapshot BuildSnapshot()
         {
             List<DistanceSummary> rows = new List<DistanceSummary>

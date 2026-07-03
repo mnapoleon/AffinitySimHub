@@ -602,15 +602,17 @@ namespace Affinity
                 : unfilteredCarSummaries.FirstOrDefault(summary =>
                     string.Equals(summary.CarModel, _selectedCarSummary.CarModel, StringComparison.OrdinalIgnoreCase));
 
-            if (_selectedTrackSummary != null && selectedTrack == null)
+            if (_selectedTrackSummary != null && (selectedTrack == null || !TrackSummaryMatchesSearch(selectedTrack)))
             {
                 _selectedTrackSummary = null;
+                selectedTrack = null;
                 OnPropertyChanged(nameof(SelectedTrackSummary));
             }
 
-            if (_selectedCarSummary != null && selectedCar == null)
+            if (_selectedCarSummary != null && (selectedCar == null || !CarSummaryMatchesSearch(selectedCar)))
             {
                 _selectedCarSummary = null;
+                selectedCar = null;
                 OnPropertyChanged(nameof(SelectedCarSummary));
             }
 
@@ -697,26 +699,34 @@ namespace Affinity
 
         private IEnumerable<TrackDistanceSummary> FilterTrackSummaries(IEnumerable<TrackDistanceSummary> summaries)
         {
-            string searchText = (TrackSearchText ?? string.Empty).Trim();
-            if (searchText.Length == 0)
-            {
-                return summaries;
-            }
-
-            return summaries.Where(summary =>
-                (summary.TrackDisplayName ?? string.Empty).IndexOf(searchText, StringComparison.OrdinalIgnoreCase) >= 0);
+            return summaries.Where(TrackSummaryMatchesSearch);
         }
 
         private IEnumerable<CarDistanceSummary> FilterCarSummaries(IEnumerable<CarDistanceSummary> summaries)
         {
+            return summaries.Where(CarSummaryMatchesSearch);
+        }
+
+        private bool TrackSummaryMatchesSearch(TrackDistanceSummary summary)
+        {
+            string searchText = (TrackSearchText ?? string.Empty).Trim();
+            if (searchText.Length == 0)
+            {
+                return true;
+            }
+
+            return (summary?.TrackDisplayName ?? string.Empty).IndexOf(searchText, StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private bool CarSummaryMatchesSearch(CarDistanceSummary summary)
+        {
             string searchText = (CarSearchText ?? string.Empty).Trim();
             if (searchText.Length == 0)
             {
-                return summaries;
+                return true;
             }
 
-            return summaries.Where(summary =>
-                (summary.CarModel ?? string.Empty).IndexOf(searchText, StringComparison.OrdinalIgnoreCase) >= 0);
+            return (summary?.CarModel ?? string.Empty).IndexOf(searchText, StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         private IEnumerable<T> ApplyResultLimit<T>(IEnumerable<T> summaries)

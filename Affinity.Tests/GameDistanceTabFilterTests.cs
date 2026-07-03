@@ -153,6 +153,29 @@ namespace Affinity.Tests
             Assert.IsTrue(tab.CarEmptyStateText.Contains("Car search: zz-no-car"));
         }
 
+        [TestMethod]
+        public void NoMatchSearches_ExposeStableTopCardEmptyStates()
+        {
+            GameDistanceTab tab = BuildSnapshot().GameTabs.Single();
+
+            tab.TrackSearchText = "zz-no-track";
+
+            Assert.IsNull(tab.TopTrackSummary);
+            Assert.IsFalse(tab.HasTopTrackSummary);
+            Assert.AreEqual("No matching tracks", tab.TopTrackEmptyStateText);
+            Assert.IsNotNull(tab.TopCarSummary);
+            Assert.IsTrue(tab.HasTopCarSummary);
+
+            tab.TrackSearchText = string.Empty;
+            tab.CarSearchText = "zz-no-car";
+
+            Assert.IsNotNull(tab.TopTrackSummary);
+            Assert.IsTrue(tab.HasTopTrackSummary);
+            Assert.IsNull(tab.TopCarSummary);
+            Assert.IsFalse(tab.HasTopCarSummary);
+            Assert.AreEqual("No matching cars", tab.TopCarEmptyStateText);
+        }
+
         private static AffinitySummarySnapshot BuildSnapshot()
         {
             List<DistanceSummary> rows = new List<DistanceSummary>

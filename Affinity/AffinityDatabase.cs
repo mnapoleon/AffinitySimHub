@@ -292,6 +292,8 @@ namespace Affinity
 
                 _topTrackSummary = value;
                 OnPropertyChanged();
+                OnPropertyChanged(nameof(HasTopTrackSummary));
+                OnPropertyChanged(nameof(TopTrackEmptyStateText));
             }
         }
 
@@ -307,8 +309,18 @@ namespace Affinity
 
                 _topCarSummary = value;
                 OnPropertyChanged();
+                OnPropertyChanged(nameof(HasTopCarSummary));
+                OnPropertyChanged(nameof(TopCarEmptyStateText));
             }
         }
+
+        public bool HasTopTrackSummary => TopTrackSummary != null;
+
+        public bool HasTopCarSummary => TopCarSummary != null;
+
+        public string TopTrackEmptyStateText => "No matching tracks";
+
+        public string TopCarEmptyStateText => "No matching cars";
 
         public List<TrackDistanceSummary> TrackSummaries { get; set; } = new List<TrackDistanceSummary>();
 

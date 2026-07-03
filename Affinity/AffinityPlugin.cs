@@ -117,6 +117,21 @@ namespace Affinity
 
         public string DatabasePath => _databasePath;
 
+        public bool IsDebugLoggingEnabled
+        {
+            get => Settings.EnableDebugLogging;
+            set
+            {
+                if (Settings.EnableDebugLogging == value)
+                {
+                    return;
+                }
+
+                Settings.EnableDebugLogging = value;
+                OnPropertyChanged();
+            }
+        }
+
         public string SettingsStatus
         {
             get => _settingsStatus;
@@ -1007,6 +1022,7 @@ namespace Affinity
             SaveSettings();
             RefreshGameDebugLoggingOptions();
             OnPropertyChanged(nameof(Settings));
+            OnPropertyChanged(nameof(IsDebugLoggingEnabled));
             RefreshDistanceSummaries();
             NotifyDistanceDisplayChanged();
         }

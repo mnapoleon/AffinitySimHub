@@ -98,6 +98,22 @@ namespace Affinity.Tests
         }
 
         [TestMethod]
+        public void IsDebugLoggingEnabled_UpdatesSettingAndNotifiesBinding()
+        {
+            AffinityPlugin plugin = new AffinityPlugin();
+            List<string> changedProperties = new List<string>();
+            plugin.PropertyChanged += (sender, args) => changedProperties.Add(args.PropertyName);
+
+            plugin.IsDebugLoggingEnabled = true;
+            plugin.IsDebugLoggingEnabled = false;
+
+            CollectionAssert.AreEqual(
+                new[] { nameof(AffinityPlugin.IsDebugLoggingEnabled), nameof(AffinityPlugin.IsDebugLoggingEnabled) },
+                changedProperties.Where(name => name == nameof(AffinityPlugin.IsDebugLoggingEnabled)).ToList());
+            Assert.IsFalse(plugin.Settings.EnableDebugLogging);
+        }
+
+        [TestMethod]
         public void NewPlugin_ExposesUnsavedSettingsStatus()
         {
             AffinityPlugin plugin = new AffinityPlugin();

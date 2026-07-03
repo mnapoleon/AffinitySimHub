@@ -824,14 +824,14 @@
                                     <CheckBox Grid.Column="1"
                                               HorizontalAlignment="Left"
                                               Content="Write telemetry debug log"
-                                              IsChecked="{Binding DataContext.Settings.EnableDebugLogging, ElementName=Root, Mode=TwoWay}" />
+                                              IsChecked="{Binding DataContext.IsDebugLoggingEnabled, ElementName=Root, Mode=TwoWay}" />
                                 </Grid>
 
                                 <TextBlock Margin="0,0,0,8" TextWrapping="Wrap">
                                     Debug logs are written to separate files per game. Per-game logging options are available when debug logging is enabled.
                                 </TextBlock>
 
-                                <ItemsControl IsEnabled="{Binding DataContext.Settings.EnableDebugLogging, ElementName=Root}"
+                                <ItemsControl IsEnabled="{Binding DataContext.IsDebugLoggingEnabled, ElementName=Root}"
                                               ItemsSource="{Binding DataContext.GameDebugLoggingOptions, ElementName=Root}">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>

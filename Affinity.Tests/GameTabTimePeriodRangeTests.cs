@@ -52,5 +52,45 @@ namespace Affinity.Tests
             Assert.AreEqual(referenceLocal.AddDays(-7).ToUniversalTime(), startUtc.Value);
             Assert.AreEqual(referenceLocal.ToUniversalTime(), endUtc.Value);
         }
+
+        [TestMethod]
+        public void TryGetRecentHighlightsRangeUtcRanges_UsesCurrentCultureWeekBoundariesForCurrentAndPreviousWeek()
+        {
+            DateTime referenceLocal = new DateTime(2026, 7, 4, 12, 0, 0, DateTimeKind.Local);
+
+            bool hasRange = AffinityPlugin.TryGetRecentHighlightsRangeUtcRanges(
+                AffinityPlugin.RecentHighlightsRangeWeek,
+                referenceLocal,
+                out DateTime? currentStartUtc,
+                out DateTime? currentEndUtc,
+                out DateTime? previousStartUtc,
+                out DateTime? previousEndUtc);
+
+            Assert.IsTrue(hasRange);
+            Assert.AreEqual(new DateTime(2026, 6, 28, 0, 0, 0, DateTimeKind.Local).ToUniversalTime(), currentStartUtc.Value);
+            Assert.AreEqual(referenceLocal.ToUniversalTime(), currentEndUtc.Value);
+            Assert.AreEqual(new DateTime(2026, 6, 21, 0, 0, 0, DateTimeKind.Local).ToUniversalTime(), previousStartUtc.Value);
+            Assert.AreEqual(new DateTime(2026, 6, 28, 0, 0, 0, DateTimeKind.Local).ToUniversalTime(), previousEndUtc.Value);
+        }
+
+        [TestMethod]
+        public void TryGetRecentHighlightsRangeUtcRanges_UsesLocalCalendarBoundariesForCurrentAndPreviousMonth()
+        {
+            DateTime referenceLocal = new DateTime(2026, 7, 4, 12, 0, 0, DateTimeKind.Local);
+
+            bool hasRange = AffinityPlugin.TryGetRecentHighlightsRangeUtcRanges(
+                AffinityPlugin.RecentHighlightsRangeMonth,
+                referenceLocal,
+                out DateTime? currentStartUtc,
+                out DateTime? currentEndUtc,
+                out DateTime? previousStartUtc,
+                out DateTime? previousEndUtc);
+
+            Assert.IsTrue(hasRange);
+            Assert.AreEqual(new DateTime(2026, 7, 1, 0, 0, 0, DateTimeKind.Local).ToUniversalTime(), currentStartUtc.Value);
+            Assert.AreEqual(referenceLocal.ToUniversalTime(), currentEndUtc.Value);
+            Assert.AreEqual(new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Local).ToUniversalTime(), previousStartUtc.Value);
+            Assert.AreEqual(new DateTime(2026, 7, 1, 0, 0, 0, DateTimeKind.Local).ToUniversalTime(), previousEndUtc.Value);
+        }
     }
 }

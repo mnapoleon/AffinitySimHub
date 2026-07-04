@@ -276,104 +276,283 @@
                                     </Grid>
                                 </StackPanel>
 
-                                <TextBlock Margin="0,4,0,8"
-                                           FontSize="14"
-                                           FontWeight="SemiBold"
-                                           Text="Recent highlights" />
-                                <ItemsControl Margin="0,0,0,16"
-                                              ItemsSource="{Binding DataContext.MonthlyTopSummarySections, ElementName=Root}">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <Border Margin="0,0,0,8"
-                                                    Padding="12,10"
-                                                    Background="#252525"
-                                                    BorderBrush="#3A3A3A"
-                                                    BorderThickness="1"
-                                                    CornerRadius="4">
-                                                <Grid>
-                                                    <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="120" />
-                                                        <ColumnDefinition Width="*" />
-                                                        <ColumnDefinition Width="*" />
-                                                        <ColumnDefinition Width="*" />
-                                                    </Grid.ColumnDefinitions>
+                                <Grid Margin="0,4,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
 
-                                                    <TextBlock Grid.Column="0"
-                                                               VerticalAlignment="Center"
-                                                               FontSize="13"
+                                    <TextBlock FontSize="14"
+                                               FontWeight="SemiBold"
+                                               Text="Recent highlights" />
+
+                                    <StackPanel Grid.Column="1"
+                                                Orientation="Horizontal">
+                                        <TextBlock Margin="0,0,6,0"
+                                                   VerticalAlignment="Center"
+                                                   Foreground="#B8B8B8"
+                                                   Text="Range" />
+                                        <ComboBox Width="120"
+                                                  DisplayMemberPath="DisplayName"
+                                                  ItemsSource="{Binding DataContext.RecentHighlightsRangeOptions, ElementName=Root}"
+                                                  SelectedValue="{Binding DataContext.SelectedRecentHighlightsRangeKey, ElementName=Root, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                  SelectedValuePath="Key"
+                                                  SelectionChanged="RecentHighlightsRangeSelectionChanged" />
+                                    </StackPanel>
+                                </Grid>
+
+                                <StackPanel Margin="0,0,0,16">
+                                    <Border Margin="0,0,0,8"
+                                            Padding="12,10"
+                                            Background="#252525"
+                                            BorderBrush="#5BAFD0"
+                                            BorderThickness="1"
+                                            CornerRadius="4">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="160" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+
+                                            <StackPanel Grid.Column="0"
+                                                        VerticalAlignment="Center">
+                                                <TextBlock FontSize="13"
+                                                           FontWeight="SemiBold"
+                                                           Text="{Binding DataContext.CurrentRecentHighlightsSection.Header, ElementName=Root}" />
+                                                <TextBlock Margin="0,4,0,0"
+                                                           FontSize="11"
+                                                           Foreground="#B8B8B8"
+                                                           Text="{Binding DataContext.CurrentRecentHighlightsDateRangeDisplay, ElementName=Root}" />
+                                            </StackPanel>
+
+                                            <TextBlock Grid.Column="1"
+                                                       VerticalAlignment="Center"
+                                                       Foreground="#B8B8B8"
+                                                       Text="{Binding DataContext.CurrentRecentHighlightsEmptyStateText, ElementName=Root}"
+                                                       TextWrapping="Wrap">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding DataContext.HasCurrentRecentHighlights, ElementName=Root}" Value="False">
+                                                                <Setter Property="Visibility" Value="Visible" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+
+                                            <Grid Grid.Column="1">
+                                                <Grid.Style>
+                                                    <Style TargetType="Grid">
+                                                        <Setter Property="Visibility" Value="Visible" />
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding DataContext.HasCurrentRecentHighlights, ElementName=Root}" Value="False">
+                                                                <Setter Property="Visibility" Value="Collapsed" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Grid.Style>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+
+                                                <StackPanel Grid.Column="0"
+                                                            Margin="8,0,0,0">
+                                                    <TextBlock Foreground="#89D9FF"
+                                                               FontSize="11"
                                                                FontWeight="SemiBold"
-                                                               Text="{Binding Header}" />
-
-                                                    <StackPanel Grid.Column="1"
-                                                                Margin="8,0,0,0">
-                                                        <TextBlock Foreground="#89D9FF"
+                                                               Text="Game" />
+                                                    <TextBlock Margin="0,2,0,0"
+                                                               FontWeight="SemiBold"
+                                                               Text="{Binding DataContext.CurrentRecentHighlightsSection.FeaturedGameTab.GameName, ElementName=Root, FallbackValue=none, TargetNullValue=none}"
+                                                               TextTrimming="CharacterEllipsis" />
+                                                    <StackPanel Margin="0,2,0,0"
+                                                                Orientation="Horizontal">
+                                                        <TextBlock FontSize="11"
+                                                                   Foreground="#B8B8B8"
+                                                                   Text="{Binding DataContext.CurrentRecentHighlightsSection.FeaturedGameTab.TotalDistanceDisplay, ElementName=Root, StringFormat={}{0:F2}, FallbackValue=0.00, TargetNullValue=0.00}" />
+                                                        <TextBlock Margin="4,0,0,0"
                                                                    FontSize="11"
-                                                                   FontWeight="SemiBold"
-                                                                   Text="Game" />
-                                                        <TextBlock Margin="0,2,0,0"
-                                                                   FontWeight="SemiBold"
-                                                                   Text="{Binding FeaturedGameTab.GameName, FallbackValue=none, TargetNullValue=none}"
-                                                                   TextTrimming="CharacterEllipsis" />
-                                                        <StackPanel Margin="0,2,0,0"
-                                                                    Orientation="Horizontal">
-                                                            <TextBlock FontSize="11"
-                                                                       Foreground="#B8B8B8"
-                                                                       Text="{Binding FeaturedGameTab.TotalDistanceDisplay, StringFormat={}{0:F2}, FallbackValue=0.00, TargetNullValue=0.00}" />
-                                                            <TextBlock Margin="4,0,0,0"
-                                                                       FontSize="11"
-                                                                       Foreground="#B8B8B8"
-                                                                       Text="{Binding DataContext.DistanceUnitLabel, ElementName=Root}" />
-                                                        </StackPanel>
+                                                                   Foreground="#B8B8B8"
+                                                                   Text="{Binding DataContext.DistanceUnitLabel, ElementName=Root}" />
                                                     </StackPanel>
+                                                </StackPanel>
 
-                                                    <StackPanel Grid.Column="2"
-                                                                Margin="8,0,0,0">
-                                                        <TextBlock Foreground="#89D9FF"
+                                                <StackPanel Grid.Column="1"
+                                                            Margin="8,0,0,0">
+                                                    <TextBlock Foreground="#89D9FF"
+                                                               FontSize="11"
+                                                               FontWeight="SemiBold"
+                                                               Text="Track" />
+                                                    <TextBlock Margin="0,2,0,0"
+                                                               FontWeight="SemiBold"
+                                                               Text="{Binding DataContext.CurrentRecentHighlightsSection.FeaturedTrackSummary.TrackDisplayName, ElementName=Root, FallbackValue=none, TargetNullValue=none}"
+                                                               TextTrimming="CharacterEllipsis" />
+                                                    <StackPanel Margin="0,2,0,0"
+                                                                Orientation="Horizontal">
+                                                        <TextBlock FontSize="11"
+                                                                   Foreground="#B8B8B8"
+                                                                   Text="{Binding DataContext.CurrentRecentHighlightsSection.FeaturedTrackSummary.DistanceDisplay, ElementName=Root, StringFormat={}{0:F2}, FallbackValue=0.00, TargetNullValue=0.00}" />
+                                                        <TextBlock Margin="4,0,0,0"
                                                                    FontSize="11"
-                                                                   FontWeight="SemiBold"
-                                                                   Text="Track" />
-                                                        <TextBlock Margin="0,2,0,0"
-                                                                   FontWeight="SemiBold"
-                                                                   Text="{Binding FeaturedTrackSummary.TrackDisplayName, FallbackValue=none, TargetNullValue=none}"
-                                                                   TextTrimming="CharacterEllipsis" />
-                                                        <StackPanel Margin="0,2,0,0"
-                                                                    Orientation="Horizontal">
-                                                            <TextBlock FontSize="11"
-                                                                       Foreground="#B8B8B8"
-                                                                       Text="{Binding FeaturedTrackSummary.DistanceDisplay, StringFormat={}{0:F2}, FallbackValue=0.00, TargetNullValue=0.00}" />
-                                                            <TextBlock Margin="4,0,0,0"
-                                                                       FontSize="11"
-                                                                       Foreground="#B8B8B8"
-                                                                       Text="{Binding DataContext.DistanceUnitLabel, ElementName=Root}" />
-                                                        </StackPanel>
+                                                                   Foreground="#B8B8B8"
+                                                                   Text="{Binding DataContext.DistanceUnitLabel, ElementName=Root}" />
                                                     </StackPanel>
+                                                </StackPanel>
 
-                                                    <StackPanel Grid.Column="3"
-                                                                Margin="8,0,0,0">
-                                                        <TextBlock Foreground="#89D9FF"
+                                                <StackPanel Grid.Column="2"
+                                                            Margin="8,0,0,0">
+                                                    <TextBlock Foreground="#89D9FF"
+                                                               FontSize="11"
+                                                               FontWeight="SemiBold"
+                                                               Text="Car" />
+                                                    <TextBlock Margin="0,2,0,0"
+                                                               FontWeight="SemiBold"
+                                                               Text="{Binding DataContext.CurrentRecentHighlightsSection.FeaturedCarSummary.CarModel, ElementName=Root, FallbackValue=none, TargetNullValue=none}"
+                                                               TextTrimming="CharacterEllipsis" />
+                                                    <StackPanel Margin="0,2,0,0"
+                                                                Orientation="Horizontal">
+                                                        <TextBlock FontSize="11"
+                                                                   Foreground="#B8B8B8"
+                                                                   Text="{Binding DataContext.CurrentRecentHighlightsSection.FeaturedCarSummary.DistanceDisplay, ElementName=Root, StringFormat={}{0:F2}, FallbackValue=0.00, TargetNullValue=0.00}" />
+                                                        <TextBlock Margin="4,0,0,0"
                                                                    FontSize="11"
-                                                                   FontWeight="SemiBold"
-                                                                   Text="Car" />
-                                                        <TextBlock Margin="0,2,0,0"
-                                                                   FontWeight="SemiBold"
-                                                                   Text="{Binding FeaturedCarSummary.CarModel, FallbackValue=none, TargetNullValue=none}"
-                                                                   TextTrimming="CharacterEllipsis" />
-                                                        <StackPanel Margin="0,2,0,0"
-                                                                    Orientation="Horizontal">
-                                                            <TextBlock FontSize="11"
-                                                                       Foreground="#B8B8B8"
-                                                                       Text="{Binding FeaturedCarSummary.DistanceDisplay, StringFormat={}{0:F2}, FallbackValue=0.00, TargetNullValue=0.00}" />
-                                                            <TextBlock Margin="4,0,0,0"
-                                                                       FontSize="11"
-                                                                       Foreground="#B8B8B8"
-                                                                       Text="{Binding DataContext.DistanceUnitLabel, ElementName=Root}" />
-                                                        </StackPanel>
+                                                                   Foreground="#B8B8B8"
+                                                                   Text="{Binding DataContext.DistanceUnitLabel, ElementName=Root}" />
                                                     </StackPanel>
-                                                </Grid>
-                                            </Border>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
+                                                </StackPanel>
+                                            </Grid>
+                                        </Grid>
+                                    </Border>
+
+                                    <Border Padding="12,10"
+                                            Background="#232323"
+                                            BorderBrush="#5BAFD0"
+                                            BorderThickness="1"
+                                            CornerRadius="4">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="160" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+
+                                            <StackPanel Grid.Column="0"
+                                                        VerticalAlignment="Center">
+                                                <TextBlock FontSize="13"
+                                                           FontWeight="SemiBold"
+                                                           Text="{Binding DataContext.PreviousRecentHighlightsSection.Header, ElementName=Root}" />
+                                                <TextBlock Margin="0,4,0,0"
+                                                           FontSize="11"
+                                                           Foreground="#B8B8B8"
+                                                           Text="{Binding DataContext.PreviousRecentHighlightsDateRangeDisplay, ElementName=Root}" />
+                                            </StackPanel>
+
+                                            <TextBlock Grid.Column="1"
+                                                       VerticalAlignment="Center"
+                                                       Foreground="#B8B8B8"
+                                                       Text="{Binding DataContext.PreviousRecentHighlightsEmptyStateText, ElementName=Root}"
+                                                       TextWrapping="Wrap">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding DataContext.HasPreviousRecentHighlights, ElementName=Root}" Value="False">
+                                                                <Setter Property="Visibility" Value="Visible" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+
+                                            <Grid Grid.Column="1">
+                                                <Grid.Style>
+                                                    <Style TargetType="Grid">
+                                                        <Setter Property="Visibility" Value="Visible" />
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding DataContext.HasPreviousRecentHighlights, ElementName=Root}" Value="False">
+                                                                <Setter Property="Visibility" Value="Collapsed" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Grid.Style>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+
+                                                <StackPanel Grid.Column="0"
+                                                            Margin="8,0,0,0">
+                                                    <TextBlock Foreground="#89D9FF"
+                                                               FontSize="11"
+                                                               FontWeight="SemiBold"
+                                                               Text="Game" />
+                                                    <TextBlock Margin="0,2,0,0"
+                                                               FontWeight="SemiBold"
+                                                               Text="{Binding DataContext.PreviousRecentHighlightsSection.FeaturedGameTab.GameName, ElementName=Root, FallbackValue=none, TargetNullValue=none}"
+                                                               TextTrimming="CharacterEllipsis" />
+                                                    <StackPanel Margin="0,2,0,0"
+                                                                Orientation="Horizontal">
+                                                        <TextBlock FontSize="11"
+                                                                   Foreground="#B8B8B8"
+                                                                   Text="{Binding DataContext.PreviousRecentHighlightsSection.FeaturedGameTab.TotalDistanceDisplay, ElementName=Root, StringFormat={}{0:F2}, FallbackValue=0.00, TargetNullValue=0.00}" />
+                                                        <TextBlock Margin="4,0,0,0"
+                                                                   FontSize="11"
+                                                                   Foreground="#B8B8B8"
+                                                                   Text="{Binding DataContext.DistanceUnitLabel, ElementName=Root}" />
+                                                    </StackPanel>
+                                                </StackPanel>
+
+                                                <StackPanel Grid.Column="1"
+                                                            Margin="8,0,0,0">
+                                                    <TextBlock Foreground="#89D9FF"
+                                                               FontSize="11"
+                                                               FontWeight="SemiBold"
+                                                               Text="Track" />
+                                                    <TextBlock Margin="0,2,0,0"
+                                                               FontWeight="SemiBold"
+                                                               Text="{Binding DataContext.PreviousRecentHighlightsSection.FeaturedTrackSummary.TrackDisplayName, ElementName=Root, FallbackValue=none, TargetNullValue=none}"
+                                                               TextTrimming="CharacterEllipsis" />
+                                                    <StackPanel Margin="0,2,0,0"
+                                                                Orientation="Horizontal">
+                                                        <TextBlock FontSize="11"
+                                                                   Foreground="#B8B8B8"
+                                                                   Text="{Binding DataContext.PreviousRecentHighlightsSection.FeaturedTrackSummary.DistanceDisplay, ElementName=Root, StringFormat={}{0:F2}, FallbackValue=0.00, TargetNullValue=0.00}" />
+                                                        <TextBlock Margin="4,0,0,0"
+                                                                   FontSize="11"
+                                                                   Foreground="#B8B8B8"
+                                                                   Text="{Binding DataContext.DistanceUnitLabel, ElementName=Root}" />
+                                                    </StackPanel>
+                                                </StackPanel>
+
+                                                <StackPanel Grid.Column="2"
+                                                            Margin="8,0,0,0">
+                                                    <TextBlock Foreground="#89D9FF"
+                                                               FontSize="11"
+                                                               FontWeight="SemiBold"
+                                                               Text="Car" />
+                                                    <TextBlock Margin="0,2,0,0"
+                                                               FontWeight="SemiBold"
+                                                               Text="{Binding DataContext.PreviousRecentHighlightsSection.FeaturedCarSummary.CarModel, ElementName=Root, FallbackValue=none, TargetNullValue=none}"
+                                                               TextTrimming="CharacterEllipsis" />
+                                                    <StackPanel Margin="0,2,0,0"
+                                                                Orientation="Horizontal">
+                                                        <TextBlock FontSize="11"
+                                                                   Foreground="#B8B8B8"
+                                                                   Text="{Binding DataContext.PreviousRecentHighlightsSection.FeaturedCarSummary.DistanceDisplay, ElementName=Root, StringFormat={}{0:F2}, FallbackValue=0.00, TargetNullValue=0.00}" />
+                                                        <TextBlock Margin="4,0,0,0"
+                                                                   FontSize="11"
+                                                                   Foreground="#B8B8B8"
+                                                                   Text="{Binding DataContext.DistanceUnitLabel, ElementName=Root}" />
+                                                    </StackPanel>
+                                                </StackPanel>
+                                            </Grid>
+                                        </Grid>
+                                    </Border>
+                                </StackPanel>
 
                                 <TextBlock Margin="0,4,0,8"
                                            FontSize="14"

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Windows.Media;
 
 namespace Affinity
 {
@@ -169,6 +170,8 @@ namespace Affinity
         private string _trackSearchText = string.Empty;
         private string _carSearchText = string.Empty;
         private bool _isUpdatingFilterState;
+        private ImageSource _gameLogo;
+        private string _gameLogoPath = string.Empty;
 
         public event PropertyChangedEventHandler PropertyChanged;
 
@@ -187,6 +190,40 @@ namespace Affinity
         public string TotalUsedTimeDisplay { get; set; } = string.Empty;
 
         public bool DisplayInMiles { get; set; }
+
+        public ImageSource GameLogo
+        {
+            get => _gameLogo;
+            set
+            {
+                if (ReferenceEquals(_gameLogo, value))
+                {
+                    return;
+                }
+
+                _gameLogo = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(HasGameLogo));
+            }
+        }
+
+        public string GameLogoPath
+        {
+            get => _gameLogoPath;
+            set
+            {
+                string normalizedValue = value ?? string.Empty;
+                if (string.Equals(_gameLogoPath, normalizedValue, StringComparison.Ordinal))
+                {
+                    return;
+                }
+
+                _gameLogoPath = normalizedValue;
+                OnPropertyChanged();
+            }
+        }
+
+        public bool HasGameLogo => GameLogo != null;
 
         public IReadOnlyList<GameTabFilterOption> TimePeriodFilterOptions => TimePeriodFilterOptionsValue;
 

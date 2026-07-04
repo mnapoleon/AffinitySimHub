@@ -140,5 +140,71 @@ namespace Affinity.Tests
             Assert.AreEqual("iRacing", snapshot.FeaturedTrackSummary.GameName);
             Assert.AreEqual("iRacing", snapshot.FeaturedCarSummary.GameName);
         }
+
+        [TestMethod]
+        public void BuildSnapshot_PopulatesResolvedGameLogoState()
+        {
+            Dictionary<string, string> logoPaths = new Dictionary<string, string>
+            {
+                ["Assetto Corsa"] = @"C:\SimHub\Logos\244210.jpg",
+                ["iRacing"] = @"C:\SimHub\Logos\iRacing.jpg"
+            };
+
+            AffinitySummarySnapshot snapshot = AffinitySummaryBuilder.BuildSnapshot(
+                AffinitySummaryBuilder.BuildDistanceSummaries(new AffinityDatabase
+                {
+                    Games = new Dictionary<string, GameBucket>
+                    {
+                        ["Assetto Corsa"] = new GameBucket
+                        {
+                            Cars = new Dictionary<string, CarBucket>
+                            {
+                                ["BMW M3 GT2"] = new CarBucket
+                                {
+                                    Tracks = new Dictionary<string, TrackBucket>
+                                    {
+                                        ["monza_gp"] = new TrackBucket
+                                        {
+                                            TrackName = "monza",
+                                            TrackNameWithConfig = "monza_gp",
+                                            TotalDistanceMeters = 5000.0,
+                                            UsedTime = 600.0
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        ["iRacing"] = new GameBucket
+                        {
+                            Cars = new Dictionary<string, CarBucket>
+                            {
+                                ["Mazda MX-5"] = new CarBucket
+                                {
+                                    Tracks = new Dictionary<string, TrackBucket>
+                                    {
+                                        ["lime_rock"] = new TrackBucket
+                                        {
+                                            TrackName = "lime_rock",
+                                            TrackNameWithConfig = "lime_rock",
+                                            TotalDistanceMeters = 1609.344,
+                                            UsedTime = 180.0
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }),
+                displayInMiles: false,
+                assettoCorsaTrackMap: null,
+                tryResolveGameLogoPath: gameName => logoPaths.TryGetValue(gameName, out string path) ? path : null);
+
+            GameDistanceTab assettoTab = snapshot.GameTabs.Single(tab => tab.GameName == "Assetto Corsa");
+            GameDistanceTab iracingTab = snapshot.GameTabs.Single(tab => tab.GameName == "iRacing");
+
+            Assert.AreEqual(@"C:\SimHub\Logos\244210.jpg", assettoTab.GameLogoPath);
+            Assert.AreEqual(@"C:\SimHub\Logos\iRacing.jpg", iracingTab.GameLogoPath);
+            Assert.AreEqual(assettoTab.GameLogoPath, snapshot.FeaturedGameTab.GameLogoPath);
+        }
     }
 }

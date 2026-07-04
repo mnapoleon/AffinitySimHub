@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Windows.Media;
 
 namespace Affinity
 {
@@ -29,13 +30,30 @@ namespace Affinity
             bool displayInMiles,
             IReadOnlyDictionary<string, string> assettoCorsaTrackMap)
         {
-            return BuildSnapshot(BuildDistanceSummaries(database), displayInMiles, assettoCorsaTrackMap);
+            return BuildSnapshot(database, displayInMiles, assettoCorsaTrackMap, null, null);
+        }
+
+        public static AffinitySummarySnapshot BuildSnapshot(
+            AffinityDatabase database,
+            bool displayInMiles,
+            IReadOnlyDictionary<string, string> assettoCorsaTrackMap,
+            Func<string, string> tryResolveGameLogoPath,
+            Func<string, ImageSource> tryResolveGameLogo)
+        {
+            return BuildSnapshot(
+                BuildDistanceSummaries(database),
+                displayInMiles,
+                assettoCorsaTrackMap,
+                tryResolveGameLogoPath,
+                tryResolveGameLogo);
         }
 
         public static AffinitySummarySnapshot BuildSnapshot(
             IEnumerable<DistanceSummary> distanceSummaries,
             bool displayInMiles,
-            IReadOnlyDictionary<string, string> assettoCorsaTrackMap)
+            IReadOnlyDictionary<string, string> assettoCorsaTrackMap,
+            Func<string, string> tryResolveGameLogoPath = null,
+            Func<string, ImageSource> tryResolveGameLogo = null)
         {
             List<DistanceSummary> summaries = (distanceSummaries ?? Enumerable.Empty<DistanceSummary>())
                 .Select(summary => new DistanceSummary
@@ -69,6 +87,8 @@ namespace Affinity
                     GameDistanceTab tab = new GameDistanceTab
                     {
                         GameName = group.Key,
+                        GameLogoPath = tryResolveGameLogoPath?.Invoke(group.Key) ?? string.Empty,
+                        GameLogo = tryResolveGameLogo?.Invoke(group.Key),
                         DisplayInMiles = displayInMiles,
                         TotalDistanceKm = group.Sum(summary => summary.TotalDistanceKm),
                         TotalDistanceMiles = group.Sum(summary => summary.TotalDistanceMiles),

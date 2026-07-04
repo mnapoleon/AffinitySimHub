@@ -15,8 +15,17 @@ namespace Affinity.Tests
 
             Assert.IsNotNull(plugin.OverallTopSummarySection);
             Assert.AreEqual("Top Overall", plugin.OverallTopSummarySection.Header);
-            Assert.IsNotNull(plugin.MonthlyTopSummarySections);
-            Assert.AreEqual(0, plugin.MonthlyTopSummarySections.Count);
+            Assert.IsNotNull(plugin.SelectedRecentHighlightsSection);
+            Assert.AreEqual(AffinityPlugin.RecentHighlightsPeriodThisMonth, plugin.SelectedRecentHighlightsPeriodKey);
+            CollectionAssert.AreEqual(
+                new[]
+                {
+                    AffinityPlugin.RecentHighlightsPeriodThisWeek,
+                    AffinityPlugin.RecentHighlightsPeriodLastWeek,
+                    AffinityPlugin.RecentHighlightsPeriodThisMonth,
+                    AffinityPlugin.RecentHighlightsPeriodLastMonth
+                },
+                plugin.RecentHighlightsPeriodOptions.Select(option => option.Key).ToArray());
         }
 
         [TestMethod]
@@ -27,20 +36,36 @@ namespace Affinity.Tests
             AffinitySummarySnapshot thisMonthSnapshot = CreateSnapshot("This Game", "This Track", "This Car");
             AffinitySummarySnapshot lastMonthSnapshot = CreateSnapshot("Last Game", "Last Track", "Last Car");
 
-            InvokeApplySummarySnapshot(plugin, allTimeSnapshot, thisMonthSnapshot, lastMonthSnapshot);
+            InvokeApplySummarySnapshot(
+                plugin,
+                allTimeSnapshot,
+                thisMonthSnapshot,
+                lastMonthSnapshot,
+                thisMonthSnapshot,
+                "This month highlights",
+                "Jul 1 - Jul 4");
 
             Assert.AreEqual("Top Overall", plugin.OverallTopSummarySection.Header);
             Assert.AreEqual("All Game", plugin.OverallTopSummarySection.FeaturedGameTab.GameName);
-            Assert.AreEqual(2, plugin.MonthlyTopSummarySections.Count);
-            CollectionAssert.AreEqual(
-                new[] { "This Month", "Last Month" },
-                plugin.MonthlyTopSummarySections.Select(section => section.Header).ToArray());
-            Assert.AreEqual("This Game", plugin.MonthlyTopSummarySections[0].FeaturedGameTab.GameName);
-            Assert.AreEqual("Last Game", plugin.MonthlyTopSummarySections[1].FeaturedGameTab.GameName);
+            Assert.AreEqual("This month highlights", plugin.SelectedRecentHighlightsSection.Header);
+            Assert.AreEqual("This Game", plugin.SelectedRecentHighlightsSection.FeaturedGameTab.GameName);
+            Assert.AreEqual("This month", plugin.SelectedRecentHighlightsPeriodDisplayName);
+            Assert.AreEqual("Jul 1 - Jul 4", plugin.SelectedRecentHighlightsDateRangeDisplay);
             Assert.AreEqual(3, plugin.TopSummarySections.Count);
             CollectionAssert.AreEqual(
                 new[] { "Top Overall", "Top This Month", "Top Last Month" },
                 plugin.TopSummarySections.Select(section => section.Header).ToArray());
+        }
+
+        [TestMethod]
+        public void SelectedRecentHighlightsPeriodKey_UpdatesDisplayState()
+        {
+            AffinityPlugin plugin = new AffinityPlugin();
+
+            plugin.SelectedRecentHighlightsPeriodKey = AffinityPlugin.RecentHighlightsPeriodLastWeek;
+
+            Assert.AreEqual(AffinityPlugin.RecentHighlightsPeriodLastWeek, plugin.SelectedRecentHighlightsPeriodKey);
+            Assert.AreEqual("Last week", plugin.SelectedRecentHighlightsPeriodDisplayName);
         }
 
         [TestMethod]
@@ -93,14 +118,27 @@ namespace Affinity.Tests
             AffinityPlugin plugin,
             AffinitySummarySnapshot snapshot,
             AffinitySummarySnapshot thisMonthSnapshot,
-            AffinitySummarySnapshot lastMonthSnapshot)
+            AffinitySummarySnapshot lastMonthSnapshot,
+            AffinitySummarySnapshot selectedRecentHighlightsSnapshot,
+            string selectedRecentHighlightsHeader,
+            string selectedRecentHighlightsDateRangeDisplay)
         {
             MethodInfo method = typeof(AffinityPlugin).GetMethod(
                 "ApplySummarySnapshot",
                 BindingFlags.Instance | BindingFlags.NonPublic);
 
             Assert.IsNotNull(method);
-            method.Invoke(plugin, new object[] { snapshot, thisMonthSnapshot, lastMonthSnapshot });
+            method.Invoke(
+                plugin,
+                new object[]
+                {
+                    snapshot,
+                    thisMonthSnapshot,
+                    lastMonthSnapshot,
+                    selectedRecentHighlightsSnapshot,
+                    selectedRecentHighlightsHeader,
+                    selectedRecentHighlightsDateRangeDisplay
+                });
         }
     }
 }

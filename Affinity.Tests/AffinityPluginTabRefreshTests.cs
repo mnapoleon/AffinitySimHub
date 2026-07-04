@@ -17,8 +17,8 @@ namespace Affinity.Tests
             };
             GameDistanceTab[] refreshedTabs =
             {
-                new GameDistanceTab { GameName = "Assetto Corsa", TotalDistanceDisplay = 12.3 },
-                new GameDistanceTab { GameName = "iRacing", TotalDistanceDisplay = 45.6 }
+                new GameDistanceTab { GameName = "Assetto Corsa", TotalDistanceDisplay = 12.3, GameLogoPath = @"C:\SimHub\Logos\244210.jpg" },
+                new GameDistanceTab { GameName = "iRacing", TotalDistanceDisplay = 45.6, GameLogoPath = @"C:\SimHub\Logos\iRacing.jpg" }
             };
 
             bool canReuse = AffinityPlugin.CanReuseTopLevelTabStructure(existingTabs, refreshedTabs);
@@ -45,8 +45,8 @@ namespace Affinity.Tests
             };
             GameDistanceTab[] refreshedTabs =
             {
-                new GameDistanceTab { GameName = "Assetto Corsa", TotalDistanceDisplay = 12.3 },
-                new GameDistanceTab { GameName = "iRacing", TotalDistanceDisplay = 45.6 }
+                new GameDistanceTab { GameName = "Assetto Corsa", TotalDistanceDisplay = 12.3, GameLogoPath = @"C:\SimHub\Logos\244210.jpg" },
+                new GameDistanceTab { GameName = "iRacing", TotalDistanceDisplay = 45.6, GameLogoPath = @"C:\SimHub\Logos\iRacing.jpg" }
             };
 
             AffinityPlugin.ReplaceGameTabsInCollections(gameTabs, topLevelTabs, refreshedTabs);
@@ -55,8 +55,10 @@ namespace Affinity.Tests
             Assert.AreSame(settingsTab, topLevelTabs[3]);
             Assert.AreSame(refreshedTabs[0], gameTabs[0]);
             Assert.AreSame(refreshedTabs[0], topLevelTabs[1]);
+            Assert.AreEqual(@"C:\SimHub\Logos\244210.jpg", gameTabs[0].GameLogoPath);
             Assert.AreSame(refreshedTabs[1], gameTabs[1]);
             Assert.AreSame(refreshedTabs[1], topLevelTabs[2]);
+            Assert.AreEqual(@"C:\SimHub\Logos\iRacing.jpg", gameTabs[1].GameLogoPath);
         }
 
         [TestMethod]

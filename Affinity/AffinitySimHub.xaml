@@ -114,11 +114,30 @@
                                                            FontSize="12"
                                                            FontWeight="SemiBold"
                                                            Text="Most distance driven" />
-                                                <TextBlock Margin="0,8,0,0"
-                                                           FontSize="24"
-                                                           FontWeight="Bold"
-                                                           Text="{Binding FeaturedGameTab.GameName, FallbackValue=none, TargetNullValue=none}"
-                                                           TextTrimming="CharacterEllipsis" />
+                                                <StackPanel Margin="0,8,0,0"
+                                                            Orientation="Horizontal">
+                                                    <Image Width="64"
+                                                           Height="36"
+                                                           Margin="0,0,10,0"
+                                                           Source="{Binding FeaturedGameTab.GameLogo}"
+                                                           Stretch="Uniform">
+                                                        <Image.Style>
+                                                            <Style TargetType="Image">
+                                                                <Setter Property="Visibility" Value="Visible" />
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding FeaturedGameTab.HasGameLogo}" Value="False">
+                                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </Image.Style>
+                                                    </Image>
+                                                    <TextBlock VerticalAlignment="Center"
+                                                               FontSize="24"
+                                                               FontWeight="Bold"
+                                                               Text="{Binding FeaturedGameTab.GameName, FallbackValue=none, TargetNullValue=none}"
+                                                               TextTrimming="CharacterEllipsis" />
+                                                </StackPanel>
                                                 <TextBlock Margin="0,4,0,0"
                                                            FontSize="13"
                                                            Foreground="#D8D8D8"
@@ -402,12 +421,39 @@
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="12" />
                             <RowDefinition Height="Auto" />
+                            <RowDefinition Height="12" />
+                            <RowDefinition Height="Auto" />
                             <RowDefinition Height="8" />
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="*" />
                         </Grid.RowDefinitions>
 
-                        <Border Grid.Row="0"
+                        <StackPanel Grid.Row="0"
+                                    Grid.ColumnSpan="3"
+                                    Orientation="Horizontal">
+                            <Image Width="64"
+                                   Height="40"
+                                   Margin="0,0,10,0"
+                                   Source="{Binding GameLogo}"
+                                   Stretch="Uniform">
+                                <Image.Style>
+                                    <Style TargetType="Image">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding HasGameLogo}" Value="False">
+                                                <Setter Property="Visibility" Value="Collapsed" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Image.Style>
+                            </Image>
+                            <TextBlock VerticalAlignment="Center"
+                                       FontSize="22"
+                                       FontWeight="Bold"
+                                       Text="{Binding GameName}" />
+                        </StackPanel>
+
+                        <Border Grid.Row="2"
                                 Grid.Column="0"
                                 Padding="16,14"
                                 Background="#252525"
@@ -491,7 +537,7 @@
                             </StackPanel>
                         </Border>
 
-                        <Border Grid.Row="0"
+                        <Border Grid.Row="2"
                                 Grid.Column="2"
                                 Padding="16,14"
                                 Background="#252525"
@@ -575,7 +621,7 @@
                             </StackPanel>
                         </Border>
 
-                        <StackPanel Grid.Row="2"
+                        <StackPanel Grid.Row="4"
                                     Grid.ColumnSpan="3"
                                     Orientation="Horizontal">
                                 <TextBlock Margin="0,0,6,0"
@@ -623,7 +669,7 @@
                                     IsEnabled="{Binding HasActiveFilter}" />
                         </StackPanel>
 
-                        <StackPanel Grid.Row="4"
+                        <StackPanel Grid.Row="6"
                                     Grid.Column="0"
                                     Margin="0,0,0,8">
                             <TextBlock FontSize="14"
@@ -639,7 +685,7 @@
                                          Text="{Binding TrackSearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                             </StackPanel>
                         </StackPanel>
-                        <StackPanel Grid.Row="4"
+                        <StackPanel Grid.Row="6"
                                     Grid.Column="2"
                                     Margin="0,0,0,8">
                             <TextBlock FontSize="14"
@@ -656,7 +702,7 @@
                             </StackPanel>
                         </StackPanel>
 
-                        <StackPanel Grid.Row="4"
+                        <StackPanel Grid.Row="6"
                                     Grid.ColumnSpan="3"
                                     Margin="0,58,0,8"
                                     Orientation="Horizontal">
@@ -665,7 +711,7 @@
                                        Text="{Binding ActiveFilterDescription}" />
                         </StackPanel>
 
-                        <DataGrid Grid.Row="5"
+                        <DataGrid Grid.Row="7"
                                   Grid.Column="0"
                                   AutoGenerateColumns="False"
                                   CanUserAddRows="False"
@@ -684,7 +730,7 @@
                             </DataGrid.Columns>
                         </DataGrid>
 
-                        <TextBlock Grid.Row="5"
+                        <TextBlock Grid.Row="7"
                                    Grid.Column="0"
                                    Margin="12,36,12,0"
                                    HorizontalAlignment="Center"
@@ -705,7 +751,7 @@
                             </TextBlock.Style>
                         </TextBlock>
 
-                        <DataGrid Grid.Row="5"
+                        <DataGrid Grid.Row="7"
                                   Grid.Column="2"
                                   AutoGenerateColumns="False"
                                   CanUserAddRows="False"
@@ -724,7 +770,7 @@
                             </DataGrid.Columns>
                         </DataGrid>
 
-                        <TextBlock Grid.Row="5"
+                        <TextBlock Grid.Row="7"
                                    Grid.Column="2"
                                    Margin="12,36,12,0"
                                    HorizontalAlignment="Center"

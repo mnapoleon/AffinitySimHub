@@ -36,13 +36,13 @@
   - `Rfactor2`
   - `rfactor2`
   - accidental extra spaces in `Assetto Corsa Competizione`
-- Because the user supplied image names but not file extensions, the resolver should match by base filename in a case-insensitive way and allow the actual file extension to vary.
+- The user confirmed the logo files are `.jpg`, so the resolver should build direct case-insensitive filename lookups such as `244210.jpg` and `iRacing.jpg`.
 
 **Design**
 
 - Add one reusable logo resolver/service responsible for:
   - converting a game name into the mapped base filename
-  - locating the logo file in the SimHub `Logos` directory
+  - locating the `.jpg` logo file in the SimHub `Logos` directory
   - loading the image into a frozen `BitmapImage`
   - caching resolved `ImageSource` results, including negative results for missing files
 - Expose logo state through bound properties rather than resolving files directly inside XAML converters.
@@ -94,7 +94,7 @@
   - each supported game maps to the expected SimHub logo base name
   - known naming variants normalize correctly
   - unknown games return no logo
-- Add tests around any new helper that finds a file by base name so extension handling and case-insensitive matching are explicit.
+- Add tests around any new helper that builds the expected `.jpg` path so case-insensitive matching is explicit.
 - Keep existing overview and tab snapshot tests passing to confirm the added properties do not change summary ordering or totals.
 - Validation should include:
   - `dotnet test .\Affinity.Tests\Affinity.Tests.csproj /p:SimHubInstallPath=C:\does-not-exist`
@@ -106,6 +106,6 @@
 
 **Risks**
 
-- SimHub may store logos with unexpected extensions or casing, so matching by base filename instead of a hard-coded full filename is important.
+- Filename casing could still vary, so lookup should remain case-insensitive even though the extension is now known to be `.jpg`.
 - Game-name drift between telemetry labels and UI display names could break lookup if normalization stays too narrow, so the mapping helper should be explicit and easy to extend.
 - Large or inconsistent source image dimensions could crowd the cards if the XAML constraints are loose, so max-size limits need to be part of the first implementation.

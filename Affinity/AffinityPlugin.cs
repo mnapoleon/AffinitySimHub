@@ -46,14 +46,14 @@ namespace Affinity
         private static readonly IReadOnlyDictionary<string, string> GameLogoFileNames =
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
-                ["Assetto Corsa"] = "244210.jpg",
-                ["Assetto Corsa Competizione"] = "805550.jpg",
-                ["Assetto Corsa EVO"] = "3058630.jpg",
-                ["Automobilista 2"] = "1066890.jpg",
-                ["iRacing"] = "iRacing.jpg",
-                ["Le Mans Ultimate"] = "23994202.jpg",
-                ["RaceRoom Racing Experience"] = "211500.jpg",
-                ["rFactor 2"] = "365950.jpg"
+                ["assettocorsa"] = "244210.jpg",
+                ["assettocorsacompetizione"] = "805550.jpg",
+                ["assettocorsaevo"] = "3058630.jpg",
+                ["automobilista2"] = "1066890.jpg",
+                ["iracing"] = "iRacing.jpg",
+                ["lmu"] = "2399420.jpg",
+                ["raceroomracingexperience"] = "211500.jpg",
+                ["rfactor2"] = "365960.jpg"
             };
         private static readonly KeyValuePair<string, string>[] DefaultGameDebugLoggingEntries =
         {
@@ -2136,12 +2136,16 @@ namespace Affinity
 
         private static string NormalizeGameLogoLookupName(string gameName)
         {
-            string normalized = Regex.Replace(gameName ?? string.Empty, "\\s+", " ").Trim();
-            switch (normalized.ToLowerInvariant())
+            string normalized = AffinityGameLogic.NormalizeGameName(gameName);
+            switch (normalized)
             {
+                case "r3e":
+                case "rrre":
+                    return "raceroomracingexperience";
                 case "rfactor2":
-                case "rfactor 2":
-                    return "rFactor 2";
+                    return "rfactor2";
+                case "lemansultimate":
+                    return "lmu";
                 default:
                     return normalized;
             }

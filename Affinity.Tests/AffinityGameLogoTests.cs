@@ -11,16 +11,28 @@ namespace Affinity.Tests
         public void TryGetGameLogoFileName_ReturnsExpectedJpgNames()
         {
             Assert.AreEqual("244210.jpg", AffinityPlugin.TryGetGameLogoFileName("Assetto Corsa"));
-            Assert.AreEqual("365950.jpg", AffinityPlugin.TryGetGameLogoFileName("rFactor 2"));
+            Assert.AreEqual("365960.jpg", AffinityPlugin.TryGetGameLogoFileName("rFactor 2"));
             Assert.AreEqual("iRacing.jpg", AffinityPlugin.TryGetGameLogoFileName("iRacing"));
         }
 
         [TestMethod]
         public void TryGetGameLogoFileName_NormalizesKnownDisplayVariants()
         {
-            Assert.AreEqual("365950.jpg", AffinityPlugin.TryGetGameLogoFileName("Rfactor2"));
-            Assert.AreEqual("365950.jpg", AffinityPlugin.TryGetGameLogoFileName("rfactor2"));
+            Assert.AreEqual("365960.jpg", AffinityPlugin.TryGetGameLogoFileName("Rfactor2"));
+            Assert.AreEqual("365960.jpg", AffinityPlugin.TryGetGameLogoFileName("rfactor2"));
             Assert.AreEqual("805550.jpg", AffinityPlugin.TryGetGameLogoFileName("Assetto Corsa  Competizione"));
+        }
+
+        [TestMethod]
+        public void TryGetGameLogoFileName_MapsRuntimeGameKeysUsedBySimHub()
+        {
+            Assert.AreEqual("244210.jpg", AffinityPlugin.TryGetGameLogoFileName("AssettoCorsa"));
+            Assert.AreEqual("3058630.jpg", AffinityPlugin.TryGetGameLogoFileName("AssettoCorsaEVO"));
+            Assert.AreEqual("1066890.jpg", AffinityPlugin.TryGetGameLogoFileName("Automobilista2"));
+            Assert.AreEqual("iRacing.jpg", AffinityPlugin.TryGetGameLogoFileName("IRacing"));
+            Assert.AreEqual("365960.jpg", AffinityPlugin.TryGetGameLogoFileName("RFactor2"));
+            Assert.AreEqual("211500.jpg", AffinityPlugin.TryGetGameLogoFileName("RRRE"));
+            Assert.AreEqual("2399420.jpg", AffinityPlugin.TryGetGameLogoFileName("LMU"));
         }
 
         [TestMethod]

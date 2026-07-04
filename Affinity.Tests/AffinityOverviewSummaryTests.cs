@@ -15,17 +15,16 @@ namespace Affinity.Tests
 
             Assert.IsNotNull(plugin.OverallTopSummarySection);
             Assert.AreEqual("Top Overall", plugin.OverallTopSummarySection.Header);
-            Assert.IsNotNull(plugin.SelectedRecentHighlightsSection);
-            Assert.AreEqual(AffinityPlugin.RecentHighlightsPeriodThisMonth, plugin.SelectedRecentHighlightsPeriodKey);
+            Assert.IsNotNull(plugin.CurrentRecentHighlightsSection);
+            Assert.IsNotNull(plugin.PreviousRecentHighlightsSection);
+            Assert.AreEqual(AffinityPlugin.RecentHighlightsRangeMonth, plugin.SelectedRecentHighlightsRangeKey);
             CollectionAssert.AreEqual(
                 new[]
                 {
-                    AffinityPlugin.RecentHighlightsPeriodThisWeek,
-                    AffinityPlugin.RecentHighlightsPeriodLastWeek,
-                    AffinityPlugin.RecentHighlightsPeriodThisMonth,
-                    AffinityPlugin.RecentHighlightsPeriodLastMonth
+                    AffinityPlugin.RecentHighlightsRangeWeek,
+                    AffinityPlugin.RecentHighlightsRangeMonth
                 },
-                plugin.RecentHighlightsPeriodOptions.Select(option => option.Key).ToArray());
+                plugin.RecentHighlightsRangeOptions.Select(option => option.Key).ToArray());
         }
 
         [TestMethod]
@@ -35,22 +34,29 @@ namespace Affinity.Tests
             AffinitySummarySnapshot allTimeSnapshot = CreateSnapshot("All Game", "All Track", "All Car");
             AffinitySummarySnapshot thisMonthSnapshot = CreateSnapshot("This Game", "This Track", "This Car");
             AffinitySummarySnapshot lastMonthSnapshot = CreateSnapshot("Last Game", "Last Track", "Last Car");
+            AffinitySummarySnapshot currentRecentHighlightsSnapshot = CreateSnapshot("Current Game", "Current Track", "Current Car");
+            AffinitySummarySnapshot previousRecentHighlightsSnapshot = CreateSnapshot("Previous Game", "Previous Track", "Previous Car");
 
             InvokeApplySummarySnapshot(
                 plugin,
                 allTimeSnapshot,
                 thisMonthSnapshot,
                 lastMonthSnapshot,
-                thisMonthSnapshot,
+                currentRecentHighlightsSnapshot,
+                previousRecentHighlightsSnapshot,
                 "This month highlights",
-                "Jul 1 - Jul 4");
+                "Jul 1 - Jul 4",
+                "Last month highlights",
+                "Jun 1 - Jun 30");
 
             Assert.AreEqual("Top Overall", plugin.OverallTopSummarySection.Header);
             Assert.AreEqual("All Game", plugin.OverallTopSummarySection.FeaturedGameTab.GameName);
-            Assert.AreEqual("This month highlights", plugin.SelectedRecentHighlightsSection.Header);
-            Assert.AreEqual("This Game", plugin.SelectedRecentHighlightsSection.FeaturedGameTab.GameName);
-            Assert.AreEqual("This month", plugin.SelectedRecentHighlightsPeriodDisplayName);
-            Assert.AreEqual("Jul 1 - Jul 4", plugin.SelectedRecentHighlightsDateRangeDisplay);
+            Assert.AreEqual("This month highlights", plugin.CurrentRecentHighlightsSection.Header);
+            Assert.AreEqual("Current Game", plugin.CurrentRecentHighlightsSection.FeaturedGameTab.GameName);
+            Assert.AreEqual("Jul 1 - Jul 4", plugin.CurrentRecentHighlightsDateRangeDisplay);
+            Assert.AreEqual("Last month highlights", plugin.PreviousRecentHighlightsSection.Header);
+            Assert.AreEqual("Previous Game", plugin.PreviousRecentHighlightsSection.FeaturedGameTab.GameName);
+            Assert.AreEqual("Jun 1 - Jun 30", plugin.PreviousRecentHighlightsDateRangeDisplay);
             Assert.AreEqual(3, plugin.TopSummarySections.Count);
             CollectionAssert.AreEqual(
                 new[] { "Top Overall", "Top This Month", "Top Last Month" },
@@ -58,14 +64,14 @@ namespace Affinity.Tests
         }
 
         [TestMethod]
-        public void SelectedRecentHighlightsPeriodKey_UpdatesDisplayState()
+        public void SelectedRecentHighlightsRangeKey_UpdatesDisplayState()
         {
             AffinityPlugin plugin = new AffinityPlugin();
 
-            plugin.SelectedRecentHighlightsPeriodKey = AffinityPlugin.RecentHighlightsPeriodLastWeek;
+            plugin.SelectedRecentHighlightsRangeKey = AffinityPlugin.RecentHighlightsRangeWeek;
 
-            Assert.AreEqual(AffinityPlugin.RecentHighlightsPeriodLastWeek, plugin.SelectedRecentHighlightsPeriodKey);
-            Assert.AreEqual("Last week", plugin.SelectedRecentHighlightsPeriodDisplayName);
+            Assert.AreEqual(AffinityPlugin.RecentHighlightsRangeWeek, plugin.SelectedRecentHighlightsRangeKey);
+            Assert.AreEqual("Week", plugin.SelectedRecentHighlightsRangeDisplayName);
         }
 
         [TestMethod]
@@ -119,9 +125,12 @@ namespace Affinity.Tests
             AffinitySummarySnapshot snapshot,
             AffinitySummarySnapshot thisMonthSnapshot,
             AffinitySummarySnapshot lastMonthSnapshot,
-            AffinitySummarySnapshot selectedRecentHighlightsSnapshot,
-            string selectedRecentHighlightsHeader,
-            string selectedRecentHighlightsDateRangeDisplay)
+            AffinitySummarySnapshot currentRecentHighlightsSnapshot,
+            AffinitySummarySnapshot previousRecentHighlightsSnapshot,
+            string currentRecentHighlightsHeader,
+            string currentRecentHighlightsDateRangeDisplay,
+            string previousRecentHighlightsHeader,
+            string previousRecentHighlightsDateRangeDisplay)
         {
             MethodInfo method = typeof(AffinityPlugin).GetMethod(
                 "ApplySummarySnapshot",
@@ -135,9 +144,12 @@ namespace Affinity.Tests
                     snapshot,
                     thisMonthSnapshot,
                     lastMonthSnapshot,
-                    selectedRecentHighlightsSnapshot,
-                    selectedRecentHighlightsHeader,
-                    selectedRecentHighlightsDateRangeDisplay
+                    currentRecentHighlightsSnapshot,
+                    previousRecentHighlightsSnapshot,
+                    currentRecentHighlightsHeader,
+                    currentRecentHighlightsDateRangeDisplay,
+                    previousRecentHighlightsHeader,
+                    previousRecentHighlightsDateRangeDisplay
                 });
         }
     }

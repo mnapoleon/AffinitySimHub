@@ -43,9 +43,9 @@ namespace Affinity
             _plugin.ApplySelectedGameTabTimeFilter();
         }
 
-        private void RecentHighlightsPeriodSelectionChanged(object sender, SelectionChangedEventArgs e)
+        private void RecentHighlightsRangeSelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            _plugin.ApplySelectedRecentHighlightsPeriod();
+            _plugin.ApplySelectedRecentHighlightsRange();
         }
     }
 }

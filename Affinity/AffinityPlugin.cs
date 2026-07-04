@@ -42,17 +42,13 @@ namespace Affinity
         private const double MinimumPersistedSessionMeters = 1.0;
         private const double MinimumPersistedSessionSeconds = 1.0;
         private const double MaxCountedTelemetryGapSeconds = 5.0;
-        public const string RecentHighlightsPeriodThisWeek = "ThisWeek";
-        public const string RecentHighlightsPeriodLastWeek = "LastWeek";
-        public const string RecentHighlightsPeriodThisMonth = "ThisMonth";
-        public const string RecentHighlightsPeriodLastMonth = "LastMonth";
+        public const string RecentHighlightsRangeWeek = "Week";
+        public const string RecentHighlightsRangeMonth = "Month";
         private static readonly string Version = ResolvePluginVersion();
-        private static readonly IReadOnlyList<GameTabFilterOption> RecentHighlightsPeriodOptionsValue = new List<GameTabFilterOption>
+        private static readonly IReadOnlyList<GameTabFilterOption> RecentHighlightsRangeOptionsValue = new List<GameTabFilterOption>
         {
-            new GameTabFilterOption(RecentHighlightsPeriodThisWeek, "This week"),
-            new GameTabFilterOption(RecentHighlightsPeriodLastWeek, "Last week"),
-            new GameTabFilterOption(RecentHighlightsPeriodThisMonth, "This month"),
-            new GameTabFilterOption(RecentHighlightsPeriodLastMonth, "Last month")
+            new GameTabFilterOption(RecentHighlightsRangeWeek, "Week"),
+            new GameTabFilterOption(RecentHighlightsRangeMonth, "Month")
         };
         private static readonly KeyValuePair<string, string>[] DefaultGameDebugLoggingEntries =
         {
@@ -92,10 +88,13 @@ namespace Affinity
         private bool _isTelemetryActive;
         private object _selectedTopLevelTab;
         private GameDistanceTab _selectedGameTab;
-        private string _selectedRecentHighlightsPeriodKey = RecentHighlightsPeriodThisMonth;
-        private string _selectedRecentHighlightsDateRangeDisplay = string.Empty;
-        private AffinityTopSummarySection _selectedRecentHighlightsSection =
+        private string _selectedRecentHighlightsRangeKey = RecentHighlightsRangeMonth;
+        private string _currentRecentHighlightsDateRangeDisplay = string.Empty;
+        private string _previousRecentHighlightsDateRangeDisplay = string.Empty;
+        private AffinityTopSummarySection _currentRecentHighlightsSection =
             new AffinityTopSummarySection { Header = "This month highlights" };
+        private AffinityTopSummarySection _previousRecentHighlightsSection =
+            new AffinityTopSummarySection { Header = "Last month highlights" };
         private Guid _activeSessionId = Guid.Empty;
         private string _activeContextKey = string.Empty;
         private SessionDistanceSource _sessionDistanceSource = SessionDistanceSource.Unknown;
@@ -181,7 +180,7 @@ namespace Affinity
 
         public ObservableCollection<AffinityTopSummarySection> MonthlyTopSummarySections { get; } = new ObservableCollection<AffinityTopSummarySection>();
 
-        public IReadOnlyList<GameTabFilterOption> RecentHighlightsPeriodOptions => RecentHighlightsPeriodOptionsValue;
+        public IReadOnlyList<GameTabFilterOption> RecentHighlightsRangeOptions => RecentHighlightsRangeOptionsValue;
 
         public ObservableCollection<AffinityTopSummarySection> TopSummarySections { get; } = new ObservableCollection<AffinityTopSummarySection>();
 
@@ -234,63 +233,101 @@ namespace Affinity
             }
         }
 
-        public string SelectedRecentHighlightsPeriodKey
+        public string SelectedRecentHighlightsRangeKey
         {
-            get => _selectedRecentHighlightsPeriodKey;
+            get => _selectedRecentHighlightsRangeKey;
             set
             {
-                string normalizedValue = NormalizeRecentHighlightsPeriodKey(value);
-                if (string.Equals(_selectedRecentHighlightsPeriodKey, normalizedValue, StringComparison.Ordinal))
+                string normalizedValue = NormalizeRecentHighlightsRangeKey(value);
+                if (string.Equals(_selectedRecentHighlightsRangeKey, normalizedValue, StringComparison.Ordinal))
                 {
                     return;
                 }
 
-                _selectedRecentHighlightsPeriodKey = normalizedValue;
+                _selectedRecentHighlightsRangeKey = normalizedValue;
                 OnPropertyChanged();
-                OnPropertyChanged(nameof(SelectedRecentHighlightsPeriodDisplayName));
+                OnPropertyChanged(nameof(SelectedRecentHighlightsRangeDisplayName));
             }
         }
 
-        public string SelectedRecentHighlightsPeriodDisplayName =>
-            GetRecentHighlightsPeriodDisplayName(SelectedRecentHighlightsPeriodKey);
+        public string SelectedRecentHighlightsRangeDisplayName =>
+            GetRecentHighlightsRangeDisplayName(SelectedRecentHighlightsRangeKey);
 
-        public string SelectedRecentHighlightsDateRangeDisplay
+        public string CurrentRecentHighlightsDateRangeDisplay
         {
-            get => _selectedRecentHighlightsDateRangeDisplay;
+            get => _currentRecentHighlightsDateRangeDisplay;
             private set
             {
-                if (string.Equals(_selectedRecentHighlightsDateRangeDisplay, value, StringComparison.Ordinal))
+                if (string.Equals(_currentRecentHighlightsDateRangeDisplay, value, StringComparison.Ordinal))
                 {
                     return;
                 }
 
-                _selectedRecentHighlightsDateRangeDisplay = value;
+                _currentRecentHighlightsDateRangeDisplay = value;
                 OnPropertyChanged();
             }
         }
 
-        public AffinityTopSummarySection SelectedRecentHighlightsSection
+        public string PreviousRecentHighlightsDateRangeDisplay
         {
-            get => _selectedRecentHighlightsSection;
+            get => _previousRecentHighlightsDateRangeDisplay;
             private set
             {
-                if (ReferenceEquals(_selectedRecentHighlightsSection, value))
+                if (string.Equals(_previousRecentHighlightsDateRangeDisplay, value, StringComparison.Ordinal))
                 {
                     return;
                 }
 
-                _selectedRecentHighlightsSection = value;
+                _previousRecentHighlightsDateRangeDisplay = value;
                 OnPropertyChanged();
-                OnPropertyChanged(nameof(HasSelectedRecentHighlights));
             }
         }
 
-        public bool HasSelectedRecentHighlights =>
-            SelectedRecentHighlightsSection?.HasFeaturedGame == true ||
-            SelectedRecentHighlightsSection?.HasFeaturedTrack == true ||
-            SelectedRecentHighlightsSection?.HasFeaturedCar == true;
+        public AffinityTopSummarySection CurrentRecentHighlightsSection
+        {
+            get => _currentRecentHighlightsSection;
+            private set
+            {
+                if (ReferenceEquals(_currentRecentHighlightsSection, value))
+                {
+                    return;
+                }
 
-        public string SelectedRecentHighlightsEmptyStateText => "No driving history for this period yet";
+                _currentRecentHighlightsSection = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(HasCurrentRecentHighlights));
+            }
+        }
+
+        public AffinityTopSummarySection PreviousRecentHighlightsSection
+        {
+            get => _previousRecentHighlightsSection;
+            private set
+            {
+                if (ReferenceEquals(_previousRecentHighlightsSection, value))
+                {
+                    return;
+                }
+
+                _previousRecentHighlightsSection = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(HasPreviousRecentHighlights));
+            }
+        }
+
+        public bool HasCurrentRecentHighlights =>
+            CurrentRecentHighlightsSection?.HasFeaturedGame == true ||
+            CurrentRecentHighlightsSection?.HasFeaturedTrack == true ||
+            CurrentRecentHighlightsSection?.HasFeaturedCar == true;
+
+        public bool HasPreviousRecentHighlights =>
+            PreviousRecentHighlightsSection?.HasFeaturedGame == true ||
+            PreviousRecentHighlightsSection?.HasFeaturedTrack == true ||
+            PreviousRecentHighlightsSection?.HasFeaturedCar == true;
+
+        public string CurrentRecentHighlightsEmptyStateText => "No driving history for this period yet";
+
+        public string PreviousRecentHighlightsEmptyStateText => "No driving history for this period yet";
 
         public string CurrentContext => $"{CurrentGameName} / {CurrentCarModel} / {GetDisplayTrackNameWithConfig(CurrentGameName, CurrentTrackNameWithConfig)}";
 
@@ -1115,17 +1152,24 @@ namespace Affinity
             DateTime nowLocal = DateTime.Now;
             AffinitySummarySnapshot thisMonthSnapshot = BuildMonthlySummarySnapshot(nowLocal);
             AffinitySummarySnapshot lastMonthSnapshot = BuildMonthlySummarySnapshot(nowLocal.AddMonths(-1));
-            AffinitySummarySnapshot selectedRecentHighlightsSnapshot = BuildRecentHighlightsSummarySnapshot(
+            BuildRecentHighlightsSummarySnapshots(
                 nowLocal,
-                out string selectedRecentHighlightsHeader,
-                out string selectedRecentHighlightsDateRangeDisplay);
+                out AffinitySummarySnapshot currentRecentHighlightsSnapshot,
+                out AffinitySummarySnapshot previousRecentHighlightsSnapshot,
+                out string currentRecentHighlightsHeader,
+                out string currentRecentHighlightsDateRangeDisplay,
+                out string previousRecentHighlightsHeader,
+                out string previousRecentHighlightsDateRangeDisplay);
             ExecuteOnUiThread(() => ApplySummarySnapshot(
                 snapshot,
                 thisMonthSnapshot,
                 lastMonthSnapshot,
-                selectedRecentHighlightsSnapshot,
-                selectedRecentHighlightsHeader,
-                selectedRecentHighlightsDateRangeDisplay));
+                currentRecentHighlightsSnapshot,
+                previousRecentHighlightsSnapshot,
+                currentRecentHighlightsHeader,
+                currentRecentHighlightsDateRangeDisplay,
+                previousRecentHighlightsHeader,
+                previousRecentHighlightsDateRangeDisplay));
         }
 
         internal void ClearSelectedGameTabFilter()
@@ -1169,7 +1213,7 @@ namespace Affinity
             selectedTab.SetTimePeriodSummaries(periodTab?.RawSummaries ?? Enumerable.Empty<DistanceSummary>());
         }
 
-        internal void ApplySelectedRecentHighlightsPeriod()
+        internal void ApplySelectedRecentHighlightsRange()
         {
             RefreshDistanceSummaries();
         }
@@ -1219,45 +1263,41 @@ namespace Affinity
             return true;
         }
 
-        internal static bool TryGetRecentHighlightsPeriodUtcRange(
-            string periodKey,
+        internal static bool TryGetRecentHighlightsRangeUtcRanges(
+            string rangeKey,
             DateTime referenceLocal,
-            out DateTime? startUtc,
-            out DateTime? endUtc)
+            out DateTime? currentStartUtc,
+            out DateTime? currentEndUtc,
+            out DateTime? previousStartUtc,
+            out DateTime? previousEndUtc)
         {
             DateTime localReference = referenceLocal.Kind == DateTimeKind.Utc
                 ? referenceLocal.ToLocalTime()
                 : referenceLocal;
-            DateTime localStart;
-            DateTime localEnd;
 
-            switch (NormalizeRecentHighlightsPeriodKey(periodKey))
+            switch (NormalizeRecentHighlightsRangeKey(rangeKey))
             {
-                case RecentHighlightsPeriodThisWeek:
-                    localStart = GetStartOfWeek(localReference);
-                    localEnd = localReference;
-                    break;
-                case RecentHighlightsPeriodLastWeek:
-                    localEnd = GetStartOfWeek(localReference);
-                    localStart = localEnd.AddDays(-7);
-                    break;
-                case RecentHighlightsPeriodThisMonth:
-                    localStart = new DateTime(localReference.Year, localReference.Month, 1, 0, 0, 0, DateTimeKind.Local);
-                    localEnd = localReference;
-                    break;
-                case RecentHighlightsPeriodLastMonth:
-                    localEnd = new DateTime(localReference.Year, localReference.Month, 1, 0, 0, 0, DateTimeKind.Local);
-                    localStart = localEnd.AddMonths(-1);
-                    break;
+                case RecentHighlightsRangeWeek:
+                    DateTime currentWeekStart = GetStartOfWeek(localReference);
+                    currentStartUtc = currentWeekStart.ToUniversalTime();
+                    currentEndUtc = localReference.ToUniversalTime();
+                    previousStartUtc = currentWeekStart.AddDays(-7).ToUniversalTime();
+                    previousEndUtc = currentWeekStart.ToUniversalTime();
+                    return true;
+                case RecentHighlightsRangeMonth:
+                    DateTime currentMonthStart = new DateTime(localReference.Year, localReference.Month, 1, 0, 0, 0, DateTimeKind.Local);
+                    currentStartUtc = currentMonthStart.ToUniversalTime();
+                    currentEndUtc = localReference.ToUniversalTime();
+                    previousStartUtc = currentMonthStart.AddMonths(-1).ToUniversalTime();
+                    previousEndUtc = currentMonthStart.ToUniversalTime();
+                    return true;
                 default:
-                    startUtc = null;
-                    endUtc = null;
+                    currentStartUtc = null;
+                    currentEndUtc = null;
+                    previousStartUtc = null;
+                    previousEndUtc = null;
                     return false;
             }
-
-            startUtc = localStart.ToUniversalTime();
-            endUtc = localEnd.ToUniversalTime();
-            return true;
         }
 
         private AffinitySettings LoadSettings()
@@ -2153,27 +2193,46 @@ namespace Affinity
                 _assettoCorsaTrackMap);
         }
 
-        private AffinitySummarySnapshot BuildRecentHighlightsSummarySnapshot(
+        private void BuildRecentHighlightsSummarySnapshots(
             DateTime referenceLocal,
-            out string selectedRecentHighlightsHeader,
-            out string selectedRecentHighlightsDateRangeDisplay)
+            out AffinitySummarySnapshot currentSnapshot,
+            out AffinitySummarySnapshot previousSnapshot,
+            out string currentHeader,
+            out string currentDateRangeDisplay,
+            out string previousHeader,
+            out string previousDateRangeDisplay)
         {
-            string normalizedPeriodKey = NormalizeRecentHighlightsPeriodKey(SelectedRecentHighlightsPeriodKey);
-            string displayName = GetRecentHighlightsPeriodDisplayName(normalizedPeriodKey);
-            selectedRecentHighlightsHeader = $"{displayName} highlights";
+            string normalizedRangeKey = NormalizeRecentHighlightsRangeKey(SelectedRecentHighlightsRangeKey);
+            currentHeader = GetCurrentRecentHighlightsHeader(normalizedRangeKey);
+            previousHeader = GetPreviousRecentHighlightsHeader(normalizedRangeKey);
 
-            if (!TryGetRecentHighlightsPeriodUtcRange(normalizedPeriodKey, referenceLocal, out DateTime? startUtc, out DateTime? endUtc))
+            if (!TryGetRecentHighlightsRangeUtcRanges(
+                normalizedRangeKey,
+                referenceLocal,
+                out DateTime? currentStartUtc,
+                out DateTime? currentEndUtc,
+                out DateTime? previousStartUtc,
+                out DateTime? previousEndUtc))
             {
-                selectedRecentHighlightsDateRangeDisplay = string.Empty;
-                return new AffinitySummarySnapshot();
+                currentSnapshot = new AffinitySummarySnapshot();
+                previousSnapshot = new AffinitySummarySnapshot();
+                currentDateRangeDisplay = string.Empty;
+                previousDateRangeDisplay = string.Empty;
+                return;
             }
 
-            selectedRecentHighlightsDateRangeDisplay = BuildDateRangeDisplay(startUtc.Value.ToLocalTime(), endUtc.Value.ToLocalTime());
+            currentDateRangeDisplay = BuildDateRangeDisplay(currentStartUtc.Value.ToLocalTime(), currentEndUtc.Value.ToLocalTime());
+            previousDateRangeDisplay = BuildDateRangeDisplay(previousStartUtc.Value.ToLocalTime(), previousEndUtc.Value.ToLocalTime());
+            currentSnapshot = BuildRecentHighlightsSummarySnapshot(currentStartUtc.Value, currentEndUtc.Value);
+            previousSnapshot = BuildRecentHighlightsSummarySnapshot(previousStartUtc.Value, previousEndUtc.Value);
+        }
 
+        private AffinitySummarySnapshot BuildRecentHighlightsSummarySnapshot(DateTime startUtc, DateTime endUtc)
+        {
             IEnumerable<DistanceSummary> rows = _sqliteRepository != null
                 ? _sqliteRepository.GetDistanceSummaries(startUtc, endUtc)
                 : AffinitySummaryBuilder.BuildDistanceSummaries(_database)
-                    .Where(summary => summary.LastUpdatedUtc >= startUtc.Value && summary.LastUpdatedUtc < endUtc.Value)
+                    .Where(summary => summary.LastUpdatedUtc >= startUtc && summary.LastUpdatedUtc < endUtc)
                     .ToList();
 
             return AffinitySummaryBuilder.BuildSnapshot(rows, Settings.DisplayInMiles, _assettoCorsaTrackMap);
@@ -2183,14 +2242,18 @@ namespace Affinity
             AffinitySummarySnapshot snapshot,
             AffinitySummarySnapshot thisMonthSnapshot,
             AffinitySummarySnapshot lastMonthSnapshot,
-            AffinitySummarySnapshot selectedRecentHighlightsSnapshot,
-            string selectedRecentHighlightsHeader,
-            string selectedRecentHighlightsDateRangeDisplay)
+            AffinitySummarySnapshot currentRecentHighlightsSnapshot,
+            AffinitySummarySnapshot previousRecentHighlightsSnapshot,
+            string currentRecentHighlightsHeader,
+            string currentRecentHighlightsDateRangeDisplay,
+            string previousRecentHighlightsHeader,
+            string previousRecentHighlightsDateRangeDisplay)
         {
             snapshot = snapshot ?? new AffinitySummarySnapshot();
             thisMonthSnapshot = thisMonthSnapshot ?? new AffinitySummarySnapshot();
             lastMonthSnapshot = lastMonthSnapshot ?? new AffinitySummarySnapshot();
-            selectedRecentHighlightsSnapshot = selectedRecentHighlightsSnapshot ?? new AffinitySummarySnapshot();
+            currentRecentHighlightsSnapshot = currentRecentHighlightsSnapshot ?? new AffinitySummarySnapshot();
+            previousRecentHighlightsSnapshot = previousRecentHighlightsSnapshot ?? new AffinitySummarySnapshot();
             TotalDistanceKm = snapshot.TotalDistanceKm;
             TotalUsedTime = snapshot.TotalUsedTime;
             FeaturedGameTab = snapshot.FeaturedGameTab;
@@ -2200,12 +2263,18 @@ namespace Affinity
             OverallTopSummarySection = CreateTopSummarySection("Top Overall", snapshot);
             OnPropertyChanged(nameof(OverallTopSummarySection));
 
-            SelectedRecentHighlightsSection = CreateTopSummarySection(
-                string.IsNullOrWhiteSpace(selectedRecentHighlightsHeader)
-                    ? $"{SelectedRecentHighlightsPeriodDisplayName} highlights"
-                    : selectedRecentHighlightsHeader,
-                selectedRecentHighlightsSnapshot);
-            SelectedRecentHighlightsDateRangeDisplay = selectedRecentHighlightsDateRangeDisplay ?? string.Empty;
+            CurrentRecentHighlightsSection = CreateTopSummarySection(
+                string.IsNullOrWhiteSpace(currentRecentHighlightsHeader)
+                    ? GetCurrentRecentHighlightsHeader(SelectedRecentHighlightsRangeKey)
+                    : currentRecentHighlightsHeader,
+                currentRecentHighlightsSnapshot);
+            CurrentRecentHighlightsDateRangeDisplay = currentRecentHighlightsDateRangeDisplay ?? string.Empty;
+            PreviousRecentHighlightsSection = CreateTopSummarySection(
+                string.IsNullOrWhiteSpace(previousRecentHighlightsHeader)
+                    ? GetPreviousRecentHighlightsHeader(SelectedRecentHighlightsRangeKey)
+                    : previousRecentHighlightsHeader,
+                previousRecentHighlightsSnapshot);
+            PreviousRecentHighlightsDateRangeDisplay = previousRecentHighlightsDateRangeDisplay ?? string.Empty;
 
             MonthlyTopSummarySections.Clear();
             MonthlyTopSummarySections.Add(CreateTopSummarySection("This Month", thisMonthSnapshot));
@@ -2256,25 +2325,37 @@ namespace Affinity
             return DateTime.SpecifyKind(localDate.AddDays(-offset), DateTimeKind.Local);
         }
 
-        private static string NormalizeRecentHighlightsPeriodKey(string value)
+        private static string NormalizeRecentHighlightsRangeKey(string value)
         {
             switch (value)
             {
-                case RecentHighlightsPeriodThisWeek:
-                case RecentHighlightsPeriodLastWeek:
-                case RecentHighlightsPeriodThisMonth:
-                case RecentHighlightsPeriodLastMonth:
+                case RecentHighlightsRangeWeek:
+                case RecentHighlightsRangeMonth:
                     return value;
                 default:
-                    return RecentHighlightsPeriodThisMonth;
+                    return RecentHighlightsRangeMonth;
             }
         }
 
-        private static string GetRecentHighlightsPeriodDisplayName(string periodKey)
+        private static string GetRecentHighlightsRangeDisplayName(string rangeKey)
         {
-            GameTabFilterOption option = RecentHighlightsPeriodOptionsValue.FirstOrDefault(item =>
-                string.Equals(item.Key, NormalizeRecentHighlightsPeriodKey(periodKey), StringComparison.Ordinal));
-            return option?.DisplayName ?? "This month";
+            GameTabFilterOption option = RecentHighlightsRangeOptionsValue.FirstOrDefault(item =>
+                string.Equals(item.Key, NormalizeRecentHighlightsRangeKey(rangeKey), StringComparison.Ordinal));
+            return option?.DisplayName ?? "Month";
+        }
+
+        private static string GetCurrentRecentHighlightsHeader(string rangeKey)
+        {
+            return string.Equals(NormalizeRecentHighlightsRangeKey(rangeKey), RecentHighlightsRangeWeek, StringComparison.Ordinal)
+                ? "This week highlights"
+                : "This month highlights";
+        }
+
+        private static string GetPreviousRecentHighlightsHeader(string rangeKey)
+        {
+            return string.Equals(NormalizeRecentHighlightsRangeKey(rangeKey), RecentHighlightsRangeWeek, StringComparison.Ordinal)
+                ? "Last week highlights"
+                : "Last month highlights";
         }
 
         private static string BuildDateRangeDisplay(DateTime startLocal, DateTime endLocal)

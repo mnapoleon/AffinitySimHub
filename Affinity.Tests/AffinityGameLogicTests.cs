@@ -1,6 +1,7 @@
 using Affinity;
 using GameReaderCommon;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using System.Collections.Generic;
 using System.Reflection;
 
 namespace Affinity.Tests
@@ -32,11 +33,36 @@ namespace Affinity.Tests
         [TestMethod]
         public void IsSupportedGame_RecognizesConfiguredTitlesAndAliases()
         {
+            Assert.IsTrue(AffinityGameLogic.IsSupportedGame("Assetto Corsa Competizione"));
             Assert.IsTrue(AffinityGameLogic.IsSupportedGame("Assetto Corsa EVO"));
             Assert.IsTrue(AffinityGameLogic.IsSupportedGame("LMU"));
             Assert.IsTrue(AffinityGameLogic.IsSupportedGame("ProjectMotorRacing"));
             Assert.IsTrue(AffinityGameLogic.IsSupportedGame("r3e"));
             Assert.IsFalse(AffinityGameLogic.IsSupportedGame("BeamNG.drive"));
+        }
+
+        [TestMethod]
+        public void IsAssettoCorsaGame_TreatsCompetizioneAsSharedRuntimeGame()
+        {
+            Assert.IsTrue(AffinityGameLogic.IsAssettoCorsaGame("Assetto Corsa"));
+            Assert.IsTrue(AffinityGameLogic.IsAssettoCorsaGame("Assetto Corsa Competizione"));
+            Assert.IsTrue(AffinityGameLogic.IsAssettoCorsaGame("Assetto Corsa EVO"));
+        }
+
+        [TestMethod]
+        public void GetDisplayTrackNameWithConfig_LeavesCompetizioneTrackNamesUntouched()
+        {
+            var trackMap = new Dictionary<string, string>
+            {
+                ["ks_spa"] = "Spa"
+            };
+
+            Assert.AreEqual(
+                "Spa",
+                AffinityGameLogic.GetDisplayTrackNameWithConfig("Assetto Corsa", "ks_spa", trackMap));
+            Assert.AreEqual(
+                "ks_spa",
+                AffinityGameLogic.GetDisplayTrackNameWithConfig("Assetto Corsa Competizione", "ks_spa", trackMap));
         }
 
         [TestMethod]

@@ -47,7 +47,14 @@ namespace Affinity
         {
             string normalized = NormalizeGameName(gameName);
             return string.Equals(normalized, "assettocorsa", StringComparison.Ordinal) ||
+                string.Equals(normalized, "assettocorsacompetizione", StringComparison.Ordinal) ||
                 string.Equals(normalized, "assettocorsaevo", StringComparison.Ordinal);
+        }
+
+        public static bool IsAssettoCorsaCompetizioneGame(string gameName)
+        {
+            string normalized = NormalizeGameName(gameName);
+            return string.Equals(normalized, "assettocorsacompetizione", StringComparison.Ordinal);
         }
 
         public static bool IsRaceRoomGame(string gameName)
@@ -101,7 +108,7 @@ namespace Affinity
 
         public static string GetDisplayTrackNameWithConfig(string gameName, string rawTrackNameWithConfig, IReadOnlyDictionary<string, string> assettoCorsaTrackMap)
         {
-            if (!IsAssettoCorsaGame(gameName))
+            if (!IsAssettoCorsaGame(gameName) || IsAssettoCorsaCompetizioneGame(gameName))
             {
                 return rawTrackNameWithConfig;
             }

@@ -33,9 +33,11 @@ namespace Affinity.Tests
 
             Assert.IsFalse(plugin.Settings.EnableDebugLogging);
             Assert.IsTrue(plugin.Settings.GameDebugLogging.ContainsKey("assettocorsa"));
+            Assert.IsTrue(plugin.Settings.GameDebugLogging.ContainsKey("assettocorsacompetizione"));
             Assert.IsTrue(plugin.Settings.GameDebugLogging.ContainsKey("iracing"));
             Assert.IsTrue(plugin.Settings.GameDebugLogging.ContainsKey("lmu"));
             Assert.IsFalse(plugin.Settings.GameDebugLogging["assettocorsa"]);
+            Assert.IsFalse(plugin.Settings.GameDebugLogging["assettocorsacompetizione"]);
             Assert.IsFalse(plugin.Settings.GameDebugLogging["iracing"]);
             Assert.IsFalse(plugin.Settings.GameDebugLogging["lmu"]);
         }
@@ -68,6 +70,23 @@ namespace Affinity.Tests
             GameDebugLoggingOption option = plugin.GameDebugLoggingOptions
                 .First(entry => entry.SettingsKey == "assettocorsa");
 
+            Assert.IsFalse(option.IsEnabled);
+        }
+
+        [TestMethod]
+        public void RefreshGameDebugLoggingOptions_RendersAccOptionWithFriendlyLabel()
+        {
+            AffinityPlugin plugin = new AffinityPlugin();
+            MethodInfo method = typeof(AffinityPlugin).GetMethod(
+                "RefreshGameDebugLoggingOptions",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+
+            method.Invoke(plugin, null);
+
+            GameDebugLoggingOption option = plugin.GameDebugLoggingOptions
+                .First(entry => entry.SettingsKey == "assettocorsacompetizione");
+
+            Assert.AreEqual("Assetto Corsa Competizione", option.DisplayName);
             Assert.IsFalse(option.IsEnabled);
         }
 

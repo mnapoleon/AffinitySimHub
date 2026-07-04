@@ -24,6 +24,20 @@ namespace Affinity.Tests
             Assert.AreEqual("Derived", result.ToString());
         }
 
+        public void ResolveSessionDistanceSource_UsesDerivedDistanceForAssettoCorsaCompetizione()
+        {
+            AffinityPlugin plugin = new AffinityPlugin();
+            TestStatusData status = new TestStatusData();
+            SetProperty(status, "TrackLength", 5793.0);
+            SetProperty(status, "SessionOdo", 9.87);
+
+            object result = typeof(AffinityPlugin)
+                .GetMethod("ResolveSessionDistanceSource", BindingFlags.Instance | BindingFlags.NonPublic)
+                .Invoke(plugin, new object[] { "Assetto Corsa Competizione", status });
+
+            Assert.AreEqual("Derived", result.ToString());
+        }
+
         [TestMethod]
         public void ResolveSessionDistanceSource_UsesDerivedDistanceForProjectMotorRacing()
         {

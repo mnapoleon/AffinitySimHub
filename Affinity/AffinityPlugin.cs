@@ -71,6 +71,7 @@ namespace Affinity
         private static readonly KeyValuePair<string, string>[] DefaultGameDebugLoggingEntries =
         {
             new KeyValuePair<string, string>("assettocorsa", "Assetto Corsa"),
+            new KeyValuePair<string, string>("assettocorsacompetizione", "Assetto Corsa Competizione"),
             new KeyValuePair<string, string>("assettocorsaevo", "Assetto Corsa EVO"),
             new KeyValuePair<string, string>("automobilista2", "Automobilista 2"),
             new KeyValuePair<string, string>("iracing", "iRacing"),
@@ -2168,6 +2169,8 @@ namespace Affinity
             {
                 case "assettocorsa":
                     return "Assetto Corsa";
+                case "assettocorsacompetizione":
+                    return "Assetto Corsa Competizione";
                 case "assettocorsaevo":
                     return "Assetto Corsa EVO";
                 case "automobilista2":

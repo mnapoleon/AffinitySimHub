@@ -51,6 +51,13 @@ namespace Affinity.Tests
 
             Assert.AreEqual("Top Overall", plugin.OverallTopSummarySection.Header);
             Assert.AreEqual("All Game", plugin.OverallTopSummarySection.FeaturedGameTab.GameName);
+            Assert.AreEqual(@"C:\SimHub\Logos\All Game.jpg", plugin.OverallTopSummarySection.FeaturedGameTab.GameLogoPath);
+            Assert.AreEqual(2, plugin.MonthlyTopSummarySections.Count);
+            CollectionAssert.AreEqual(
+                new[] { "This Month", "Last Month" },
+                plugin.MonthlyTopSummarySections.Select(section => section.Header).ToArray());
+            Assert.AreEqual("This Game", plugin.MonthlyTopSummarySections[0].FeaturedGameTab.GameName);
+            Assert.AreEqual("Last Game", plugin.MonthlyTopSummarySections[1].FeaturedGameTab.GameName);
             Assert.AreEqual("This month highlights", plugin.CurrentRecentHighlightsSection.Header);
             Assert.AreEqual("Current Game", plugin.CurrentRecentHighlightsSection.FeaturedGameTab.GameName);
             Assert.AreEqual("Jul 1 - Jul 4", plugin.CurrentRecentHighlightsDateRangeDisplay);
@@ -100,6 +107,7 @@ namespace Affinity.Tests
                 FeaturedGameTab = new GameDistanceTab
                 {
                     GameName = gameName,
+                    GameLogoPath = $@"C:\SimHub\Logos\{gameName}.jpg",
                     TotalDistanceDisplay = 12.34,
                     TotalUsedTimeDisplay = "00:12:34"
                 },

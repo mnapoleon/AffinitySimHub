@@ -8,6 +8,7 @@ using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -45,6 +46,18 @@ namespace Affinity
         public const string RecentHighlightsRangeWeek = "Week";
         public const string RecentHighlightsRangeMonth = "Month";
         private static readonly string Version = ResolvePluginVersion();
+        private static readonly IReadOnlyDictionary<string, string> GameLogoFileNames =
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["assettocorsa"] = "244210.jpg",
+                ["assettocorsacompetizione"] = "805550.jpg",
+                ["assettocorsaevo"] = "3058630.jpg",
+                ["automobilista2"] = "1066890.jpg",
+                ["iracing"] = "iRacing.jpg",
+                ["lmu"] = "2399420.jpg",
+                ["raceroomracingexperience"] = "211500.jpg",
+                ["rfactor2"] = "365960.jpg"
+            };
         private static readonly IReadOnlyList<GameTabFilterOption> RecentHighlightsRangeOptionsValue = new List<GameTabFilterOption>
         {
             new GameTabFilterOption(RecentHighlightsRangeWeek, "Week"),
@@ -88,6 +101,7 @@ namespace Affinity
         private bool _isTelemetryActive;
         private object _selectedTopLevelTab;
         private GameDistanceTab _selectedGameTab;
+        private readonly Dictionary<string, ImageSource> _gameLogoCache = new Dictionary<string, ImageSource>(StringComparer.OrdinalIgnoreCase);
         private string _selectedRecentHighlightsRangeKey = RecentHighlightsRangeMonth;
         private string _currentRecentHighlightsDateRangeDisplay = string.Empty;
         private string _previousRecentHighlightsDateRangeDisplay = string.Empty;
@@ -1148,7 +1162,12 @@ namespace Affinity
 
         internal void RefreshDistanceSummaries()
         {
-            AffinitySummarySnapshot snapshot = AffinitySummaryBuilder.BuildSnapshot(_database, Settings.DisplayInMiles, _assettoCorsaTrackMap);
+            AffinitySummarySnapshot snapshot = AffinitySummaryBuilder.BuildSnapshot(
+                database: _database,
+                displayInMiles: Settings.DisplayInMiles,
+                assettoCorsaTrackMap: _assettoCorsaTrackMap,
+                tryResolveGameLogoPath: TryResolveGameLogoPath,
+                tryResolveGameLogo: TryLoadGameLogo);
             DateTime nowLocal = DateTime.Now;
             AffinitySummarySnapshot thisMonthSnapshot = BuildMonthlySummarySnapshot(nowLocal);
             AffinitySummarySnapshot lastMonthSnapshot = BuildMonthlySummarySnapshot(nowLocal.AddMonths(-1));
@@ -1206,7 +1225,7 @@ namespace Affinity
                 .Where(summary => string.Equals(summary.GameName, selectedTab.GameName, StringComparison.OrdinalIgnoreCase))
                 .ToList();
             GameDistanceTab periodTab = AffinitySummaryBuilder
-                .BuildSnapshot(periodRows, Settings.DisplayInMiles, _assettoCorsaTrackMap)
+                .BuildSnapshot(periodRows, Settings.DisplayInMiles, _assettoCorsaTrackMap, TryResolveGameLogoPath, TryLoadGameLogo)
                 .GameTabs
                 .FirstOrDefault(tab => string.Equals(tab.GameName, selectedTab.GameName, StringComparison.OrdinalIgnoreCase));
 
@@ -2190,7 +2209,9 @@ namespace Affinity
             return AffinitySummaryBuilder.BuildSnapshot(
                 _sqliteRepository.GetDistanceSummaries(monthStartUtc, nextMonthStartUtc),
                 Settings.DisplayInMiles,
-                _assettoCorsaTrackMap);
+                _assettoCorsaTrackMap,
+                TryResolveGameLogoPath,
+                TryLoadGameLogo);
         }
 
         private void BuildRecentHighlightsSummarySnapshots(
@@ -2378,6 +2399,71 @@ namespace Affinity
             };
         }
 
+        internal static string TryGetGameLogoFileName(string gameName)
+        {
+            string normalizedGameName = NormalizeGameLogoLookupName(gameName);
+            return GameLogoFileNames.TryGetValue(normalizedGameName, out string fileName)
+                ? fileName
+                : null;
+        }
+
+        internal static string TryGetGameLogoPath(string logosDirectory, string gameName)
+        {
+            string fileName = TryGetGameLogoFileName(gameName);
+            if (string.IsNullOrWhiteSpace(logosDirectory) || string.IsNullOrWhiteSpace(fileName))
+            {
+                return null;
+            }
+
+            string fullPath = Path.Combine(logosDirectory, fileName);
+            return File.Exists(fullPath)
+                ? fullPath
+                : null;
+        }
+
+        private static string NormalizeGameLogoLookupName(string gameName)
+        {
+            string normalized = AffinityGameLogic.NormalizeGameName(gameName);
+            switch (normalized)
+            {
+                case "r3e":
+                case "rrre":
+                    return "raceroomracingexperience";
+                case "rfactor2":
+                    return "rfactor2";
+                case "lemansultimate":
+                    return "lmu";
+                default:
+                    return normalized;
+            }
+        }
+
+        internal string ResolveSimHubLogosDirectory()
+        {
+            string baseDirectory = AppDomain.CurrentDomain.BaseDirectory ?? string.Empty;
+            return string.IsNullOrWhiteSpace(baseDirectory)
+                ? string.Empty
+                : Path.Combine(baseDirectory, "Logos");
+        }
+
+        internal string TryResolveGameLogoPath(string gameName)
+        {
+            return TryGetGameLogoPath(ResolveSimHubLogosDirectory(), gameName);
+        }
+
+        private ImageSource TryLoadGameLogo(string gameName)
+        {
+            string cacheKey = NormalizeGameLogoLookupName(gameName);
+            if (_gameLogoCache.TryGetValue(cacheKey, out ImageSource cachedLogo))
+            {
+                return cachedLogo;
+            }
+
+            ImageSource logo = LoadBitmapFromPath(TryResolveGameLogoPath(gameName));
+            _gameLogoCache[cacheKey] = logo;
+            return logo;
+        }
+
         private void RebuildTopLevelTabs()
         {
             TopLevelTabs.Clear();
@@ -2492,6 +2578,22 @@ namespace Affinity
             BitmapImage image = new BitmapImage();
             image.BeginInit();
             image.UriSource = new Uri("pack://application:,,,/Affinity;component/assets/affinity-icon-24.png", UriKind.Absolute);
+            image.CacheOption = BitmapCacheOption.OnLoad;
+            image.EndInit();
+            image.Freeze();
+            return image;
+        }
+
+        private static ImageSource LoadBitmapFromPath(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+            {
+                return null;
+            }
+
+            BitmapImage image = new BitmapImage();
+            image.BeginInit();
+            image.UriSource = new Uri(path, UriKind.Absolute);
             image.CacheOption = BitmapCacheOption.OnLoad;
             image.EndInit();
             image.Freeze();

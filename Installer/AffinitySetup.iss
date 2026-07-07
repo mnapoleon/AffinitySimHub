@@ -33,6 +33,8 @@ Source: "..\Affinity\bin\Release\net48\ac_track_id_map.json"; DestDir: "{app}"; 
 Source: "..\Affinity\bin\Release\net48\System.Data.SQLite.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\Affinity\bin\Release\net48\x64\SQLite.Interop.dll"; DestDir: "{app}\x64"; Flags: ignoreversion
 Source: "..\Affinity\bin\Release\net48\x86\SQLite.Interop.dll"; DestDir: "{app}\x86"; Flags: ignoreversion
+Source: "..\Affinity\bin\Release\net48\x64\SQLite.Interop.dll"; DestDir: "{app}\PluginsData\Affinity\sqlite-native\x64"; Flags: ignoreversion
+Source: "..\Affinity\bin\Release\net48\x86\SQLite.Interop.dll"; DestDir: "{app}\PluginsData\Affinity\sqlite-native\x86"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\Uninstall Affinity SimHub Plugin"; Filename: "{uninstallexe}"

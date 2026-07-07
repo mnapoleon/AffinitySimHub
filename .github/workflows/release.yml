@@ -201,6 +201,8 @@ jobs:
             'System.Data.SQLite.dll'
             'x64\SQLite.Interop.dll'
             'x86\SQLite.Interop.dll'
+            'PluginsData\Affinity\sqlite-native\x64\SQLite.Interop.dll'
+            'PluginsData\Affinity\sqlite-native\x86\SQLite.Interop.dll'
           )
 
           foreach ($requiredFile in $requiredFiles) {

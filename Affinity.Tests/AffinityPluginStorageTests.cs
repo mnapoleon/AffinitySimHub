@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace Affinity.Tests
@@ -142,6 +143,55 @@ namespace Affinity.Tests
             Assert.AreEqual("fresh-db", File.ReadAllText(backupPath + ".1"));
             Assert.AreEqual("old-single-backup", File.ReadAllText(backupPath + ".2"));
             Assert.IsFalse(File.Exists(backupPath));
+        }
+
+        [TestMethod]
+        public void GetSqliteInteropProbePaths_ReturnsPluginAndRecoveryCandidatesForEachArchitecture()
+        {
+            string pluginRoot = Path.Combine(_tempDirectory, "SimHub");
+            string affinityStorageRoot = Path.Combine(_tempDirectory, "PluginsData", "Affinity");
+
+            string[] x64Paths = AffinityPlugin.GetSqliteInteropProbePaths(pluginRoot, affinityStorageRoot, is64BitProcess: true).ToArray();
+            string[] x86Paths = AffinityPlugin.GetSqliteInteropProbePaths(pluginRoot, affinityStorageRoot, is64BitProcess: false).ToArray();
+
+            CollectionAssert.AreEqual(
+                new[]
+                {
+                    Path.Combine(pluginRoot, "x64", "SQLite.Interop.dll"),
+                    Path.Combine(affinityStorageRoot, "sqlite-native", "x64", "SQLite.Interop.dll")
+                },
+                x64Paths);
+            CollectionAssert.AreEqual(
+                new[]
+                {
+                    Path.Combine(pluginRoot, "x86", "SQLite.Interop.dll"),
+                    Path.Combine(affinityStorageRoot, "sqlite-native", "x86", "SQLite.Interop.dll")
+                },
+                x86Paths);
+        }
+
+        [TestMethod]
+        public void TryCopySqliteInteropToRecoveryPath_CopiesNativeLibraryIntoAffinityStorage()
+        {
+            string sourcePath = Path.Combine(_tempDirectory, "SimHub", "x64", "SQLite.Interop.dll");
+            string recoveryPath = Path.Combine(_tempDirectory, "PluginsData", "Affinity", "sqlite-native", "x64", "SQLite.Interop.dll");
+            Directory.CreateDirectory(Path.GetDirectoryName(sourcePath));
+            File.WriteAllText(sourcePath, "sqlite-native");
+
+            bool copied = AffinityPlugin.TryCopySqliteInteropToRecoveryPath(sourcePath, recoveryPath);
+
+            Assert.IsTrue(copied);
+            Assert.AreEqual("sqlite-native", File.ReadAllText(recoveryPath));
+        }
+
+        [TestMethod]
+        public void BuildSqliteInitializationFailureMessage_IncludesReinstallGuidance()
+        {
+            string message = AffinityPlugin.BuildSqliteInitializationFailureMessage(new DllNotFoundException("SQLite.Interop.dll"));
+
+            Assert.IsTrue(message.Contains("SQLite native files are missing or unloadable"));
+            Assert.IsTrue(message.Contains("Reinstall Affinity"));
+            Assert.IsTrue(message.Contains("SimHub update"));
         }
     }
 }

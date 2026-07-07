@@ -240,7 +240,7 @@ Before extracting the ZIP into your SimHub installation folder, verify its SHA-2
 Get-FileHash .\Affinity-v0.1.2.zip -Algorithm SHA256
 ```
 
-Compare that hash with `Affinity-v0.1.2.zip.sha256`, then extract the ZIP into `C:\Program Files (x86)\SimHub\` and restart SimHub.
+Compare that hash with `Affinity-v0.1.2.zip.sha256`, then extract the ZIP into `C:\Program Files (x86)\SimHub\` and restart SimHub. The ZIP includes both the standard `x86`/`x64` SQLite native DLL layout and backup copies under `PluginsData\Affinity\sqlite-native\`.
 
 ### Stub-based development and tests
 

@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Windows;
 using System.Windows.Controls;
@@ -34,6 +35,9 @@ namespace Affinity
         private const string SqliteDataFileName = "Affinity.distance.db";
         private const string LegacyDataFileName = "Affinity.distance.json";
         private const string DebugLogFileName = "Affinity.distance.debug.log";
+        private const string SqliteInteropFileName = "SQLite.Interop.dll";
+        private const string SqliteNativeRecoveryFolderName = "sqlite-native";
+        private const string SqliteUnavailableStatusMessage = "Affinity install incomplete; reinstall plugin to load data";
         private const double MetersPerKilometer = 1000.0;
         private const double MetersPerMile = 1609.344;
         private const double SaveThresholdMeters = 50.0;
@@ -98,6 +102,12 @@ namespace Affinity
         private DateTime _lastSessionSampleUtc = DateTime.MinValue;
         private readonly AffinityOverviewTab _overviewTab = new AffinityOverviewTab();
         private readonly AffinitySettingsTab _settingsTab = new AffinitySettingsTab();
+
+        [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+        private static extern IntPtr LoadLibrary(string fileName);
+
+        [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+        private static extern IntPtr GetModuleHandle(string moduleName);
 
         public event PropertyChangedEventHandler PropertyChanged;
 
@@ -425,6 +435,7 @@ namespace Affinity
             Settings = LoadSettings();
             EnsureDefaultGameDebugLoggingSettings();
             _assettoCorsaTrackMap = LoadAssettoCorsaTrackMap();
+            EnsureSqliteNativeLibraryReady();
             InitializeDatabase();
             _database = LoadRuntimeDatabase();
 
@@ -890,6 +901,65 @@ namespace Affinity
             File.Copy(sourcePath, backupPath + ".1", overwrite: true);
         }
 
+        internal static IReadOnlyList<string> GetSqliteInteropProbePaths(string pluginRoot, string affinityStorageRoot, bool is64BitProcess)
+        {
+            string architectureFolder = is64BitProcess ? "x64" : "x86";
+            string pluginInteropPath = string.IsNullOrWhiteSpace(pluginRoot)
+                ? Path.Combine(architectureFolder, SqliteInteropFileName)
+                : Path.Combine(pluginRoot, architectureFolder, SqliteInteropFileName);
+            string recoveryInteropPath = string.IsNullOrWhiteSpace(affinityStorageRoot)
+                ? Path.Combine(SqliteNativeRecoveryFolderName, architectureFolder, SqliteInteropFileName)
+                : Path.Combine(affinityStorageRoot, SqliteNativeRecoveryFolderName, architectureFolder, SqliteInteropFileName);
+
+            return new[]
+            {
+                pluginInteropPath,
+                recoveryInteropPath
+            };
+        }
+
+        internal static bool TryCopySqliteInteropToRecoveryPath(string sourcePath, string recoveryPath)
+        {
+            if (string.IsNullOrWhiteSpace(sourcePath) ||
+                string.IsNullOrWhiteSpace(recoveryPath) ||
+                !File.Exists(sourcePath))
+            {
+                return false;
+            }
+
+            string normalizedSourcePath = Path.GetFullPath(sourcePath);
+            string normalizedRecoveryPath = Path.GetFullPath(recoveryPath);
+            if (string.Equals(normalizedSourcePath, normalizedRecoveryPath, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            string directory = Path.GetDirectoryName(normalizedRecoveryPath);
+            if (!string.IsNullOrWhiteSpace(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+
+            File.Copy(normalizedSourcePath, normalizedRecoveryPath, overwrite: true);
+            return true;
+        }
+
+        internal static string BuildSqliteInitializationFailureMessage(Exception ex)
+        {
+            var builder = new StringBuilder();
+            builder.Append("Affinity - Failed to initialize SQLite database. ");
+            builder.Append("SQLite native files are missing or unloadable. ");
+            builder.Append("Reinstall Affinity, especially after a SimHub update.");
+
+            if (ex != null)
+            {
+                builder.Append(" Exception: ");
+                builder.Append(ex);
+            }
+
+            return builder.ToString();
+        }
+
         public Control GetWPFSettingsControl(PluginManager pluginManager)
         {
             return new AffinitySimHub(this)
@@ -1155,9 +1225,7 @@ namespace Affinity
             }
             catch (Exception ex)
             {
-                SimHub.Logging.Current.Error($"Affinity - Failed to initialize SQLite database: {ex}");
-                _sqliteRepository?.Dispose();
-                _sqliteRepository = null;
+                HandleSqliteInitializationFailure(ex);
             }
         }
 
@@ -2152,6 +2220,67 @@ namespace Affinity
             image.EndInit();
             image.Freeze();
             return image;
+        }
+
+        private void EnsureSqliteNativeLibraryReady()
+        {
+            string affinityStorageRoot = Path.GetDirectoryName(_databasePath);
+            IReadOnlyList<string> probePaths = GetSqliteInteropProbePaths(
+                AppDomain.CurrentDomain.BaseDirectory,
+                affinityStorageRoot,
+                Environment.Is64BitProcess);
+
+            if (probePaths.Count >= 2)
+            {
+                try
+                {
+                    TryCopySqliteInteropToRecoveryPath(probePaths[0], probePaths[1]);
+                }
+                catch (Exception ex)
+                {
+                    SimHub.Logging.Current.Warn($"Affinity - Failed to cache SQLite native library for recovery: {ex.Message}");
+                }
+            }
+
+            foreach (string probePath in probePaths)
+            {
+                if (TryLoadSqliteInteropLibrary(probePath))
+                {
+                    return;
+                }
+            }
+        }
+
+        private void HandleSqliteInitializationFailure(Exception ex)
+        {
+            SimHub.Logging.Current.Error(BuildSqliteInitializationFailureMessage(ex));
+            DataStatus = SqliteUnavailableStatusMessage;
+            IsTelemetryActive = false;
+            _sqliteRepository?.Dispose();
+            _sqliteRepository = null;
+        }
+
+        private bool TryLoadSqliteInteropLibrary(string interopPath)
+        {
+            if (GetModuleHandle(SqliteInteropFileName) != IntPtr.Zero)
+            {
+                return true;
+            }
+
+            if (string.IsNullOrWhiteSpace(interopPath) || !File.Exists(interopPath))
+            {
+                return false;
+            }
+
+            IntPtr moduleHandle = LoadLibrary(interopPath);
+            if (moduleHandle != IntPtr.Zero)
+            {
+                return true;
+            }
+
+            int win32Error = Marshal.GetLastWin32Error();
+            SimHub.Logging.Current.Warn($"Affinity - Failed to load SQLite native library from {interopPath}: Win32 error {win32Error}");
+            return false;
         }
 
         private static string ResolvePluginVersion()

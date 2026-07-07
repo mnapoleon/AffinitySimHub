@@ -62,7 +62,23 @@
     </Content>
   </ItemGroup>
 
-  <Target Name="CopyPluginToSimHub" AfterTargets="Build" Condition="Exists('$(SimHubInstallPath)')">
+  <Target Name="StageSqliteNativeRecoveryCopies" AfterTargets="Build">
+    <ItemGroup>
+      <SqliteInteropRecoveryCopy Include="$(TargetDir)x64\SQLite.Interop.dll">
+        <Destination>$(TargetDir)PluginsData\Affinity\sqlite-native\x64\SQLite.Interop.dll</Destination>
+      </SqliteInteropRecoveryCopy>
+      <SqliteInteropRecoveryCopy Include="$(TargetDir)x86\SQLite.Interop.dll">
+        <Destination>$(TargetDir)PluginsData\Affinity\sqlite-native\x86\SQLite.Interop.dll</Destination>
+      </SqliteInteropRecoveryCopy>
+    </ItemGroup>
+
+    <MakeDir Directories="$(TargetDir)PluginsData\Affinity\sqlite-native\x64;$(TargetDir)PluginsData\Affinity\sqlite-native\x86" />
+    <Copy SourceFiles="@(SqliteInteropRecoveryCopy)"
+          DestinationFiles="@(SqliteInteropRecoveryCopy->'%(Destination)')"
+          SkipUnchangedFiles="false" />
+  </Target>
+
+  <Target Name="CopyPluginToSimHub" AfterTargets="Build" DependsOnTargets="StageSqliteNativeRecoveryCopies" Condition="Exists('$(SimHubInstallPath)')">
     <ItemGroup>
       <PluginOutput Include="$(TargetDir)**\*.*" Exclude="$(TargetDir)ref\**\*.*" />
     </ItemGroup>

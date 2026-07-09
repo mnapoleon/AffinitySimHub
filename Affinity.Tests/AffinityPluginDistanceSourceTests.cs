@@ -25,6 +25,90 @@ namespace Affinity.Tests
         }
 
         [TestMethod]
+        public void ResolveSessionDistanceSource_UsesDerivedDistanceForProjectMotorRacing()
+        {
+            AffinityPlugin plugin = new AffinityPlugin();
+            TestStatusData status = new TestStatusData();
+            SetProperty(status, "TrackLength", 5000.0);
+            SetProperty(status, "SessionOdo", 12.34);
+
+            object result = typeof(AffinityPlugin)
+                .GetMethod("ResolveSessionDistanceSource", BindingFlags.Instance | BindingFlags.NonPublic)
+                .Invoke(plugin, new object[] { "ProjectMotorRacing", status });
+
+            Assert.AreEqual("Derived", result.ToString());
+        }
+
+        [TestMethod]
+        public void GetAbsoluteSessionDistanceMeters_UsesStatefulDerivedDistanceForProjectMotorRacing()
+        {
+            AffinityPlugin plugin = new AffinityPlugin();
+            TestStatusData status = new TestStatusData();
+            SetProperty(status, "TrackLength", 5000.0);
+            SetProperty(status, "CompletedLaps", 1);
+            SetProperty(status, "TrackPositionMeters", 1234.0);
+            typeof(AffinityPlugin)
+                .GetField("_sessionStatefulAbsoluteMeters", BindingFlags.Instance | BindingFlags.NonPublic)
+                .SetValue(plugin, 8765.0);
+
+            object derivedSource = typeof(AffinityPlugin)
+                .GetMethod("ResolveSessionDistanceSource", BindingFlags.Instance | BindingFlags.NonPublic)
+                .Invoke(plugin, new object[] { "ProjectMotorRacing", status });
+
+            object result = typeof(AffinityPlugin)
+                .GetMethod("GetAbsoluteSessionDistanceMeters", BindingFlags.Instance | BindingFlags.NonPublic)
+                .Invoke(plugin, new object[] { "ProjectMotorRacing", status, derivedSource });
+
+            Assert.AreEqual(8765.0, (double)result, 0.001);
+        }
+
+        [TestMethod]
+        public void UpdateStatefulDerivedAbsoluteSessionDistanceMeters_IgnoresProjectMotorRacingStartupPlaceholderBeforeCarMoves()
+        {
+            AffinityPlugin plugin = new AffinityPlugin();
+
+            typeof(AffinityPlugin)
+                .GetField("_lastTrackPositionWithinLapMeters", BindingFlags.Instance | BindingFlags.NonPublic)
+                .SetValue(plugin, 0.0);
+
+            TestStatusData placeholderStatus = new TestStatusData();
+            SetProperty(placeholderStatus, "TrackLength", 2462.0);
+            SetProperty(placeholderStatus, "CompletedLaps", 0);
+            SetProperty(placeholderStatus, "TrackPositionMeters", 77.86);
+            SetProperty(placeholderStatus, "SpeedKmh", 0.11);
+
+            object placeholderResult = typeof(AffinityPlugin)
+                .GetMethod("UpdateStatefulDerivedAbsoluteSessionDistanceMeters", BindingFlags.Instance | BindingFlags.NonPublic)
+                .Invoke(plugin, new object[] { "ProjectMotorRacing", placeholderStatus, 2462.0 });
+
+            Assert.AreEqual(0.0, (double)placeholderResult, 0.001);
+
+            TestStatusData flickerToLineStatus = new TestStatusData();
+            SetProperty(flickerToLineStatus, "TrackLength", 2462.0);
+            SetProperty(flickerToLineStatus, "CompletedLaps", 0);
+            SetProperty(flickerToLineStatus, "TrackPositionMeters", 0.0);
+            SetProperty(flickerToLineStatus, "SpeedKmh", 0.15);
+
+            object flickerResult = typeof(AffinityPlugin)
+                .GetMethod("UpdateStatefulDerivedAbsoluteSessionDistanceMeters", BindingFlags.Instance | BindingFlags.NonPublic)
+                .Invoke(plugin, new object[] { "ProjectMotorRacing", flickerToLineStatus, 2462.0 });
+
+            Assert.AreEqual(0.0, (double)flickerResult, 0.001);
+
+            TestStatusData movingStatus = new TestStatusData();
+            SetProperty(movingStatus, "TrackLength", 2462.0);
+            SetProperty(movingStatus, "CompletedLaps", 0);
+            SetProperty(movingStatus, "TrackPositionMeters", 79.19);
+            SetProperty(movingStatus, "SpeedKmh", 13.91);
+
+            object movingResult = typeof(AffinityPlugin)
+                .GetMethod("UpdateStatefulDerivedAbsoluteSessionDistanceMeters", BindingFlags.Instance | BindingFlags.NonPublic)
+                .Invoke(plugin, new object[] { "ProjectMotorRacing", movingStatus, 2462.0 });
+
+            Assert.AreEqual(1.33, (double)movingResult, 0.05);
+        }
+
+        [TestMethod]
         public void LooksLikeIgnoredLapIncrement_IgnoresLowSpeedLineIncrementForLmu()
         {
             AffinityPlugin plugin = new AffinityPlugin();

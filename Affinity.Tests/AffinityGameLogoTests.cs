@@ -30,6 +30,7 @@ namespace Affinity.Tests
             Assert.AreEqual("3058630.jpg", AffinityPlugin.TryGetGameLogoFileName("AssettoCorsaEVO"));
             Assert.AreEqual("1066890.jpg", AffinityPlugin.TryGetGameLogoFileName("Automobilista2"));
             Assert.AreEqual("iRacing.jpg", AffinityPlugin.TryGetGameLogoFileName("IRacing"));
+            Assert.AreEqual("299970.jpg", AffinityPlugin.TryGetGameLogoFileName("ProjectMotorRacing"));
             Assert.AreEqual("365960.jpg", AffinityPlugin.TryGetGameLogoFileName("RFactor2"));
             Assert.AreEqual("211500.jpg", AffinityPlugin.TryGetGameLogoFileName("RRRE"));
             Assert.AreEqual("2399420.jpg", AffinityPlugin.TryGetGameLogoFileName("LMU"));

@@ -24,10 +24,17 @@ namespace Affinity.Tests
         }
 
         [TestMethod]
+        public void GetDebugLoggingSettingsKey_UsesProjectMotorRacingRuntimeKey()
+        {
+            Assert.AreEqual("projectmotorracing", AffinityGameLogic.GetDebugLoggingSettingsKey("ProjectMotorRacing"));
+        }
+
+        [TestMethod]
         public void IsSupportedGame_RecognizesConfiguredTitlesAndAliases()
         {
             Assert.IsTrue(AffinityGameLogic.IsSupportedGame("Assetto Corsa EVO"));
             Assert.IsTrue(AffinityGameLogic.IsSupportedGame("LMU"));
+            Assert.IsTrue(AffinityGameLogic.IsSupportedGame("ProjectMotorRacing"));
             Assert.IsTrue(AffinityGameLogic.IsSupportedGame("r3e"));
             Assert.IsFalse(AffinityGameLogic.IsSupportedGame("BeamNG.drive"));
         }

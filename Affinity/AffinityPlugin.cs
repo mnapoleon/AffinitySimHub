@@ -59,6 +59,7 @@ namespace Affinity
                 ["automobilista2"] = "1066890.jpg",
                 ["iracing"] = "iRacing.jpg",
                 ["lmu"] = "2399420.jpg",
+                ["projectmotorracing"] = "299970.jpg",
                 ["raceroomracingexperience"] = "211500.jpg",
                 ["rfactor2"] = "365960.jpg"
             };
@@ -74,6 +75,7 @@ namespace Affinity
             new KeyValuePair<string, string>("automobilista2", "Automobilista 2"),
             new KeyValuePair<string, string>("iracing", "iRacing"),
             new KeyValuePair<string, string>("lmu", "Le Mans Ultimate"),
+            new KeyValuePair<string, string>("projectmotorracing", "Project Motor Racing"),
             new KeyValuePair<string, string>("rfactor2", "rFactor 2"),
             new KeyValuePair<string, string>("raceroomracingexperience", "RaceRoom Racing Experience")
         };
@@ -806,6 +808,7 @@ namespace Affinity
                         _lastObservedSessionMeters <= 25.0 &&
                         sessionMeters >= Math.Max(200.0, trackLengthMeters * 0.25) &&
                         !IsAutomobilista2Game(gameName) &&
+                        !IsProjectMotorRacingGame(gameName) &&
                         data.NewData.SpeedKmh < 5.0;
                     TrackBucket bucket = GetOrCreateTrackBucket(gameName, carModel, trackName, trackNameWithConfig);
                     bool bucketUpdated = false;
@@ -1546,7 +1549,7 @@ namespace Affinity
 
         private SessionDistanceSource ResolveSessionDistanceSource(string gameName, StatusDataBase status)
         {
-            if (IsAssettoCorsaGame(gameName) || IsRaceRoomGame(gameName) || IsAutomobilista2Game(gameName) || IsIRacingGame(gameName) || IsRFactor2Game(gameName) || IsLmuGame(gameName))
+            if (IsAssettoCorsaGame(gameName) || IsRaceRoomGame(gameName) || IsAutomobilista2Game(gameName) || IsProjectMotorRacingGame(gameName) || IsIRacingGame(gameName) || IsRFactor2Game(gameName) || IsLmuGame(gameName))
             {
                 return SessionDistanceSource.Derived;
             }
@@ -1724,6 +1727,11 @@ namespace Affinity
                 return _sessionStatefulAbsoluteMeters;
             }
 
+            if (ShouldIgnoreStatefulStartupPlaceholder(gameName, status, trackPositionMeters))
+            {
+                return _sessionStatefulAbsoluteMeters;
+            }
+
             if (_lastTrackPositionWithinLapMeters < 0.0)
             {
                 _lastTrackPositionWithinLapMeters = trackPositionMeters;
@@ -1755,6 +1763,40 @@ namespace Affinity
             return _sessionStatefulAbsoluteMeters;
         }
 
+        private bool ShouldIgnoreStatefulStartupPlaceholder(string gameName, StatusDataBase status, double trackPositionMeters)
+        {
+            if (!IsProjectMotorRacingGame(gameName) ||
+                status == null ||
+                Math.Max(0, status.CompletedLaps) != 0 ||
+                status.SpeedKmh > 1.0 ||
+                _sessionStatefulAbsoluteMeters > 0.0)
+            {
+                return false;
+            }
+
+            bool hasStartupAnchor = _sessionStartTrackPositionMeters > 25.0;
+            if (!hasStartupAnchor && trackPositionMeters > 25.0)
+            {
+                _sessionStartTrackPositionMeters = trackPositionMeters;
+                _lastTrackPositionWithinLapMeters = trackPositionMeters;
+                return true;
+            }
+
+            if (!hasStartupAnchor)
+            {
+                return false;
+            }
+
+            if (trackPositionMeters <= 5.0 ||
+                Math.Abs(trackPositionMeters - _sessionStartTrackPositionMeters) <= 5.0)
+            {
+                _lastTrackPositionWithinLapMeters = _sessionStartTrackPositionMeters;
+                return true;
+            }
+
+            return false;
+        }
+
         private static double GetDerivedSessionDistanceMeters(StatusDataBase status, double trackLengthMeters)
         {
             if (status == null || trackLengthMeters <= 0.0)
@@ -1773,7 +1815,7 @@ namespace Affinity
 
         private double GetSessionStartTrackPositionMeters(string gameName, StatusDataBase status)
         {
-            if (!IsAutomobilista2Game(gameName) || status == null)
+            if ((!IsAutomobilista2Game(gameName) && !IsProjectMotorRacingGame(gameName)) || status == null)
             {
                 return -1.0;
             }
@@ -1851,6 +1893,11 @@ namespace Affinity
             return AffinityGameLogic.IsAutomobilista2Game(gameName);
         }
 
+        private bool IsProjectMotorRacingGame(string gameName)
+        {
+            return AffinityGameLogic.IsProjectMotorRacingGame(gameName);
+        }
+
         private bool IsIRacingGame(string gameName)
         {
             return AffinityGameLogic.IsIRacingGame(gameName);
@@ -1870,6 +1917,7 @@ namespace Affinity
         {
             return IsAssettoCorsaGame(gameName) ||
                 IsAutomobilista2Game(gameName) ||
+                IsProjectMotorRacingGame(gameName) ||
                 IsIRacingGame(gameName) ||
                 IsRFactor2Game(gameName);
         }
@@ -2128,6 +2176,8 @@ namespace Affinity
                     return "iRacing";
                 case "lmu":
                     return "Le Mans Ultimate";
+                case "projectmotorracing":
+                    return "Project Motor Racing";
                 case "rfactor2":
                     return "rFactor 2";
                 case "raceroomracingexperience":

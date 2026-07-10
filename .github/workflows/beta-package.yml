@@ -147,7 +147,6 @@ jobs:
 
           $requiredFiles = @(
             'Affinity.dll'
-            'ac_track_id_map.json'
             'System.Data.SQLite.dll'
             'x64\SQLite.Interop.dll'
             'x86\SQLite.Interop.dll'

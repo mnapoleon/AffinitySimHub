@@ -232,6 +232,10 @@ If SimHub is open and the DLL is locked, close or restart SimHub and rebuild.
 
 GitHub releases are built by [.github/workflows/release.yml](.github/workflows/release.yml). The release workflow builds the plugin and uploads a ZIP payload plus a matching `.sha256` file as release assets.
 
+### Beta ZIP
+
+Manual beta packages are built by [.github/workflows/beta-package.yml](.github/workflows/beta-package.yml). Run that workflow from the Actions tab, choose the semantic version bump, and download the uploaded artifact to get a ZIP payload plus matching `.sha256` file without creating a tag or GitHub release.
+
 ### Verify and install a release
 
 Before extracting the ZIP into your SimHub installation folder, verify its SHA-256 value in PowerShell:

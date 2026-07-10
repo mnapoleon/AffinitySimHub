@@ -64,6 +64,12 @@ namespace Affinity
             return string.Equals(normalized, "automobilista2", StringComparison.Ordinal);
         }
 
+        public static bool IsProjectMotorRacingGame(string gameName)
+        {
+            string normalized = NormalizeGameName(gameName);
+            return string.Equals(normalized, "projectmotorracing", StringComparison.Ordinal);
+        }
+
         public static bool IsIRacingGame(string gameName)
         {
             string normalized = NormalizeGameName(gameName);
@@ -87,6 +93,7 @@ namespace Affinity
             return IsAssettoCorsaGame(gameName) ||
                 IsRaceRoomGame(gameName) ||
                 IsAutomobilista2Game(gameName) ||
+                IsProjectMotorRacingGame(gameName) ||
                 IsIRacingGame(gameName) ||
                 IsRFactor2Game(gameName) ||
                 IsLmuGame(gameName);

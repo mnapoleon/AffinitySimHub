@@ -100,6 +100,12 @@ namespace Affinity.Tests
             Assert.IsTrue(AffinityGameLogic.HasReliableTelemetryContext("Assetto Corsa", "Unknown Car", "Unknown Track"));
         }
 
+        [TestMethod]
+        public void IsAccTrackNameUpgrade_TreatsTitleCaseShortNameAsUpgradeCandidate()
+        {
+            Assert.IsTrue(AffinityGameLogic.IsAccTrackNameUpgrade("Zandvoort", "Circuit Zandvoort"));
+        }
+
         private static void SetTrackPositionPercent(StatusDataBase status, double value)
         {
             typeof(StatusDataBase)

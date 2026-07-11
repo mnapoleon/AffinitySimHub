@@ -162,10 +162,66 @@ namespace Affinity
                 !IsUnknownContextValue(trackNameWithConfig, "Unknown Track");
         }
 
+        public static bool IsAccTrackNameUpgrade(string previousTrackNameWithConfig, string updatedTrackNameWithConfig)
+        {
+            if (string.IsNullOrWhiteSpace(previousTrackNameWithConfig) ||
+                string.IsNullOrWhiteSpace(updatedTrackNameWithConfig) ||
+                string.Equals(previousTrackNameWithConfig.Trim(), updatedTrackNameWithConfig.Trim(), StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            if (!LooksLikeCompactTrackCode(previousTrackNameWithConfig) ||
+                LooksLikeCompactTrackCode(updatedTrackNameWithConfig))
+            {
+                return false;
+            }
+
+            string previousNormalized = NormalizeGameName(previousTrackNameWithConfig);
+            string updatedNormalized = NormalizeGameName(updatedTrackNameWithConfig);
+            if (string.IsNullOrWhiteSpace(previousNormalized) ||
+                string.IsNullOrWhiteSpace(updatedNormalized) ||
+                updatedNormalized.Length <= previousNormalized.Length)
+            {
+                return false;
+            }
+
+            return updatedNormalized.Contains(previousNormalized);
+        }
+
         private static bool IsUnknownContextValue(string value, string fallback)
         {
             return string.IsNullOrWhiteSpace(value) ||
                 string.Equals(value.Trim(), fallback, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool LooksLikeCompactTrackCode(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return false;
+            }
+
+            string trimmed = value.Trim();
+            if (trimmed.IndexOf(' ') >= 0)
+            {
+                return false;
+            }
+
+            foreach (char character in trimmed)
+            {
+                if (character == '_' || character == '-')
+                {
+                    continue;
+                }
+
+                if (!char.IsLetterOrDigit(character))
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
     }
 }

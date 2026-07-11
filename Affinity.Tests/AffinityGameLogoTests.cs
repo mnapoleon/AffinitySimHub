@@ -27,6 +27,7 @@ namespace Affinity.Tests
         public void TryGetGameLogoFileName_MapsRuntimeGameKeysUsedBySimHub()
         {
             Assert.AreEqual("244210.jpg", AffinityPlugin.TryGetGameLogoFileName("AssettoCorsa"));
+            Assert.AreEqual("805550.jpg", AffinityPlugin.TryGetGameLogoFileName("AssettoCorsaCompetizione"));
             Assert.AreEqual("3058630.jpg", AffinityPlugin.TryGetGameLogoFileName("AssettoCorsaEVO"));
             Assert.AreEqual("1066890.jpg", AffinityPlugin.TryGetGameLogoFileName("Automobilista2"));
             Assert.AreEqual("iRacing.jpg", AffinityPlugin.TryGetGameLogoFileName("IRacing"));

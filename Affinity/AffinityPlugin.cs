@@ -71,6 +71,7 @@ namespace Affinity
         private static readonly KeyValuePair<string, string>[] DefaultGameDebugLoggingEntries =
         {
             new KeyValuePair<string, string>("assettocorsa", "Assetto Corsa"),
+            new KeyValuePair<string, string>("assettocorsacompetizione", "Assetto Corsa Competizione"),
             new KeyValuePair<string, string>("assettocorsaevo", "Assetto Corsa EVO"),
             new KeyValuePair<string, string>("automobilista2", "Automobilista 2"),
             new KeyValuePair<string, string>("iracing", "iRacing"),
@@ -693,9 +694,17 @@ namespace Affinity
                 bool shouldDebugTelemetry = ShouldDebugTelemetry(gameName);
                 bool bucketTimeUpdated = AccumulateActiveSessionTime(now);
 
-                if (!string.Equals(_activeContextKey, contextKey, StringComparison.OrdinalIgnoreCase) ||
+                bool activeContextChanged =
+                    !string.Equals(_activeContextKey, contextKey, StringComparison.OrdinalIgnoreCase) ||
                     _activeSessionId != sessionId ||
-                    data.NewData.IsSessionRestart)
+                    data.NewData.IsSessionRestart;
+                bool promotedAccTrackContext = false;
+                if (activeContextChanged && !data.NewData.IsSessionRestart)
+                {
+                    promotedAccTrackContext = TryPromoteAccTrackContext(sessionId, gameName, carModel, trackName, trackNameWithConfig);
+                }
+
+                if (activeContextChanged && !promotedAccTrackContext)
                 {
                     FinalizeActiveSession(refreshSummaries: bucketTimeUpdated);
 
@@ -1547,6 +1556,122 @@ namespace Affinity
             return trackBucket;
         }
 
+        private bool TryPromoteAccTrackContext(Guid sessionId, string gameName, string carModel, string trackName, string trackNameWithConfig)
+        {
+            if (!IsAssettoCorsaCompetizioneGame(gameName) ||
+                _activeSessionId == Guid.Empty ||
+                _activeSessionId != sessionId ||
+                !string.Equals(CurrentGameName, gameName, StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(CurrentCarModel, carModel, StringComparison.OrdinalIgnoreCase) ||
+                !AffinityGameLogic.IsAccTrackNameUpgrade(CurrentTrackNameWithConfig, trackNameWithConfig))
+            {
+                return false;
+            }
+
+            TrackBucket promotedBucket = PromoteTrackBucket(
+                _database,
+                gameName,
+                carModel,
+                CurrentTrackNameWithConfig,
+                trackName,
+                trackNameWithConfig);
+            if (promotedBucket == null)
+            {
+                return false;
+            }
+
+            CurrentTrackName = trackName;
+            CurrentTrackNameWithConfig = trackNameWithConfig;
+            _activeContextKey = BuildContextKey(gameName, carModel, trackNameWithConfig);
+            CurrentContextDistanceKm = promotedBucket.TotalDistanceMeters / MetersPerKilometer;
+            CurrentContextUsedTime = promotedBucket.UsedTime;
+            return true;
+        }
+
+        private static TrackBucket PromoteTrackBucket(
+            AffinityDatabase database,
+            string gameName,
+            string carModel,
+            string previousTrackNameWithConfig,
+            string trackName,
+            string trackNameWithConfig)
+        {
+            if (database?.Games == null ||
+                string.IsNullOrWhiteSpace(previousTrackNameWithConfig) ||
+                string.IsNullOrWhiteSpace(trackNameWithConfig) ||
+                !database.Games.TryGetValue(gameName, out GameBucket gameBucket) ||
+                gameBucket?.Cars == null ||
+                !gameBucket.Cars.TryGetValue(carModel, out CarBucket carBucket) ||
+                carBucket?.Tracks == null ||
+                !carBucket.Tracks.TryGetValue(previousTrackNameWithConfig, out TrackBucket previousBucket))
+            {
+                return null;
+            }
+
+            if (string.Equals(previousTrackNameWithConfig, trackNameWithConfig, StringComparison.OrdinalIgnoreCase))
+            {
+                previousBucket.TrackName = trackName;
+                previousBucket.TrackNameWithConfig = trackNameWithConfig;
+                return previousBucket;
+            }
+
+            if (carBucket.Tracks.TryGetValue(trackNameWithConfig, out TrackBucket promotedBucket))
+            {
+                if (!ReferenceEquals(previousBucket, promotedBucket))
+                {
+                    promotedBucket.TotalDistanceMeters += previousBucket.TotalDistanceMeters;
+                    promotedBucket.UsedTime += previousBucket.UsedTime;
+                    promotedBucket.CreatedUtc = EarlierUtc(promotedBucket.CreatedUtc, previousBucket.CreatedUtc);
+                    promotedBucket.LastUpdatedUtc = LaterUtc(promotedBucket.LastUpdatedUtc, previousBucket.LastUpdatedUtc);
+                    carBucket.Tracks.Remove(previousTrackNameWithConfig);
+                }
+
+                promotedBucket.GameName = gameName;
+                promotedBucket.CarModel = carModel;
+                promotedBucket.TrackName = trackName;
+                promotedBucket.TrackNameWithConfig = trackNameWithConfig;
+                return promotedBucket;
+            }
+
+            carBucket.Tracks.Remove(previousTrackNameWithConfig);
+            previousBucket.GameName = gameName;
+            previousBucket.CarModel = carModel;
+            previousBucket.TrackName = trackName;
+            previousBucket.TrackNameWithConfig = trackNameWithConfig;
+            carBucket.Tracks[trackNameWithConfig] = previousBucket;
+            return previousBucket;
+        }
+
+        private static DateTime EarlierUtc(DateTime left, DateTime right)
+        {
+            if (left == default)
+            {
+                return right;
+            }
+
+            if (right == default)
+            {
+                return left;
+            }
+
+            return left <= right ? left : right;
+        }
+
+        private static DateTime LaterUtc(DateTime left, DateTime right)
+        {
+            if (left == default)
+            {
+                return right;
+            }
+
+            if (right == default)
+            {
+                return left;
+            }
+
+            return left >= right ? left : right;
+        }
+
         private SessionDistanceSource ResolveSessionDistanceSource(string gameName, StatusDataBase status)
         {
             if (IsAssettoCorsaGame(gameName) || IsRaceRoomGame(gameName) || IsAutomobilista2Game(gameName) || IsProjectMotorRacingGame(gameName) || IsIRacingGame(gameName) || IsRFactor2Game(gameName) || IsLmuGame(gameName))
@@ -1883,6 +2008,11 @@ namespace Affinity
             return AffinityGameLogic.IsAssettoCorsaGame(gameName);
         }
 
+        private bool IsAssettoCorsaCompetizioneGame(string gameName)
+        {
+            return AffinityGameLogic.IsAssettoCorsaCompetizioneGame(gameName);
+        }
+
         private bool IsRaceRoomGame(string gameName)
         {
             return AffinityGameLogic.IsRaceRoomGame(gameName);
@@ -2168,6 +2298,8 @@ namespace Affinity
             {
                 case "assettocorsa":
                     return "Assetto Corsa";
+                case "assettocorsacompetizione":
+                    return "Assetto Corsa Competizione";
                 case "assettocorsaevo":
                     return "Assetto Corsa EVO";
                 case "automobilista2":

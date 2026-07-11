@@ -345,7 +345,6 @@ jobs:
             ];
             const managedZipPattern = /^Affinity-v.*\.zip$/i;
             const managedHashPattern = /^Affinity-v.*\.zip\.sha256$/i;
-            const legacyInstallerPattern = /^AffinitySetup-.*\.exe$/i;
 
             const existingAssets = await github.rest.repos.listReleaseAssets({
               owner: context.repo.owner,
@@ -357,8 +356,7 @@ jobs:
             const assetsToDelete = existingAssets.data.filter(existing =>
               assetsToUpload.some(asset => asset.name === existing.name) ||
               managedZipPattern.test(existing.name) ||
-              managedHashPattern.test(existing.name) ||
-              legacyInstallerPattern.test(existing.name)
+              managedHashPattern.test(existing.name)
             );
 
             for (const existingAsset of assetsToDelete) {

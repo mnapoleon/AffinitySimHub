@@ -77,6 +77,71 @@ namespace Affinity.Tests
         }
 
         [TestMethod]
+        public void GetAbsoluteSessionDistanceMeters_UsesStatefulDerivedDistanceForRaceRoom()
+        {
+            AffinityPlugin plugin = new AffinityPlugin();
+            TestStatusData status = new TestStatusData();
+            SetProperty(status, "TrackLength", 1939.54);
+            SetProperty(status, "CompletedLaps", 0);
+            SetProperty(status, "TrackPositionMeters", 1419.73);
+            typeof(AffinityPlugin)
+                .GetField("_sessionStatefulAbsoluteMeters", BindingFlags.Instance | BindingFlags.NonPublic)
+                .SetValue(plugin, 518.75);
+
+            object derivedSource = typeof(AffinityPlugin)
+                .GetMethod("ResolveSessionDistanceSource", BindingFlags.Instance | BindingFlags.NonPublic)
+                .Invoke(plugin, new object[] { "RRRE", status });
+
+            object result = typeof(AffinityPlugin)
+                .GetMethod("GetAbsoluteSessionDistanceMeters", BindingFlags.Instance | BindingFlags.NonPublic)
+                .Invoke(plugin, new object[] { "RRRE", status, derivedSource });
+
+            Assert.AreEqual(518.75, (double)result, 0.001);
+        }
+
+        [TestMethod]
+        public void UpdateStatefulDerivedAbsoluteSessionDistanceMeters_KeepsRaceRoomFormationLapDistanceAcrossLineWrap()
+        {
+            AffinityPlugin plugin = new AffinityPlugin();
+
+            TestStatusData anchorStatus = new TestStatusData();
+            SetProperty(anchorStatus, "TrackLength", 1939.54);
+            SetProperty(anchorStatus, "CompletedLaps", 0);
+            SetProperty(anchorStatus, "TrackPositionMeters", 1421.20);
+            SetProperty(anchorStatus, "SpeedKmh", 34.40);
+
+            object anchorResult = typeof(AffinityPlugin)
+                .GetMethod("UpdateStatefulDerivedAbsoluteSessionDistanceMeters", BindingFlags.Instance | BindingFlags.NonPublic)
+                .Invoke(plugin, new object[] { "RRRE", anchorStatus, 1939.54 });
+
+            Assert.AreEqual(0.0, (double)anchorResult, 0.001);
+
+            TestStatusData preWrapStatus = new TestStatusData();
+            SetProperty(preWrapStatus, "TrackLength", 1939.54);
+            SetProperty(preWrapStatus, "CompletedLaps", 0);
+            SetProperty(preWrapStatus, "TrackPositionMeters", 1919.32);
+            SetProperty(preWrapStatus, "SpeedKmh", 77.76);
+
+            object preWrapResult = typeof(AffinityPlugin)
+                .GetMethod("UpdateStatefulDerivedAbsoluteSessionDistanceMeters", BindingFlags.Instance | BindingFlags.NonPublic)
+                .Invoke(plugin, new object[] { "RRRE", preWrapStatus, 1939.54 });
+
+            Assert.AreEqual(498.12, (double)preWrapResult, 0.05);
+
+            TestStatusData postWrapStatus = new TestStatusData();
+            SetProperty(postWrapStatus, "TrackLength", 1939.54);
+            SetProperty(postWrapStatus, "CompletedLaps", 0);
+            SetProperty(postWrapStatus, "TrackPositionMeters", 0.28);
+            SetProperty(postWrapStatus, "SpeedKmh", 78.24);
+
+            object postWrapResult = typeof(AffinityPlugin)
+                .GetMethod("UpdateStatefulDerivedAbsoluteSessionDistanceMeters", BindingFlags.Instance | BindingFlags.NonPublic)
+                .Invoke(plugin, new object[] { "RRRE", postWrapStatus, 1939.54 });
+
+            Assert.AreEqual(518.62, (double)postWrapResult, 0.05);
+        }
+
+        [TestMethod]
         public void UpdateStatefulDerivedAbsoluteSessionDistanceMeters_IgnoresProjectMotorRacingStartupPlaceholderBeforeCarMoves()
         {
             AffinityPlugin plugin = new AffinityPlugin();

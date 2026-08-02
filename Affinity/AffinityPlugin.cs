@@ -2372,7 +2372,8 @@ namespace Affinity
                 IsAutomobilista2Game(gameName) ||
                 IsProjectMotorRacingGame(gameName) ||
                 IsIRacingGame(gameName) ||
-                IsRFactor2Game(gameName);
+                IsRFactor2Game(gameName) ||
+                IsLmuGame(gameName);
         }
 
         private bool LooksLikeTransientIracingZeroDrop(string gameName, StatusDataBase status, int completedLaps, double trackLengthMeters)

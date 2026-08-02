@@ -6,6 +6,7 @@ This file captures the repo-specific working agreement for agents and contributo
 
 - Applies to the whole repository.
 - Use these instructions in addition to any higher-priority system or user instructions.
+- Also follow the recurring project workflow in [.codex\project-practices.md](C:\Users\micha\dev\AffinitySimHub\.codex\project-practices.md) for every code, docs, workflow, or release change.
 
 ## Project Overview
 
@@ -54,9 +55,13 @@ This file captures the repo-specific working agreement for agents and contributo
 - SimHub runtime logs are usually the first place to check for plugin failures:
   - `C:\Program Files (x86)\SimHub\Logs\simhub.txt`
 - Affinity data and debug logs are usually under:
-  - `C:\Program Files (x86)\SimHub\PluginsData\Common\`
+  - `C:\Program Files (x86)\SimHub\PluginsData\Affinity\`
+- Affinity distance storage is usually:
+  - `C:\Program Files (x86)\SimHub\PluginsData\Affinity\Affinity.distance.db`
+- Affinity per-game distance debug logs are usually:
+  - `C:\Program Files (x86)\SimHub\PluginsData\Affinity\Affinity.distance.debug.<game>.log`
 - When investigating telemetry issues, compare:
-  - persisted JSON totals
+  - persisted DB/session rows
   - Affinity debug logs
   - SimHub log exceptions
 

@@ -80,6 +80,58 @@ namespace Affinity
             new KeyValuePair<string, string>("rfactor2", "rFactor 2"),
             new KeyValuePair<string, string>("raceroomracingexperience", "RaceRoom Racing Experience")
         };
+        private static readonly string[] GameDataDebugMemberNames =
+        {
+            "IsGameReplay",
+            "GameReplay",
+            "ReplayMode",
+            "SessionId",
+            "SessionType",
+            "SessionState",
+            "SessionNum",
+            "SessionTime",
+            "SessionTimeRemain",
+            "SessionTimeLeft",
+            "ReplayPlaySpeed",
+            "ReplayFrameNum",
+            "ReplayFrameNumEnd",
+            "ReplaySessionNum",
+            "ReplaySessionTime",
+            "IsSpectator",
+            "CameraState"
+        };
+        private static readonly string[] StatusDebugMemberNames =
+        {
+            "IsGameReplay",
+            "ReplayMode",
+            "SessionType",
+            "SessionState",
+            "SessionNum",
+            "SessionTick",
+            "SessionTickCount",
+            "SessionTime",
+            "SessionTimeRemain",
+            "SessionTimeLeft",
+            "RaceTime",
+            "CurrentLapTime",
+            "LapTimeCurrent",
+            "ReplayPlaySpeed",
+            "ReplayFrameNum",
+            "ReplayFrameNumEnd",
+            "ReplaySessionNum",
+            "ReplaySessionTime",
+            "IsSpectator",
+            "IsOnTrack",
+            "IsInPit",
+            "IsInGarage",
+            "PitLimiterOn",
+            "PlayerTrackSurface",
+            "PlayerCarPosition"
+        };
+        private static readonly string[] RawDataDebugMemberNames =
+        {
+            "FinishStatus"
+        };
 
         private bool _hasLoggedDataError;
         private ImageSource _pictureIcon;
@@ -656,6 +708,25 @@ namespace Affinity
                 string carModel = NormalizeContextValue(data.NewData.CarModel, "Unknown Car");
                 string trackName = NormalizeContextValue(data.NewData.TrackName, "Unknown Track");
                 string trackNameWithConfig = NormalizeContextValue(data.NewData.TrackNameWithConfig, trackName);
+                bool isReplayTelemetry = IsReplayTelemetry(data);
+                bool isRaceRoomFinishedTelemetry = IsRaceRoomFinishedTelemetry(gameName, data.NewData);
+                if (isReplayTelemetry || isRaceRoomFinishedTelemetry)
+                {
+                    string ignoreReason = isReplayTelemetry
+                        ? "replay-ignored"
+                        : "finishstatus-ignored";
+                    LogTelemetryDebugSnapshot(ignoreReason, data, gameName, carModel, trackNameWithConfig, data.SessionId, data.NewData, -1.0, 0.0, 0, false);
+                    DataStatus = isReplayTelemetry
+                        ? $"Ignoring replay telemetry for {gameName}"
+                        : $"Ignoring finished-session telemetry for {gameName}";
+                    IsTelemetryActive = false;
+                    bool finalizedTime = AccumulateActiveSessionTime(now);
+                    FinalizeActiveSession(refreshSummaries: finalizedTime);
+                    ResetActiveSession(clearContext: false);
+                    PublishProperties(pluginManager, gameName, string.Empty, string.Empty, 0.0, 0.0);
+                    _hasLoggedDataError = false;
+                    return;
+                }
 
                 if (!IsSupportedGame(gameName))
                 {
@@ -750,7 +821,7 @@ namespace Affinity
 
                     if (shouldDebugTelemetry)
                     {
-                        LogTelemetryDebugSnapshot("session-start", gameName, carModel, trackNameWithConfig, sessionId, data.NewData, -1.0, 0.0, 0, false);
+                        LogTelemetryDebugSnapshot("session-start", data, gameName, carModel, trackNameWithConfig, sessionId, data.NewData, -1.0, 0.0, 0, false);
                     }
                 }
                 else
@@ -767,7 +838,7 @@ namespace Affinity
 
                         if (shouldDebugTelemetry)
                         {
-                            LogTelemetryDebugSnapshot("transient-zero-drop", gameName, carModel, trackNameWithConfig, sessionId, data.NewData, 0.0, _lastObservedSessionMeters, completedLaps - _lastObservedCompletedLaps, false);
+                            LogTelemetryDebugSnapshot("transient-zero-drop", data, gameName, carModel, trackNameWithConfig, sessionId, data.NewData, 0.0, _lastObservedSessionMeters, completedLaps - _lastObservedCompletedLaps, false);
                         }
 
                         PublishProperties(
@@ -831,7 +902,7 @@ namespace Affinity
 
                         if (shouldDebugTelemetry)
                         {
-                            LogTelemetryDebugSnapshot("lap-wrap-wait", gameName, carModel, trackNameWithConfig, sessionId, data.NewData, deltaMeters, sessionMeters, lapDelta, false);
+                            LogTelemetryDebugSnapshot("lap-wrap-wait", data, gameName, carModel, trackNameWithConfig, sessionId, data.NewData, deltaMeters, sessionMeters, lapDelta, false);
                         }
                     }
                     else if (looksLikeInitialPositionSnap)
@@ -844,7 +915,7 @@ namespace Affinity
 
                         if (shouldDebugTelemetry)
                         {
-                            LogTelemetryDebugSnapshot("initial-snap", gameName, carModel, trackNameWithConfig, sessionId, data.NewData, deltaMeters, sessionMeters, lapDelta, true);
+                            LogTelemetryDebugSnapshot("initial-snap", data, gameName, carModel, trackNameWithConfig, sessionId, data.NewData, deltaMeters, sessionMeters, lapDelta, true);
                         }
                     }
                     else if (shouldIgnoreDistanceJumpForIgnoredLapIncrement || shouldIgnoreRepeatedIgnoredDistanceJump)
@@ -856,7 +927,7 @@ namespace Affinity
 
                         if (shouldDebugTelemetry)
                         {
-                            LogTelemetryDebugSnapshot("lap-distance-ignored", gameName, carModel, trackNameWithConfig, sessionId, data.NewData, deltaMeters, sessionMeters, lapDelta, false);
+                            LogTelemetryDebugSnapshot("lap-distance-ignored", data, gameName, carModel, trackNameWithConfig, sessionId, data.NewData, deltaMeters, sessionMeters, lapDelta, false);
                         }
                     }
                     else if (deltaMeters > 0.0)
@@ -871,7 +942,7 @@ namespace Affinity
 
                         if (shouldDebugTelemetry && ShouldLogTelemetryProgress(deltaMeters, lapDelta, trackLengthMeters))
                         {
-                            LogTelemetryDebugSnapshot("progress", gameName, carModel, trackNameWithConfig, sessionId, data.NewData, deltaMeters, sessionMeters, lapDelta, false);
+                            LogTelemetryDebugSnapshot("progress", data, gameName, carModel, trackNameWithConfig, sessionId, data.NewData, deltaMeters, sessionMeters, lapDelta, false);
                         }
                     }
                     else if (sessionMeters + 1.0 < _lastObservedSessionMeters)
@@ -884,7 +955,7 @@ namespace Affinity
 
                         if (shouldDebugTelemetry)
                         {
-                            LogTelemetryDebugSnapshot("distance-reset", gameName, carModel, trackNameWithConfig, sessionId, data.NewData, deltaMeters, sessionMeters, lapDelta, false);
+                            LogTelemetryDebugSnapshot("distance-reset", data, gameName, carModel, trackNameWithConfig, sessionId, data.NewData, deltaMeters, sessionMeters, lapDelta, false);
                         }
                     }
 
@@ -898,7 +969,7 @@ namespace Affinity
 
                         if (shouldDebugTelemetry)
                         {
-                            LogTelemetryDebugSnapshot("lap-increment-ignored", gameName, carModel, trackNameWithConfig, sessionId, data.NewData, deltaMeters, sessionMeters, lapDelta, false);
+                            LogTelemetryDebugSnapshot("lap-increment-ignored", data, gameName, carModel, trackNameWithConfig, sessionId, data.NewData, deltaMeters, sessionMeters, lapDelta, false);
                         }
                     }
                     else if (lapDelta > 0)
@@ -909,7 +980,7 @@ namespace Affinity
 
                         if (shouldDebugTelemetry)
                         {
-                            LogTelemetryDebugSnapshot("lap-change", gameName, carModel, trackNameWithConfig, sessionId, data.NewData, deltaMeters, sessionMeters, lapDelta, false);
+                            LogTelemetryDebugSnapshot("lap-change", data, gameName, carModel, trackNameWithConfig, sessionId, data.NewData, deltaMeters, sessionMeters, lapDelta, false);
                         }
                     }
                     else if (completedLaps < _lastObservedCompletedLaps)
@@ -920,7 +991,7 @@ namespace Affinity
 
                         if (shouldDebugTelemetry)
                         {
-                            LogTelemetryDebugSnapshot("lap-reset", gameName, carModel, trackNameWithConfig, sessionId, data.NewData, deltaMeters, sessionMeters, lapDelta, false);
+                            LogTelemetryDebugSnapshot("lap-reset", data, gameName, carModel, trackNameWithConfig, sessionId, data.NewData, deltaMeters, sessionMeters, lapDelta, false);
                         }
                     }
 
@@ -935,7 +1006,7 @@ namespace Affinity
                     }
                     else if (shouldDebugTelemetry && ShouldLogTelemetryHeartbeat())
                     {
-                        LogTelemetryDebugSnapshot("heartbeat", gameName, carModel, trackNameWithConfig, sessionId, data.NewData, deltaMeters, sessionMeters, lapDelta, false);
+                        LogTelemetryDebugSnapshot("heartbeat", data, gameName, carModel, trackNameWithConfig, sessionId, data.NewData, deltaMeters, sessionMeters, lapDelta, false);
                     }
                 }
 
@@ -1782,7 +1853,7 @@ namespace Affinity
             return true;
         }
 
-        private void LogTelemetryDebugSnapshot(string reason, string gameName, string carModel, string trackNameWithConfig, Guid sessionId, StatusDataBase status, double deltaMeters, double sessionMeters, int lapDelta, bool looksLikeInitialPositionSnap)
+        private void LogTelemetryDebugSnapshot(string reason, GameData data, string gameName, string carModel, string trackNameWithConfig, Guid sessionId, StatusDataBase status, double deltaMeters, double sessionMeters, int lapDelta, bool looksLikeInitialPositionSnap)
         {
             try
             {
@@ -1803,9 +1874,22 @@ namespace Affinity
                 double sessionOdoMeters = status.SessionOdo > 0.0 ? status.SessionOdo : -1.0;
                 double sessionOdoKilometers = status.SessionOdo > 0.0 ? status.SessionOdo * MetersPerKilometer : -1.0;
                 double absoluteSessionMeters = GetAbsoluteSessionDistanceMeters(gameName, status, _sessionDistanceSource);
+                bool replayDetected = IsReplayTelemetry(data);
+                string gameDataIsGameReplay = GetDebugMemberValue(data, "IsGameReplay");
+                string gameDataGameReplay = GetDebugMemberValue(data, "GameReplay");
+                string gameDataReplayMode = GetDebugMemberValue(data, "ReplayMode");
+                string statusIsGameReplay = GetDebugMemberValue(status, "IsGameReplay");
+                string statusReplayMode = GetDebugMemberValue(status, "ReplayMode");
+                string gameDataType = FormatDebugValue(data.GetType().FullName);
+                string statusType = FormatDebugValue(status.GetType().FullName);
+                string gameDataExtra = GetDebugMemberValues(data, GameDataDebugMemberNames);
+                string statusExtra = GetDebugMemberValues(status, StatusDebugMemberNames);
+                object rawData = GetRawStatusDataObject(status);
+                string rawDataType = FormatDebugValue(rawData?.GetType().FullName);
+                string rawDataExtra = GetDebugMemberValues(rawData, RawDataDebugMemberNames);
                 string line = string.Format(
                     System.Globalization.CultureInfo.InvariantCulture,
-                    "{0:o} reason={1} game=\"{2}\" car=\"{3}\" track=\"{4}\" sessionId={5} source={6} originM={7:F2} absM={8:F2} sessM={9:F2} deltaM={10:F2} completedLaps={11} lapDelta={12} trackLenM={13:F2} reportedTrackLenM={14:F2} posM={15:F2} posPct={16:F5} sessOdoRaw={17:F5} sessOdoAsM={18:F2} sessOdoAsKmM={19:F2} derivedM={20:F2} speedKmh={21:F2} isRestart={22} initialSnap={23}",
+                    "{0:o} reason={1} game=\"{2}\" car=\"{3}\" track=\"{4}\" sessionId={5} source={6} originM={7:F2} absM={8:F2} sessM={9:F2} deltaM={10:F2} completedLaps={11} lapDelta={12} trackLenM={13:F2} reportedTrackLenM={14:F2} posM={15:F2} posPct={16:F5} sessOdoRaw={17:F5} sessOdoAsM={18:F2} sessOdoAsKmM={19:F2} derivedM={20:F2} speedKmh={21:F2} isRestart={22} initialSnap={23} replayDetected={24} gdIsGameReplay=\"{25}\" gdGameReplay=\"{26}\" gdReplayMode=\"{27}\" sdIsGameReplay=\"{28}\" sdReplayMode=\"{29}\" gdType=\"{30}\" sdType=\"{31}\" gdExtra=\"{32}\" sdExtra=\"{33}\" rawType=\"{34}\" rawExtra=\"{35}\"",
                     DateTime.UtcNow,
                     reason,
                     gameName,
@@ -1829,7 +1913,19 @@ namespace Affinity
                     derivedSessionMeters,
                     status.SpeedKmh,
                     status.IsSessionRestart,
-                    looksLikeInitialPositionSnap);
+                    looksLikeInitialPositionSnap,
+                    replayDetected,
+                    gameDataIsGameReplay,
+                    gameDataGameReplay,
+                    gameDataReplayMode,
+                    statusIsGameReplay,
+                    statusReplayMode,
+                    gameDataType,
+                    statusType,
+                    gameDataExtra,
+                    statusExtra,
+                    rawDataType,
+                    rawDataExtra);
 
                 File.AppendAllText(debugLogPath, line + Environment.NewLine, Encoding.UTF8);
             }
@@ -2003,6 +2099,232 @@ namespace Affinity
             return AffinityGameLogic.HasReliableTelemetryContext(gameName, carModel, trackNameWithConfig);
         }
 
+        private bool IsReplayTelemetry(GameData data)
+        {
+            // SimHub exposes replay state at runtime even though the local SDK stubs do not model it.
+            if (data == null)
+            {
+                return false;
+            }
+
+            if (TryGetBooleanMemberValue(data, "IsGameReplay", out bool isGameReplay))
+            {
+                if (isGameReplay)
+                {
+                    return true;
+                }
+            }
+
+            if (TryGetBooleanMemberValue(data, "GameReplay", out bool gameReplay))
+            {
+                if (gameReplay)
+                {
+                    return true;
+                }
+            }
+
+            if (TryGetMemberValue(data, "ReplayMode", out object gameReplayModeValue))
+            {
+                if (IsReplayModeActive(gameReplayModeValue))
+                {
+                    return true;
+                }
+            }
+
+            if (data.NewData == null)
+            {
+                return false;
+            }
+
+            if (TryGetBooleanMemberValue(data.NewData, "IsGameReplay", out bool statusReplay))
+            {
+                if (statusReplay)
+                {
+                    return true;
+                }
+            }
+
+            return TryGetMemberValue(data.NewData, "ReplayMode", out object statusReplayModeValue) &&
+                IsReplayModeActive(statusReplayModeValue);
+        }
+
+        private bool IsRaceRoomFinishedTelemetry(string gameName, StatusDataBase status)
+        {
+            if (!IsRaceRoomGame(gameName) || status == null)
+            {
+                return false;
+            }
+
+            object rawData = GetRawStatusDataObject(status);
+            return TryGetMemberValue(rawData, "FinishStatus", out object finishStatusValue) &&
+                TryGetBooleanValue(finishStatusValue, out bool isFinishedStatusActive) &&
+                isFinishedStatusActive;
+        }
+
+        private static bool IsReplayModeActive(object replayModeValue)
+        {
+            if (replayModeValue == null)
+            {
+                return false;
+            }
+
+            if (replayModeValue is string || replayModeValue.GetType().IsEnum)
+            {
+                string replayModeText = replayModeValue.ToString()?.Trim();
+                if (string.IsNullOrWhiteSpace(replayModeText))
+                {
+                    return false;
+                }
+
+                return !string.Equals(replayModeText, "None", StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(replayModeText, "Off", StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(replayModeText, "Disabled", StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(replayModeText, "Live", StringComparison.OrdinalIgnoreCase);
+            }
+
+            return TryGetBooleanValue(replayModeValue, out bool replayModeFlag) &&
+                replayModeFlag;
+        }
+
+        private static bool TryGetBooleanMemberValue(object source, string memberName, out bool value)
+        {
+            value = false;
+            return TryGetMemberValue(source, memberName, out object rawValue) &&
+                TryGetBooleanValue(rawValue, out value);
+        }
+
+        private static string GetDebugMemberValue(object source, string memberName)
+        {
+            if (!TryGetMemberValue(source, memberName, out object value))
+            {
+                return "<missing>";
+            }
+
+            return FormatDebugValue(value);
+        }
+
+        private static string GetDebugMemberValues(object source, IEnumerable<string> memberNames)
+        {
+            if (source == null)
+            {
+                return "<null-source>";
+            }
+
+            if (memberNames == null)
+            {
+                return "<none>";
+            }
+
+            List<string> values = new List<string>();
+            HashSet<string> seenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (string memberName in memberNames)
+            {
+                if (string.IsNullOrWhiteSpace(memberName) || !seenNames.Add(memberName))
+                {
+                    continue;
+                }
+
+                if (!TryGetMemberValue(source, memberName, out object value))
+                {
+                    continue;
+                }
+
+                values.Add(memberName + "=" + FormatDebugValue(value));
+            }
+
+            return values.Count > 0
+                ? string.Join(",", values)
+                : "<none>";
+        }
+
+        private static string FormatDebugValue(object value)
+        {
+            if (value == null)
+            {
+                return "<null>";
+            }
+
+            return value.ToString()
+                .Replace("\\", "\\\\")
+                .Replace("\"", "\\\"");
+        }
+
+        private static object GetRawStatusDataObject(StatusDataBase status)
+        {
+            if (status == null)
+            {
+                return null;
+            }
+
+            try
+            {
+                return status.GetRawDataObject();
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static bool TryGetBooleanValue(object value, out bool result)
+        {
+            result = false;
+            if (value == null)
+            {
+                return false;
+            }
+
+            if (value is bool boolValue)
+            {
+                result = boolValue;
+                return true;
+            }
+
+            if (value is string stringValue)
+            {
+                return bool.TryParse(stringValue, out result);
+            }
+
+            try
+            {
+                result = Math.Abs(Convert.ToDouble(value, CultureInfo.InvariantCulture)) > 0.0001;
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static bool TryGetMemberValue(object source, string memberName, out object value)
+        {
+            value = null;
+            if (source == null || string.IsNullOrWhiteSpace(memberName))
+            {
+                return false;
+            }
+
+            Type sourceType = source.GetType();
+            const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.IgnoreCase;
+
+            PropertyInfo property = sourceType.GetProperty(memberName, flags);
+            if (property != null && property.GetIndexParameters().Length == 0)
+            {
+                value = property.GetValue(source);
+                return true;
+            }
+
+            FieldInfo field = sourceType.GetField(memberName, flags);
+            if (field != null)
+            {
+                value = field.GetValue(source);
+                return true;
+            }
+
+            return false;
+        }
+
         private bool IsAssettoCorsaGame(string gameName)
         {
             return AffinityGameLogic.IsAssettoCorsaGame(gameName);
@@ -2046,6 +2368,7 @@ namespace Affinity
         private bool UsesStatefulDerivedDistance(string gameName)
         {
             return IsAssettoCorsaGame(gameName) ||
+                IsRaceRoomGame(gameName) ||
                 IsAutomobilista2Game(gameName) ||
                 IsProjectMotorRacingGame(gameName) ||
                 IsIRacingGame(gameName) ||

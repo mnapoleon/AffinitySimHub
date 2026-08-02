@@ -77,6 +77,74 @@ namespace Affinity.Tests
         }
 
         [TestMethod]
+        public void GetAbsoluteSessionDistanceMeters_UsesStatefulDerivedDistanceForLmu()
+        {
+            AffinityPlugin plugin = new AffinityPlugin();
+            TestStatusData status = new TestStatusData();
+            SetProperty(status, "TrackLength", 4900.67);
+            SetProperty(status, "CompletedLaps", 1);
+            SetProperty(status, "TrackPositionMeters", 846.36);
+            typeof(AffinityPlugin)
+                .GetField("_sessionStatefulAbsoluteMeters", BindingFlags.Instance | BindingFlags.NonPublic)
+                .SetValue(plugin, 5747.03);
+
+            object derivedSource = typeof(AffinityPlugin)
+                .GetMethod("ResolveSessionDistanceSource", BindingFlags.Instance | BindingFlags.NonPublic)
+                .Invoke(plugin, new object[] { "LMU", status });
+
+            object result = typeof(AffinityPlugin)
+                .GetMethod("GetAbsoluteSessionDistanceMeters", BindingFlags.Instance | BindingFlags.NonPublic)
+                .Invoke(plugin, new object[] { "LMU", status, derivedSource });
+
+            Assert.AreEqual(5747.03, (double)result, 0.001);
+        }
+
+        [TestMethod]
+        public void UpdateStatefulDerivedAbsoluteSessionDistanceMeters_KeepsLmuDistanceAcrossSkippedRollingStartTeleport()
+        {
+            AffinityPlugin plugin = new AffinityPlugin();
+
+            TestStatusData preSkipStatus = new TestStatusData();
+            SetProperty(preSkipStatus, "TrackLength", 4900.67);
+            SetProperty(preSkipStatus, "CompletedLaps", 0);
+            SetProperty(preSkipStatus, "TrackPositionMeters", 4740.72);
+            SetProperty(preSkipStatus, "TrackPositionPercent", 0.96736);
+            SetProperty(preSkipStatus, "SpeedKmh", 213.71);
+
+            object preSkipResult = typeof(AffinityPlugin)
+                .GetMethod("UpdateStatefulDerivedAbsoluteSessionDistanceMeters", BindingFlags.Instance | BindingFlags.NonPublic)
+                .Invoke(plugin, new object[] { "LMU", preSkipStatus, 4900.67 });
+
+            Assert.AreEqual(0.0, (double)preSkipResult, 0.001);
+
+            TestStatusData postSkipStatus = new TestStatusData();
+            SetProperty(postSkipStatus, "TrackLength", 4900.67);
+            SetProperty(postSkipStatus, "CompletedLaps", 0);
+            SetProperty(postSkipStatus, "TrackPositionMeters", 977.42);
+            SetProperty(postSkipStatus, "TrackPositionPercent", 0.19945);
+            SetProperty(postSkipStatus, "SpeedKmh", 152.50);
+
+            object postSkipResult = typeof(AffinityPlugin)
+                .GetMethod("UpdateStatefulDerivedAbsoluteSessionDistanceMeters", BindingFlags.Instance | BindingFlags.NonPublic)
+                .Invoke(plugin, new object[] { "LMU", postSkipStatus, 4900.67 });
+
+            Assert.AreEqual(1137.37, (double)postSkipResult, 0.05);
+
+            TestStatusData resumedStatus = new TestStatusData();
+            SetProperty(resumedStatus, "TrackLength", 4900.67);
+            SetProperty(resumedStatus, "CompletedLaps", 0);
+            SetProperty(resumedStatus, "TrackPositionMeters", 1836.57);
+            SetProperty(resumedStatus, "TrackPositionPercent", 0.37476);
+            SetProperty(resumedStatus, "SpeedKmh", 135.62);
+
+            object resumedResult = typeof(AffinityPlugin)
+                .GetMethod("UpdateStatefulDerivedAbsoluteSessionDistanceMeters", BindingFlags.Instance | BindingFlags.NonPublic)
+                .Invoke(plugin, new object[] { "LMU", resumedStatus, 4900.67 });
+
+            Assert.AreEqual(1996.52, (double)resumedResult, 0.05);
+        }
+
+        [TestMethod]
         public void UpdateStatefulDerivedAbsoluteSessionDistanceMeters_IgnoresProjectMotorRacingStartupPlaceholderBeforeCarMoves()
         {
             AffinityPlugin plugin = new AffinityPlugin();

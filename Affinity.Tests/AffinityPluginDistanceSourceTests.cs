@@ -142,6 +142,36 @@ namespace Affinity.Tests
         }
 
         [TestMethod]
+        public void UpdateStatefulDerivedAbsoluteSessionDistanceMeters_CountsRaceRoomLapIncrementAsFullLap()
+        {
+            AffinityPlugin plugin = new AffinityPlugin();
+
+            TestStatusData anchorStatus = new TestStatusData();
+            SetProperty(anchorStatus, "TrackLength", 20785.39);
+            SetProperty(anchorStatus, "CompletedLaps", 0);
+            SetProperty(anchorStatus, "TrackPositionMeters", 20753.44);
+            SetProperty(anchorStatus, "SpeedKmh", 0.93);
+
+            object anchorResult = typeof(AffinityPlugin)
+                .GetMethod("UpdateStatefulDerivedAbsoluteSessionDistanceMeters", BindingFlags.Instance | BindingFlags.NonPublic)
+                .Invoke(plugin, new object[] { "RRRE", anchorStatus, 20785.39 });
+
+            Assert.AreEqual(0.0, (double)anchorResult, 0.001);
+
+            TestStatusData lineCrossingStatus = new TestStatusData();
+            SetProperty(lineCrossingStatus, "TrackLength", 20785.39);
+            SetProperty(lineCrossingStatus, "CompletedLaps", 1);
+            SetProperty(lineCrossingStatus, "TrackPositionMeters", 0.64);
+            SetProperty(lineCrossingStatus, "SpeedKmh", 145.73);
+
+            object lineCrossingResult = typeof(AffinityPlugin)
+                .GetMethod("UpdateStatefulDerivedAbsoluteSessionDistanceMeters", BindingFlags.Instance | BindingFlags.NonPublic)
+                .Invoke(plugin, new object[] { "RRRE", lineCrossingStatus, 20785.39 });
+
+            Assert.AreEqual(20786.03, (double)lineCrossingResult, 0.05);
+        }
+
+        [TestMethod]
         public void GetAbsoluteSessionDistanceMeters_UsesStatefulDerivedDistanceForLmu()
         {
             AffinityPlugin plugin = new AffinityPlugin();

@@ -1980,6 +1980,15 @@ namespace Affinity
                 _sessionStatefulAbsoluteMeters += deltaTrackPositionMeters;
             }
 
+            if (IsRaceRoomGame(gameName) && Math.Max(0, status.CompletedLaps) > 0)
+            {
+                double lapCounterSessionMeters = GetDerivedSessionDistanceMeters(status, trackLengthMeters);
+                if (lapCounterSessionMeters > _sessionStatefulAbsoluteMeters)
+                {
+                    _sessionStatefulAbsoluteMeters = lapCounterSessionMeters;
+                }
+            }
+
             _lastTrackPositionWithinLapMeters = trackPositionMeters;
             return _sessionStatefulAbsoluteMeters;
         }

@@ -130,7 +130,8 @@ namespace Affinity
         };
         private static readonly string[] RawDataDebugMemberNames =
         {
-            "FinishStatus"
+            "FinishStatus",
+            "GamePlayerInGarage"
         };
 
         private bool _hasLoggedDataError;
@@ -709,16 +710,16 @@ namespace Affinity
                 string trackName = NormalizeContextValue(data.NewData.TrackName, "Unknown Track");
                 string trackNameWithConfig = NormalizeContextValue(data.NewData.TrackNameWithConfig, trackName);
                 bool isReplayTelemetry = IsReplayTelemetry(data);
-                bool isRaceRoomFinishedTelemetry = IsRaceRoomFinishedTelemetry(gameName, data.NewData);
-                if (isReplayTelemetry || isRaceRoomFinishedTelemetry)
+                bool isRaceRoomInactiveTelemetry = IsRaceRoomInactiveTelemetry(gameName, data.NewData);
+                if (isReplayTelemetry || isRaceRoomInactiveTelemetry)
                 {
                     string ignoreReason = isReplayTelemetry
                         ? "replay-ignored"
-                        : "finishstatus-ignored";
+                        : "raceroom-inactive-ignored";
                     LogTelemetryDebugSnapshot(ignoreReason, data, gameName, carModel, trackNameWithConfig, data.SessionId, data.NewData, -1.0, 0.0, 0, false);
                     DataStatus = isReplayTelemetry
                         ? $"Ignoring replay telemetry for {gameName}"
-                        : $"Ignoring finished-session telemetry for {gameName}";
+                        : $"Ignoring inactive RaceRoom telemetry for {gameName}";
                     IsTelemetryActive = false;
                     bool finalizedTime = AccumulateActiveSessionTime(now);
                     FinalizeActiveSession(refreshSummaries: finalizedTime);
@@ -2157,7 +2158,7 @@ namespace Affinity
                 IsReplayModeActive(statusReplayModeValue);
         }
 
-        private bool IsRaceRoomFinishedTelemetry(string gameName, StatusDataBase status)
+        private bool IsRaceRoomInactiveTelemetry(string gameName, StatusDataBase status)
         {
             if (!IsRaceRoomGame(gameName) || status == null)
             {
@@ -2165,9 +2166,16 @@ namespace Affinity
             }
 
             object rawData = GetRawStatusDataObject(status);
-            return TryGetMemberValue(rawData, "FinishStatus", out object finishStatusValue) &&
+            if (TryGetMemberValue(rawData, "FinishStatus", out object finishStatusValue) &&
                 TryGetBooleanValue(finishStatusValue, out bool isFinishedStatusActive) &&
-                isFinishedStatusActive;
+                isFinishedStatusActive)
+            {
+                return true;
+            }
+
+            return TryGetMemberValue(rawData, "GamePlayerInGarage", out object playerInGarageValue) &&
+                TryGetBooleanValue(playerInGarageValue, out bool isPlayerInGarage) &&
+                isPlayerInGarage;
         }
 
         private static bool IsReplayModeActive(object replayModeValue)

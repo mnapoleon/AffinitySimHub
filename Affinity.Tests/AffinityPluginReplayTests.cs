@@ -62,29 +62,46 @@ namespace Affinity.Tests
         }
 
         [TestMethod]
-        public void IsRaceRoomFinishedTelemetry_ReturnsTrueWhenFinishStatusIsNonZero()
+        public void IsRaceRoomInactiveTelemetry_ReturnsTrueWhenFinishStatusIsNonZero()
         {
             AffinityPlugin plugin = new AffinityPlugin();
             StatusDataBase status = new RawFinishStatusStatusData(new RawFinishStatusData { FinishStatus = 1 });
 
             object result = typeof(AffinityPlugin)
-                .GetMethod("IsRaceRoomFinishedTelemetry", BindingFlags.Instance | BindingFlags.NonPublic)
+                .GetMethod("IsRaceRoomInactiveTelemetry", BindingFlags.Instance | BindingFlags.NonPublic)
                 .Invoke(plugin, new object[] { "RRRE", status });
 
             Assert.AreEqual(true, result);
         }
 
         [TestMethod]
-        public void IsRaceRoomFinishedTelemetry_ReturnsFalseWhenFinishStatusIsZero()
+        public void IsRaceRoomInactiveTelemetry_ReturnsFalseWhenFinishStatusIsZero()
         {
             AffinityPlugin plugin = new AffinityPlugin();
             StatusDataBase status = new RawFinishStatusStatusData(new RawFinishStatusData { FinishStatus = 0 });
 
             object result = typeof(AffinityPlugin)
-                .GetMethod("IsRaceRoomFinishedTelemetry", BindingFlags.Instance | BindingFlags.NonPublic)
+                .GetMethod("IsRaceRoomInactiveTelemetry", BindingFlags.Instance | BindingFlags.NonPublic)
                 .Invoke(plugin, new object[] { "RRRE", status });
 
             Assert.AreEqual(false, result);
+        }
+
+        [TestMethod]
+        public void IsRaceRoomInactiveTelemetry_ReturnsTrueWhenPlayerIsInGarage()
+        {
+            AffinityPlugin plugin = new AffinityPlugin();
+            StatusDataBase status = new RawFinishStatusStatusData(new RawFinishStatusData
+            {
+                FinishStatus = 0,
+                GamePlayerInGarage = 1
+            });
+
+            object result = typeof(AffinityPlugin)
+                .GetMethod("IsRaceRoomInactiveTelemetry", BindingFlags.Instance | BindingFlags.NonPublic)
+                .Invoke(plugin, new object[] { "RRRE", status });
+
+            Assert.AreEqual(true, result);
         }
 
         private static GameData CreateReplayFlagGameData(bool isGameReplay)
@@ -161,6 +178,8 @@ namespace Affinity.Tests
         private sealed class RawFinishStatusData
         {
             public int FinishStatus { get; set; }
+
+            public int GamePlayerInGarage { get; set; }
         }
 
         private sealed class TestStatusData : StatusDataBase

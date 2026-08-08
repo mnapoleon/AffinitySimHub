@@ -418,6 +418,16 @@ namespace Affinity.Tests
         }
 
         [TestMethod]
+        public void ShouldPersistFinalizedSession_IgnoresStationaryTimeOnlySession()
+        {
+            object result = typeof(AffinityPlugin)
+                .GetMethod("ShouldPersistFinalizedSession", BindingFlags.Static | BindingFlags.NonPublic)
+                .Invoke(null, new object[] { 0.0, 30.0 });
+
+            Assert.AreEqual(false, result);
+        }
+
+        [TestMethod]
         public void ShouldPersistFinalizedSession_PersistsMeaningfulSession()
         {
             object result = typeof(AffinityPlugin)

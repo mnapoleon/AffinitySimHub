@@ -45,8 +45,8 @@ namespace Affinity
         private const double SaveThresholdMeters = 50.0;
         private const double SaveThresholdUsedTimeSeconds = 30.0;
         private const double MinimumPersistedSessionMeters = 1.0;
-        private const double MinimumPersistedSessionSeconds = 1.0;
         private const double MaxCountedTelemetryGapSeconds = 5.0;
+        private const int Automobilista2ObservedReplayGameState = 6;
         public const string RecentHighlightsRangeWeek = "Week";
         public const string RecentHighlightsRangeMonth = "Month";
         private static readonly string Version = ResolvePluginVersion();
@@ -131,7 +131,12 @@ namespace Affinity
         private static readonly string[] RawDataDebugMemberNames =
         {
             "FinishStatus",
-            "GamePlayerInGarage"
+            "GamePlayerInGarage",
+            "mViewedParticipantIndex",
+            "mGameState",
+            "mSessionState",
+            "mRaceState",
+            "mPitMode"
         };
 
         private bool _hasLoggedDataError;
@@ -186,6 +191,7 @@ namespace Affinity
         private double _pendingUsedTimeSecondsSinceSave;
         private DateTime _lastTelemetryDebugLogUtc = DateTime.MinValue;
         private DateTime _lastSessionSampleUtc = DateTime.MinValue;
+        private int _automobilista2PlayerViewedParticipantIndex = -1;
         private readonly AffinityOverviewTab _overviewTab = new AffinityOverviewTab();
         private readonly AffinitySettingsTab _settingsTab = new AffinitySettingsTab();
 
@@ -689,6 +695,11 @@ namespace Affinity
             try
             {
                 DateTime now = DateTime.UtcNow;
+                if (!data.GameRunning)
+                {
+                    _automobilista2PlayerViewedParticipantIndex = -1;
+                }
+
                 pluginManager.SetPropertyValue("Affinity.IsGameRunning", GetType(), data.GameRunning);
                 pluginManager.SetPropertyValue("Affinity.DataFilePath", GetType(), _databasePath);
                 pluginManager.SetPropertyValue("Affinity.DebugLogPath", GetType(), GetDebugLogPath(string.Empty));
@@ -710,16 +721,16 @@ namespace Affinity
                 string trackName = NormalizeContextValue(data.NewData.TrackName, "Unknown Track");
                 string trackNameWithConfig = NormalizeContextValue(data.NewData.TrackNameWithConfig, trackName);
                 bool isReplayTelemetry = IsReplayTelemetry(data);
-                bool isRaceRoomInactiveTelemetry = IsRaceRoomInactiveTelemetry(gameName, data.NewData);
-                if (isReplayTelemetry || isRaceRoomInactiveTelemetry)
+                bool isInactiveTelemetry = IsInactiveTelemetry(gameName, data.NewData);
+                if (isReplayTelemetry || isInactiveTelemetry)
                 {
                     string ignoreReason = isReplayTelemetry
                         ? "replay-ignored"
-                        : "raceroom-inactive-ignored";
+                        : "inactive-ignored";
                     LogTelemetryDebugSnapshot(ignoreReason, data, gameName, carModel, trackNameWithConfig, data.SessionId, data.NewData, -1.0, 0.0, 0, false);
                     DataStatus = isReplayTelemetry
                         ? $"Ignoring replay telemetry for {gameName}"
-                        : $"Ignoring inactive RaceRoom telemetry for {gameName}";
+                        : $"Ignoring inactive telemetry for {gameName}";
                     IsTelemetryActive = false;
                     bool finalizedTime = AccumulateActiveSessionTime(now);
                     FinalizeActiveSession(refreshSummaries: finalizedTime);
@@ -1890,7 +1901,7 @@ namespace Affinity
                 string rawDataExtra = GetDebugMemberValues(rawData, RawDataDebugMemberNames);
                 string line = string.Format(
                     System.Globalization.CultureInfo.InvariantCulture,
-                    "{0:o} reason={1} game=\"{2}\" car=\"{3}\" track=\"{4}\" sessionId={5} source={6} originM={7:F2} absM={8:F2} sessM={9:F2} deltaM={10:F2} completedLaps={11} lapDelta={12} trackLenM={13:F2} reportedTrackLenM={14:F2} posM={15:F2} posPct={16:F5} sessOdoRaw={17:F5} sessOdoAsM={18:F2} sessOdoAsKmM={19:F2} derivedM={20:F2} speedKmh={21:F2} isRestart={22} initialSnap={23} replayDetected={24} gdIsGameReplay=\"{25}\" gdGameReplay=\"{26}\" gdReplayMode=\"{27}\" sdIsGameReplay=\"{28}\" sdReplayMode=\"{29}\" gdType=\"{30}\" sdType=\"{31}\" gdExtra=\"{32}\" sdExtra=\"{33}\" rawType=\"{34}\" rawExtra=\"{35}\"",
+                    "{0:o} reason={1} game=\"{2}\" car=\"{3}\" track=\"{4}\" sessionId={5} source={6} originM={7:F2} absM={8:F2} sessM={9:F2} deltaM={10:F2} completedLaps={11} lapDelta={12} trackLenM={13:F2} reportedTrackLenM={14:F2} posM={15:F2} posPct={16:F5} sessOdoRaw={17:F5} sessOdoAsM={18:F2} sessOdoAsKmM={19:F2} derivedM={20:F2} speedKmh={21:F2} isRestart={22} initialSnap={23} replayDetected={24} gdIsGameReplay=\"{25}\" gdGameReplay=\"{26}\" gdReplayMode=\"{27}\" sdIsGameReplay=\"{28}\" sdReplayMode=\"{29}\" gdType=\"{30}\" sdType=\"{31}\" gdExtra=\"{32}\" sdExtra=\"{33}\" rawType=\"{34}\" rawExtra=\"{35}\" ams2PlayerViewedParticipantIndex={36}",
                     DateTime.UtcNow,
                     reason,
                     gameName,
@@ -1926,7 +1937,8 @@ namespace Affinity
                     gameDataExtra,
                     statusExtra,
                     rawDataType,
-                    rawDataExtra);
+                    rawDataExtra,
+                    _automobilista2PlayerViewedParticipantIndex);
 
                 File.AppendAllText(debugLogPath, line + Environment.NewLine, Encoding.UTF8);
             }
@@ -2158,22 +2170,59 @@ namespace Affinity
                 IsReplayModeActive(statusReplayModeValue);
         }
 
-        private bool IsRaceRoomInactiveTelemetry(string gameName, StatusDataBase status)
+        private bool IsInactiveTelemetry(string gameName, StatusDataBase status)
         {
-            if (!IsRaceRoomGame(gameName) || status == null)
+            if (status == null)
             {
                 return false;
             }
 
-            object rawData = GetRawStatusDataObject(status);
-            if (TryGetMemberValue(rawData, "FinishStatus", out object finishStatusValue) &&
-                TryGetBooleanValue(finishStatusValue, out bool isFinishedStatusActive) &&
-                isFinishedStatusActive)
+            if (IsRaceRoomGame(gameName) && IsRaceRoomInactiveTelemetry(status))
             {
                 return true;
             }
 
-            return TryGetMemberValue(rawData, "GamePlayerInGarage", out object playerInGarageValue) &&
+            return IsAutomobilista2Game(gameName) &&
+                IsAutomobilista2InactiveTelemetry(status);
+        }
+
+        private bool IsAutomobilista2InactiveTelemetry(StatusDataBase status)
+        {
+            if (TryGetBooleanMemberValue(status, "IsInGarage", out bool isInGarage) && isInGarage ||
+                TryGetBooleanMemberValue(status, "IsSpectator", out bool isSpectator) && isSpectator)
+            {
+                return true;
+            }
+
+            object rawData = GetRawStatusDataObject(status);
+            if (TryGetIntegerMemberValue(rawData, "mGameState", out int gameState) &&
+                gameState == Automobilista2ObservedReplayGameState)
+            {
+                return true;
+            }
+
+            if (!TryGetIntegerMemberValue(rawData, "mViewedParticipantIndex", out int viewedParticipantIndex) ||
+                viewedParticipantIndex < 0)
+            {
+                return false;
+            }
+
+            if (_automobilista2PlayerViewedParticipantIndex < 0)
+            {
+                _automobilista2PlayerViewedParticipantIndex = viewedParticipantIndex;
+                return false;
+            }
+
+            return viewedParticipantIndex != _automobilista2PlayerViewedParticipantIndex;
+        }
+
+        private static bool IsRaceRoomInactiveTelemetry(StatusDataBase status)
+        {
+            object rawData = GetRawStatusDataObject(status);
+            return TryGetMemberValue(rawData, "FinishStatus", out object finishStatusValue) &&
+                TryGetBooleanValue(finishStatusValue, out bool isFinishedStatusActive) &&
+                isFinishedStatusActive ||
+                TryGetMemberValue(rawData, "GamePlayerInGarage", out object playerInGarageValue) &&
                 TryGetBooleanValue(playerInGarageValue, out bool isPlayerInGarage) &&
                 isPlayerInGarage;
         }
@@ -2208,6 +2257,25 @@ namespace Affinity
             value = false;
             return TryGetMemberValue(source, memberName, out object rawValue) &&
                 TryGetBooleanValue(rawValue, out value);
+        }
+
+        private static bool TryGetIntegerMemberValue(object source, string memberName, out int value)
+        {
+            value = 0;
+            if (!TryGetMemberValue(source, memberName, out object rawValue) || rawValue == null)
+            {
+                return false;
+            }
+
+            try
+            {
+                value = Convert.ToInt32(rawValue, CultureInfo.InvariantCulture);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         private static string GetDebugMemberValue(object source, string memberName)
@@ -2776,8 +2844,7 @@ namespace Affinity
 
         private static bool ShouldPersistFinalizedSession(double sessionDistanceMeters, double sessionTimeDrivenSeconds)
         {
-            return sessionDistanceMeters >= MinimumPersistedSessionMeters ||
-                sessionTimeDrivenSeconds >= MinimumPersistedSessionSeconds;
+            return sessionDistanceMeters >= MinimumPersistedSessionMeters;
         }
 
         private static string FormatUsedTime(double usedTimeSeconds)

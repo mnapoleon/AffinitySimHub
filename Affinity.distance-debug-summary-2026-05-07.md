@@ -27,6 +27,7 @@ Date: 2026-05-07
 
 - Earlier bug was real and significant.
 - The current logic is much healthier than before.
+- RaceRoom now ignores the bad `SessionOdo` interpretation, uses derived/stateful distance handling, guards against start/finish line wrap double-counting, and filters inactive raw states such as `FinishStatus` and `GamePlayerInGarage` before recording distance or time.
 
 ### Assetto Corsa
 
@@ -47,6 +48,8 @@ Date: 2026-05-07
 - That confirmed the generic distance-source heuristic was trusting a bad `SessionOdo` interpretation instead of a true session-distance value.
 - AMS2 now ignores `SessionOdo`, writes targeted debug logs, and uses a monotonic derived-distance model based on forward track-position movement across lap wraps.
 - On a clean retest at Red Bull National/Short, the plugin recorded about `7.22 km` for an out lap from pits plus `2` full laps on a `2328.24 m` track, and the live session distance matched the stored JSON total.
+- Later AMS2 validation found that pit race-monitor views and replay playback can keep emitting telemetry for the watched car while generic replay fields still look live. Affinity now uses raw AMS2 state to ignore non-player `mViewedParticipantIndex` samples and observed replay-state samples such as `mGameState=6`.
+- Finalized sessions are also distance-gated, so stationary monitor or replay time cannot create a zero-distance saved row.
 
 ### iRacing
 

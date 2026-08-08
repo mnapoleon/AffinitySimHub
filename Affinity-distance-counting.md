@@ -52,7 +52,20 @@ Important details:
 
 - Time is cumulative across sessions for each `game / car / track` bucket.
 - Time is inferred from telemetry update cadence, not from `CreatedUtc` / `LastUpdatedUtc`.
+- Finalized sessions are persisted only after at least `1 meter` of distance was recorded, so stationary pit, monitor, or replay time does not create a zero-distance row even if telemetry time accumulated.
 - Very large telemetry gaps are ignored so sleep, pauses, or missing telemetry do not create huge false time jumps.
+
+## Inactive And Replay Telemetry Filtering
+
+Before distance and time integration, Affinity filters telemetry samples that should not represent new driving.
+
+Ignored samples include:
+
+- generic replay telemetry exposed through `IsGameReplay`, `GameReplay`, or non-live `ReplayMode`
+- game-specific inactive telemetry such as garage or spectator state
+- game-specific raw-view states where the simulator keeps emitting telemetry for a watched car or replay camera while the player's race session is still open
+
+When a filtered sample arrives, Affinity finalizes and resets any pending active session before normal tracking continues. Debug logs report generic replay detection as `replay-ignored` and game-specific inactive or raw replay detection as `inactive-ignored`.
 
 ## Distance Sources
 
@@ -144,11 +157,13 @@ Why:
 Extra guards:
 
 - derived line-wrap guard at the start/finish line
+- ignores RaceRoom inactive telemetry when raw `FinishStatus` or `GamePlayerInGarage` is active
 
 Why:
 
 - In RaceRoom, `TrackPosition` can wrap to near zero one frame before the sim's lap counter increments.
 - Without a guard, that can look like a session reset followed by an extra full-lap jump, which double-counts distance.
+- RaceRoom can keep emitting telemetry after the player's active driving state ends, including garage or finished-session states. Affinity filters those samples before distance and time integration so post-race monitoring does not add watched-car distance or stationary time.
 
 ### Automobilista 2
 
@@ -176,11 +191,15 @@ Why:
 
 Extra guards:
 
-- no AMS2-specific wrap or startup guard yet
+- ignores AMS2 garage/spectator telemetry before distance integration
+- ignores AMS2 samples when the raw game state matches the observed post-race or saved-replay state
+- ignores AMS2 samples when the raw viewed participant index changes away from the learned player index
 
 Why:
 
 - The AMS2 path model handles legitimate pit starts and line crossings by integrating forward movement across wraps instead of using AC-style zero-origin handling.
+- When the player monitors the race or views other cars from the pits, SimHub can keep emitting telemetry for the viewed car. In recent captures, AMS2 did not expose the generic garage/spectator fields, but its raw shared-memory object did expose `mViewedParticipantIndex`. Affinity learns the player's viewed participant index during live telemetry and ignores later samples for other viewed participants.
+- When the player watches the post-race replay without returning to the game menu, or opens a saved replay, SimHub can still report generic replay fields as live telemetry. In the observed AMS2 captures, raw `mGameState=6` identified those replay samples, so Affinity ignores them even when the viewed participant is the player.
 
 ### iRacing
 
@@ -328,7 +347,7 @@ Affinity has a few protections for bad telemetry transitions:
 - derived line-wrap guard
   - for derived-source sims, if track position wraps by about one lap before the sim's counters settle, Affinity waits for telemetry sync instead of treating that wrap as a real reset
 - empty-session persistence guard
-  - if a finalized session has less than `1 meter` of distance and less than `1 second` of driven time, Affinity does not save it
+  - if a finalized session has less than `1 meter` of distance, Affinity does not save it, even if telemetry time accumulated
 
 ## What The UI Shows
 
@@ -388,4 +407,6 @@ It records:
 - derived session meters
 - session deltas
 - counter deltas used by telemetry guards
+- replay and inactive-sample decisions when detected
+- selected raw game-state fields for games with targeted guards
 - reset and wrap events

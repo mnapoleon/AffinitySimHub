@@ -10,7 +10,6 @@ Refresh the static GitHub Pages site so it matches the current Affinity plugin f
 
 - Preserve the current one-page static site structure and visual direction.
 - Update landing-page copy for the current cumulative distance and used-time features.
-- Add a compact section describing telemetry-aware tracking protections, including replay and inactive-sample filtering.
 - Refresh supported-game and install/release wording for the current plugin state.
 - Keep the existing screenshot assets and captions aligned with the new screenshots.
 
@@ -24,15 +23,16 @@ Key points to surface:
 - Cumulative distance and driving time.
 - Overview highlights for top game, track, and car.
 - Per-game drilldowns with period, sort, result-limit, and track/car cross-filter controls.
-- Telemetry safeguards for replay, garage, spectator, session reset, and line-wrap edge cases.
-- Current supported games: Assetto Corsa, Assetto Corsa EVO, Automobilista 2, iRacing, Le Mans Ultimate, rFactor 2, and RaceRoom Racing Experience.
+- Optional per-game telemetry debug logging for investigation work.
+- Current supported games: Assetto Corsa, Assetto Corsa Competizione, Assetto Corsa EVO, Automobilista 2, iRacing, Le Mans Ultimate, Project Motor Racing, rFactor 2, and RaceRoom Racing Experience.
 
 ## Implementation Shape
 
-- Edit `site/index.html` for copy and one new compact informational section.
-- Edit `site/styles.css` only if the new section needs a small reusable layout rule.
+- Edit `site/index.html` for product-focused copy updates.
+- Edit `site/styles.css` only if the refreshed copy needs small layout support.
 - Do not redesign the hero or screenshot layout.
 - Do not overwrite the modified screenshot PNG files.
+- Do not add a dedicated replay/noise section; that reads like a bug-fix note instead of a product feature.
 
 ## Verification
 

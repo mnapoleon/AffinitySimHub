@@ -405,6 +405,11 @@ code {
     color: var(--muted);
 }
 
+.support-widget {
+    display: flex;
+    align-items: center;
+}
+
 @media (max-width: 980px) {
     .hero-grid,
     .feature-grid,

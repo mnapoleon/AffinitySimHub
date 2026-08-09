@@ -229,11 +229,15 @@ Why:
 Extra guards:
 
 - ignores brief iRacing-only zeroed telemetry drops after progress has already been recorded
+- ignores iRacing raw telemetry when the nested SDK `Telemetry.IsReplayPlaying` flag is active, even if SimHub's generic replay fields still report live telemetry
+- implementation reads the raw iRacing sample from `StatusDataBase.GetRawDataObject()`, then checks both `IsReplayPlaying` directly on the raw object and `Telemetry.IsReplayPlaying` on the nested SDK telemetry object
 
 Why:
 
 - iRacing can briefly report `0` laps and `0` position without a real session restart.
 - Without a guard, that transient reset can double-count distance when telemetry snaps back a frame later.
+- iRacing replay playback can continue emitting moving telemetry while SimHub's generic `GameReplay`, `IsGameReplay`, and `ReplayMode` values look live.
+- The deployed fix was runtime-checked on August 8, 2026 by replaying the start of a three-lap iRacing race; replay distance/time was no longer recorded.
 
 ### rFactor 2
 

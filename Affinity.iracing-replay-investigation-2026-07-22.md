@@ -121,6 +121,28 @@ If we return to this work later, the best options are:
    - impossible live-session resets or jumps
 3. Look for one more raw iRacing/SimHub field that differs between real live driving and passive replay playback.
 
+## Implemented Fix
+
+On Saturday, August 8, 2026, reflection against the installed SimHub iRacing reader showed that `IRacingReader.DataSampleEx` exposes a nested SDK telemetry object:
+
+- `DataSampleEx.Telemetry`
+- `Telemetry.IsReplayPlaying`
+
+Affinity already received the raw iRacing sample through `StatusDataBase.GetRawDataObject()`, but `IsReplayTelemetry()` only checked replay fields directly on `GameData` and `StatusDataBase`.
+
+The fix keeps the existing generic checks first, then inspects the raw iRacing object:
+
+1. call `GetRawStatusDataObject(data.NewData)`
+2. check `rawData.IsReplayPlaying` when a reader exposes the flag directly
+3. check `rawData.Telemetry.IsReplayPlaying` for iRacing's `DataSampleEx`
+4. ignore the telemetry sample before distance or used time can be accumulated
+
+This avoids relying on iRacing's misleading SimHub-facing values, where replay playback can still report `GameReplay=False`, `IsGameReplay=False`, and `ReplayMode=Live`.
+
+Runtime follow-up:
+
+- After copying the build into SimHub on Saturday, August 8, 2026, watching the beginning of the same iRacing replay no longer recorded replay distance/time.
+
 ## What Not To Assume
 
 - Do not assume `ReplayMode` will flip away from `Live`.
@@ -131,4 +153,6 @@ If we return to this work later, the best options are:
 
 - Investigation captured.
 - Logging expanded for future replay captures.
-- No robust replay fix identified yet.
+- Follow-up on 2026-08-08 found the reliable raw iRacing SDK signal: `DataSampleEx.Telemetry.IsReplayPlaying`.
+- Affinity now checks that nested raw telemetry flag in addition to SimHub's generic replay fields.
+- User runtime validation on 2026-08-08 confirmed the deployed build stopped recording distance/time during replay playback.

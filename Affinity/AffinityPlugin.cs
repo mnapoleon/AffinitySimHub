@@ -2166,8 +2166,26 @@ namespace Affinity
                 }
             }
 
-            return TryGetMemberValue(data.NewData, "ReplayMode", out object statusReplayModeValue) &&
-                IsReplayModeActive(statusReplayModeValue);
+            if (TryGetMemberValue(data.NewData, "ReplayMode", out object statusReplayModeValue) &&
+                IsReplayModeActive(statusReplayModeValue))
+            {
+                return true;
+            }
+
+            object rawData = GetRawStatusDataObject(data.NewData);
+            if (TryGetBooleanMemberValue(rawData, "IsReplayPlaying", out bool rawReplayPlaying) && rawReplayPlaying)
+            {
+                return true;
+            }
+
+            if (TryGetMemberValue(rawData, "Telemetry", out object telemetry) &&
+                TryGetBooleanMemberValue(telemetry, "IsReplayPlaying", out bool telemetryReplayPlaying) &&
+                telemetryReplayPlaying)
+            {
+                return true;
+            }
+
+            return false;
         }
 
         private bool IsInactiveTelemetry(string gameName, StatusDataBase status)

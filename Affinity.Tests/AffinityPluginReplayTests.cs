@@ -65,6 +65,32 @@ namespace Affinity.Tests
         }
 
         [TestMethod]
+        public void IsReplayTelemetry_ReturnsTrueWhenRawTelemetryIsReplayPlaying()
+        {
+            AffinityPlugin plugin = new AffinityPlugin();
+            GameData data = new GameData();
+            SetMemberValue(
+                data,
+                "NewData",
+                new InactiveStatusData
+                {
+                    RawData = new RawIracingData
+                    {
+                        Telemetry = new RawIracingTelemetry
+                        {
+                            IsReplayPlaying = true
+                        }
+                    }
+                });
+
+            object result = typeof(AffinityPlugin)
+                .GetMethod("IsReplayTelemetry", BindingFlags.Instance | BindingFlags.NonPublic)
+                .Invoke(plugin, new object[] { data });
+
+            Assert.AreEqual(true, result);
+        }
+
+        [TestMethod]
         public void IsRaceRoomInactiveTelemetry_ReturnsTrueWhenFinishStatusIsNonZero()
         {
             AffinityPlugin plugin = new AffinityPlugin();
@@ -359,6 +385,16 @@ namespace Affinity.Tests
             public int mViewedParticipantIndex;
 
             public int mGameState;
+        }
+
+        private sealed class RawIracingData
+        {
+            public RawIracingTelemetry Telemetry { get; set; }
+        }
+
+        private sealed class RawIracingTelemetry
+        {
+            public bool IsReplayPlaying { get; set; }
         }
 
         private sealed class TestStatusData : StatusDataBase

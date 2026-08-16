@@ -917,6 +917,8 @@
 
                         <DataGrid Grid.Row="5"
                                   Grid.Column="0"
+                                  AlternatingRowBackground="#333333"
+                                  AlternationCount="2"
                                   AutoGenerateColumns="False"
                                   CanUserAddRows="False"
                                   CanUserDeleteRows="False"
@@ -924,7 +926,8 @@
                                   ItemsSource="{Binding VisibleTrackSummaries}"
                                   SelectedItem="{Binding SelectedTrackSummary, Mode=TwoWay}">
                             <DataGrid.Columns>
-                                <DataGridTextColumn Width="*" Binding="{Binding TrackDisplayName}" Header="Track" />
+                                <DataGridTextColumn Width="*" Binding="{Binding CircuitNameDisplay}" Header="Circuit Name" />
+                                <DataGridTextColumn Width="*" Binding="{Binding CircuitLayoutDisplay}" Header="Circuit Layout" />
                                 <DataGridTextColumn Width="120" Binding="{Binding DistanceDisplay, StringFormat=F2}">
                                     <DataGridTextColumn.Header>
                                         <TextBlock Text="{Binding DataContext.DistanceColumnHeader, ElementName=Root}" />
@@ -957,6 +960,8 @@
 
                         <DataGrid Grid.Row="5"
                                   Grid.Column="2"
+                                  AlternatingRowBackground="#333333"
+                                  AlternationCount="2"
                                   AutoGenerateColumns="False"
                                   CanUserAddRows="False"
                                   CanUserDeleteRows="False"

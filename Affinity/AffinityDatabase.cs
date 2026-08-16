@@ -70,6 +70,10 @@ namespace Affinity
 
         public string TrackDisplayName { get; set; } = string.Empty;
 
+        public string CircuitNameDisplay { get; set; } = string.Empty;
+
+        public string CircuitLayoutDisplay { get; set; } = string.Empty;
+
         public double DistanceKm { get; set; }
 
         public double DistanceMiles { get; set; }
@@ -752,7 +756,14 @@ namespace Affinity
                 return true;
             }
 
-            return (summary?.TrackDisplayName ?? string.Empty).IndexOf(searchText, StringComparison.OrdinalIgnoreCase) >= 0;
+            if (summary == null)
+            {
+                return false;
+            }
+
+            return (summary.TrackDisplayName ?? string.Empty).IndexOf(searchText, StringComparison.OrdinalIgnoreCase) >= 0 ||
+                (summary.CircuitNameDisplay ?? string.Empty).IndexOf(searchText, StringComparison.OrdinalIgnoreCase) >= 0 ||
+                (summary.CircuitLayoutDisplay ?? string.Empty).IndexOf(searchText, StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         private bool CarSummaryMatchesSearch(CarDistanceSummary summary)

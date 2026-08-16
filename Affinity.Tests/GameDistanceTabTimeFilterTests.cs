@@ -76,6 +76,27 @@ namespace Affinity.Tests
         }
 
         [TestMethod]
+        public void TrackSearch_MatchesCircuitNameAndLayoutDisplayText()
+        {
+            GameDistanceTab tab = AffinitySummaryBuilder.BuildSnapshot(new[]
+            {
+                Row(
+                    "Automobilista 2",
+                    "Formula Trainer",
+                    "Buenos_Aires-Buenos_Aires_Circuito_15",
+                    1.0,
+                    60.0,
+                    new DateTime(2026, 6, 20, 0, 0, 0, DateTimeKind.Utc))
+            }, displayInMiles: false, assettoCorsaTrackMap: null).GameTabs.Single();
+
+            tab.TrackSearchText = "Circuito 15";
+
+            Assert.AreEqual(1, tab.VisibleTrackSummaries.Count);
+            Assert.AreEqual("Buenos Aires", tab.VisibleTrackSummaries.Single().CircuitNameDisplay);
+            Assert.AreEqual("Buenos Aires Circuito 15", tab.VisibleTrackSummaries.Single().CircuitLayoutDisplay);
+        }
+
+        [TestMethod]
         public void ClearFilter_ResetsTimeFiltersAndRestoresAllTimeRows()
         {
             GameDistanceTab tab = BuildTab();

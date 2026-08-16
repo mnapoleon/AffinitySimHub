@@ -40,8 +40,9 @@ This file captures the repo-specific working agreement for agents and contributo
 
 ## SimHub Copy Workflow
 
-- The plugin project has a post-build copy target that copies `Affinity.dll`, `Affinity.pdb`, and `ac_track_id_map.json` into the SimHub install when `SimHubInstallPath` exists.
-- After changing plugin code, always copy the built plugin into SimHub if able.
+- The plugin project has a post-build copy target that copies build output into the SimHub install when `SimHubInstallPath` exists.
+- After changing plugin code, always copy the built plugin binaries into SimHub if able.
+- Do not copy `ac_track_id_map.json` into the live SimHub install during routine validation or deployment. Leave the installed map file intact unless the user explicitly asks to refresh it.
 - The default install path is:
   - `C:\Program Files (x86)\SimHub\`
 - If SimHub is open and the DLL is locked, do not force around it.

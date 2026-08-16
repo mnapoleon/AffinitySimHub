@@ -50,11 +50,12 @@ namespace Affinity.Tests
         }
 
         [TestMethod]
-        public void GetDisplayTrackNameWithConfig_LeavesCompetizioneTrackNamesUntouched()
+        public void GetDisplayTrackNameWithConfig_LeavesCompetizioneAndEvoTrackNamesUntouched()
         {
             var trackMap = new Dictionary<string, string>
             {
-                ["ks_spa"] = "Spa"
+                ["ks_spa"] = "Spa",
+                ["Monza-GP"] = "Mapped Monza"
             };
 
             Assert.AreEqual(
@@ -63,6 +64,9 @@ namespace Affinity.Tests
             Assert.AreEqual(
                 "ks_spa",
                 AffinityGameLogic.GetDisplayTrackNameWithConfig("Assetto Corsa Competizione", "ks_spa", trackMap));
+            Assert.AreEqual(
+                "Monza-GP",
+                AffinityGameLogic.GetDisplayTrackNameWithConfig("Assetto Corsa EVO", "Monza-GP", trackMap));
         }
 
         [TestMethod]

@@ -61,10 +61,11 @@ When investigating telemetry issues, compare persisted DB rows, Affinity debug l
 2. Default validation commands:
    - `dotnet test .\Affinity.Tests\Affinity.Tests.csproj /p:SimHubInstallPath=C:\does-not-exist`
    - `dotnet build .\Affinity\Affinity.csproj /p:SimHubInstallPath=C:\does-not-exist`
-3. If runtime plugin behavior or UI changed, also run the normal plugin build so it copies into SimHub when possible:
+3. If runtime plugin behavior or UI changed, also run the normal plugin build so it copies plugin binaries into SimHub when possible:
    - `dotnet build .\Affinity\Affinity.csproj`
-4. If SimHub has files locked, do not force the copy. Report the lock, ask the user to close or restart SimHub, then retry the copy when asked.
-5. When packaging or release behavior changes, check both the project build output and GitHub workflow/archive contents so shipping artifacts match runtime expectations.
+4. Routine SimHub deployment must not overwrite the live `ac_track_id_map.json`; leave the installed map intact unless the user explicitly asks to refresh it.
+5. If SimHub has files locked, do not force the copy. Report the lock, ask the user to close or restart SimHub, then retry the copy when asked.
+6. When packaging or release behavior changes, check both the project build output and GitHub workflow/archive contents so shipping artifacts match runtime expectations.
 
 ## Commit And PR
 

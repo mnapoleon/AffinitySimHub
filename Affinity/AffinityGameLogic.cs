@@ -51,6 +51,12 @@ namespace Affinity
                 string.Equals(normalized, "assettocorsaevo", StringComparison.Ordinal);
         }
 
+        public static bool IsAssettoCorsaClassicGame(string gameName)
+        {
+            string normalized = NormalizeGameName(gameName);
+            return string.Equals(normalized, "assettocorsa", StringComparison.Ordinal);
+        }
+
         public static bool IsAssettoCorsaCompetizioneGame(string gameName)
         {
             string normalized = NormalizeGameName(gameName);
@@ -108,7 +114,7 @@ namespace Affinity
 
         public static string GetDisplayTrackNameWithConfig(string gameName, string rawTrackNameWithConfig, IReadOnlyDictionary<string, string> assettoCorsaTrackMap)
         {
-            if (!IsAssettoCorsaGame(gameName) || IsAssettoCorsaCompetizioneGame(gameName))
+            if (!IsAssettoCorsaClassicGame(gameName))
             {
                 return rawTrackNameWithConfig;
             }

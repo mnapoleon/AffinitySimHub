@@ -97,6 +97,12 @@ namespace Affinity.Tests
             Assert.AreEqual("00:35:00", assettoTab.TotalUsedTimeDisplay);
             Assert.AreEqual("spa", assettoTab.TrackSummaries[0].TrackDisplayName);
             Assert.AreEqual("Monza GP", assettoTab.TrackSummaries[1].TrackDisplayName);
+            TrackDistanceSummary mappedAssettoTrack = assettoTab.TrackSummaries.Single(summary => summary.TrackName == "monza_gp");
+            Assert.AreEqual("Monza GP", mappedAssettoTrack.CircuitNameDisplay);
+            Assert.AreEqual("Monza GP", mappedAssettoTrack.CircuitLayoutDisplay);
+            TrackDistanceSummary fallbackAssettoTrack = assettoTab.TrackSummaries.Single(summary => summary.TrackName == "monza_short");
+            Assert.AreEqual("monza_short", fallbackAssettoTrack.CircuitNameDisplay);
+            Assert.AreEqual("monza_short", fallbackAssettoTrack.CircuitLayoutDisplay);
             Assert.AreEqual("Ferrari 488 GT3", assettoTab.CarSummaries[0].CarModel);
             Assert.AreEqual("00:20:00", assettoTab.TrackSummaries[0].UsedTimeDisplay);
         }
@@ -139,6 +145,122 @@ namespace Affinity.Tests
             Assert.AreEqual("00:01:30", onlyTab.TotalUsedTimeDisplay);
             Assert.AreEqual("iRacing", snapshot.FeaturedTrackSummary.GameName);
             Assert.AreEqual("iRacing", snapshot.FeaturedCarSummary.GameName);
+        }
+
+        [TestMethod]
+        public void BuildSnapshot_SplitsCircuitNameAndLayoutForTrackRows()
+        {
+            AffinitySummarySnapshot snapshot = AffinitySummaryBuilder.BuildSnapshot(new[]
+            {
+                new DistanceSummary
+                {
+                    GameName = "Automobilista 2",
+                    CarModel = "Formula Trainer",
+                    TrackName = "Buenos_Aires",
+                    TrackNameWithConfig = "Buenos_Aires-Buenos_Aires_Circuito_15",
+                    TrackDisplayName = "Buenos_Aires-Buenos_Aires_Circuito_15",
+                    TotalDistanceKm = 1.0,
+                    TotalDistanceMiles = 0.621371,
+                    UsedTime = 60.0
+                }
+            }, displayInMiles: false, assettoCorsaTrackMap: null);
+
+            TrackDistanceSummary trackSummary = snapshot.GameTabs.Single().TrackSummaries.Single();
+
+            Assert.AreEqual("Buenos Aires", trackSummary.CircuitNameDisplay);
+            Assert.AreEqual("Buenos Aires Circuito 15", trackSummary.CircuitLayoutDisplay);
+        }
+
+        [TestMethod]
+        public void BuildSnapshot_TitleCasesIRacingCircuitNamesForTrackRows()
+        {
+            AffinitySummarySnapshot snapshot = AffinitySummaryBuilder.BuildSnapshot(new[]
+            {
+                new DistanceSummary
+                {
+                    GameName = "IRacing",
+                    CarModel = "Mazda MX-5",
+                    TrackName = "spielberg gp",
+                    TrackNameWithConfig = "spielberg gp-Grand Prix",
+                    TrackDisplayName = "spielberg gp-Grand Prix",
+                    TotalDistanceKm = 1.0,
+                    TotalDistanceMiles = 0.621371,
+                    UsedTime = 60.0
+                }
+            }, displayInMiles: false, assettoCorsaTrackMap: null);
+
+            TrackDistanceSummary trackSummary = snapshot.GameTabs.Single().TrackSummaries.Single();
+
+            Assert.AreEqual("Spielberg GP", trackSummary.CircuitNameDisplay);
+            Assert.AreEqual("Grand Prix", trackSummary.CircuitLayoutDisplay);
+        }
+
+        [TestMethod]
+        public void BuildSnapshot_SplitsRFactor2CircuitNamesOnDoubleDash()
+        {
+            AffinitySummarySnapshot snapshot = AffinitySummaryBuilder.BuildSnapshot(new[]
+            {
+                new DistanceSummary
+                {
+                    GameName = "RFactor2",
+                    CarModel = "BTCC",
+                    TrackName = "Lime Rock Park -- No Chicanes",
+                    TrackNameWithConfig = "Lime Rock Park -- No Chicanes",
+                    TrackDisplayName = "Lime Rock Park -- No Chicanes",
+                    TotalDistanceKm = 1.0,
+                    TotalDistanceMiles = 0.621371,
+                    UsedTime = 60.0
+                }
+            }, displayInMiles: false, assettoCorsaTrackMap: null);
+
+            TrackDistanceSummary trackSummary = snapshot.GameTabs.Single().TrackSummaries.Single();
+
+            Assert.AreEqual("Lime Rock Park", trackSummary.CircuitNameDisplay);
+            Assert.AreEqual("No Chicanes", trackSummary.CircuitLayoutDisplay);
+        }
+
+        [TestMethod]
+        public void BuildSnapshot_DuplicatesAccAndLmuCircuitNamesAcrossTrackColumns()
+        {
+            AffinitySummarySnapshot snapshot = AffinitySummaryBuilder.BuildSnapshot(new[]
+            {
+                new DistanceSummary
+                {
+                    GameName = "Assetto Corsa Competizione",
+                    CarModel = "Ferrari 488 GT3",
+                    TrackName = "Brands Hatch Circuit",
+                    TrackNameWithConfig = "Brands Hatch Circuit",
+                    TrackDisplayName = "Brands Hatch Circuit",
+                    TotalDistanceKm = 1.0,
+                    TotalDistanceMiles = 0.621371,
+                    UsedTime = 60.0
+                },
+                new DistanceSummary
+                {
+                    GameName = "LMU",
+                    CarModel = "Akkodis ASP Team 2026",
+                    TrackName = "Circuit de la Sarthe",
+                    TrackNameWithConfig = "Circuit de la Sarthe",
+                    TrackDisplayName = "Circuit de la Sarthe",
+                    TotalDistanceKm = 2.0,
+                    TotalDistanceMiles = 1.242742,
+                    UsedTime = 120.0
+                }
+            }, displayInMiles: false, assettoCorsaTrackMap: null);
+
+            TrackDistanceSummary accTrackSummary = snapshot.GameTabs
+                .Single(tab => tab.GameName == "Assetto Corsa Competizione")
+                .TrackSummaries
+                .Single();
+            TrackDistanceSummary lmuTrackSummary = snapshot.GameTabs
+                .Single(tab => tab.GameName == "LMU")
+                .TrackSummaries
+                .Single();
+
+            Assert.AreEqual("Brands Hatch Circuit", accTrackSummary.CircuitNameDisplay);
+            Assert.AreEqual("Brands Hatch Circuit", accTrackSummary.CircuitLayoutDisplay);
+            Assert.AreEqual("Circuit de la Sarthe", lmuTrackSummary.CircuitNameDisplay);
+            Assert.AreEqual("Circuit de la Sarthe", lmuTrackSummary.CircuitLayoutDisplay);
         }
 
         [TestMethod]

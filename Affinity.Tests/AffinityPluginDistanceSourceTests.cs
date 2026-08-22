@@ -1,8 +1,13 @@
 using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.IO;
 using System.Reflection;
+using System.Runtime.Serialization;
 using Affinity;
 using GameReaderCommon;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using SimHub.Plugins;
 
 namespace Affinity.Tests
 {
@@ -311,6 +316,172 @@ namespace Affinity.Tests
         }
 
         [TestMethod]
+        public void DataUpdate_DelegatesTransientResetToResolvedProfile()
+        {
+            RecordingDistanceProfile profile = new RecordingDistanceProfile
+            {
+                IgnoreTransientReset = true
+            };
+            AffinityPlugin plugin = CreatePlugin(profile);
+            PluginManager pluginManager = CreatePluginManager();
+            Guid sessionId = Guid.NewGuid();
+
+            TestStatusData initialStatus = CreateStatus(
+                completedLaps: 1,
+                trackLengthMeters: 1000.0,
+                trackPositionMeters: 500.0,
+                speedKmh: 50.0);
+            GameData initialData = CreateGameData(initialStatus, sessionId);
+            plugin.DataUpdate(pluginManager, ref initialData);
+
+            SetPrivateField(plugin, "_sessionStatefulAbsoluteMeters", 1234.0);
+            SetPrivateField(plugin, "_lastObservedSessionMeters", 1234.0);
+            SetPrivateField(plugin, "_lastObservedCompletedLaps", 1);
+
+            TestStatusData resetStatus = CreateStatus(
+                completedLaps: 0,
+                trackLengthMeters: 1000.0,
+                trackPositionMeters: 0.0,
+                speedKmh: 0.0);
+            GameData resetData = CreateGameData(resetStatus, sessionId);
+            plugin.DataUpdate(pluginManager, ref resetData);
+
+            Assert.AreEqual(1, profile.TransientResetContexts.Count);
+            Assert.AreSame(resetStatus, profile.TransientResetContexts[0].Status);
+            Assert.AreEqual(1234.0, profile.TransientResetContexts[0].LastObservedSessionMeters, 0.001);
+            Assert.AreEqual(1, profile.TransientResetContexts[0].LastObservedCompletedLaps);
+            Assert.AreEqual("Ignoring transient iRacing telemetry reset", plugin.DataStatus);
+            Assert.AreEqual(1.234, plugin.SessionDistanceKm, 0.001);
+        }
+
+        [TestMethod]
+        public void DataUpdate_DelegatesPlaceholderSessionStartToResolvedProfile()
+        {
+            RecordingDistanceProfile profile = new RecordingDistanceProfile
+            {
+                IgnorePlaceholderSessionStart = true
+            };
+            AffinityPlugin plugin = CreatePlugin(profile);
+            PluginManager pluginManager = CreatePluginManager();
+            SetPrivateField(plugin, "_sessionStatefulAbsoluteMeters", 500.0);
+            SetPrivateField(plugin, "_lastIgnoredSessionMeters", 77.0);
+
+            TestStatusData placeholderStatus = CreateStatus(
+                completedLaps: 4,
+                trackLengthMeters: 1000.0,
+                trackPositionMeters: 2.0,
+                speedKmh: 0.0);
+            GameData placeholderData = CreateGameData(placeholderStatus, Guid.NewGuid());
+            plugin.DataUpdate(pluginManager, ref placeholderData);
+
+            Assert.AreEqual(1, profile.PlaceholderSessionStartContexts.Count);
+            Assert.AreSame(placeholderStatus, profile.PlaceholderSessionStartContexts[0].Status);
+            Assert.AreEqual(500.0, profile.PlaceholderSessionStartContexts[0].SessionStatefulAbsoluteMeters, 0.001);
+            Assert.AreEqual(77.0, profile.PlaceholderSessionStartContexts[0].LastIgnoredSessionMeters, 0.001);
+            Assert.AreEqual("Waiting for LMU telemetry reset after exit", plugin.DataStatus);
+            Assert.IsFalse(plugin.IsTelemetryActive);
+            Assert.AreEqual(77.0, GetPrivateField<double>(plugin, "_lastIgnoredSessionMeters"), 0.001);
+        }
+
+        [TestMethod]
+        public void DataUpdate_ReevaluatesLapIncrementAfterDistanceMutation()
+        {
+            string tempDirectory = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+            string debugLogPath = Path.Combine(tempDirectory, "Affinity.distance.debug.log");
+            string gameDebugLogPath = Path.Combine(tempDirectory, "Affinity.distance.debug.test.log");
+            try
+            {
+                RecordingDistanceProfile profile = new RecordingDistanceProfile
+                {
+                    UseThresholdLapIncrementDecision = true
+                };
+                AffinityPlugin plugin = CreatePlugin(profile);
+                plugin.Settings.EnableDebugLogging = true;
+                plugin.Settings.GameDebugLogging["test"] = true;
+                SetPrivateField(plugin, "_debugLogPath", debugLogPath);
+                PluginManager pluginManager = CreatePluginManager();
+                Guid sessionId = Guid.NewGuid();
+
+                TestStatusData initialStatus = CreateStatus(
+                    completedLaps: 0,
+                    trackLengthMeters: 1000.0,
+                    trackPositionMeters: 999.0,
+                    speedKmh: 50.0);
+                GameData initialData = CreateGameData(initialStatus, sessionId);
+                plugin.DataUpdate(pluginManager, ref initialData);
+
+                SetPrivateField(plugin, "_sessionStatefulAbsoluteMeters", 999.0);
+                SetPrivateField(plugin, "_lastObservedSessionMeters", 999.0);
+
+                TestStatusData lineCrossingStatus = CreateStatus(
+                    completedLaps: 1,
+                    trackLengthMeters: 1000.0,
+                    trackPositionMeters: 1.0,
+                    speedKmh: 1.0);
+                GameData lineCrossingData = CreateGameData(lineCrossingStatus, sessionId);
+                plugin.DataUpdate(pluginManager, ref lineCrossingData);
+
+                Assert.AreEqual(2, profile.LapIncrementContexts.Count);
+                Assert.AreEqual(999.0, profile.LapIncrementContexts[0].LastObservedSessionMeters, 0.001);
+                Assert.IsFalse(profile.LapIncrementDecisions[0]);
+                Assert.AreEqual(1001.0, profile.LapIncrementContexts[1].LastObservedSessionMeters, 0.001);
+                Assert.IsTrue(profile.LapIncrementDecisions[1]);
+                Assert.AreEqual(1.001, plugin.SessionDistanceKm, 0.001);
+
+                string debugLog = File.ReadAllText(gameDebugLogPath);
+                Assert.IsTrue(debugLog.Contains("reason=lap-increment-ignored"), debugLog);
+                Assert.IsFalse(debugLog.Contains("reason=lap-change"), debugLog);
+            }
+            finally
+            {
+                if (Directory.Exists(tempDirectory))
+                {
+                    Directory.Delete(tempDirectory, recursive: true);
+                }
+            }
+        }
+
+        [TestMethod]
+        public void DataUpdate_UsesDistinctLapIncrementDecisionsAtBothStages()
+        {
+            RecordingDistanceProfile profile = new RecordingDistanceProfile
+            {
+                UseIgnoredMarkerLapIncrementDecision = true
+            };
+            AffinityPlugin plugin = CreatePlugin(profile);
+            PluginManager pluginManager = CreatePluginManager();
+            Guid sessionId = Guid.NewGuid();
+
+            TestStatusData initialStatus = CreateStatus(
+                completedLaps: 0,
+                trackLengthMeters: 1000.0,
+                trackPositionMeters: 100.0,
+                speedKmh: 50.0);
+            GameData initialData = CreateGameData(initialStatus, sessionId);
+            plugin.DataUpdate(pluginManager, ref initialData);
+
+            SetPrivateField(plugin, "_sessionStatefulAbsoluteMeters", 1000.0);
+            SetPrivateField(plugin, "_lastObservedSessionMeters", 1000.0);
+
+            TestStatusData jumpStatus = CreateStatus(
+                completedLaps: 1,
+                trackLengthMeters: 1000.0,
+                trackPositionMeters: 600.0,
+                speedKmh: 50.0);
+            GameData jumpData = CreateGameData(jumpStatus, sessionId);
+            plugin.DataUpdate(pluginManager, ref jumpData);
+
+            Assert.AreEqual(2, profile.LapIncrementContexts.Count);
+            Assert.AreEqual(-1.0, profile.LapIncrementContexts[0].LastIgnoredSessionMeters, 0.001);
+            Assert.IsTrue(profile.LapIncrementDecisions[0]);
+            Assert.AreEqual(1500.0, profile.LapIncrementContexts[1].LastIgnoredSessionMeters, 0.001);
+            Assert.IsFalse(profile.LapIncrementDecisions[1]);
+            Assert.AreEqual(1.0, plugin.SessionDistanceKm, 0.001);
+            Assert.AreEqual(1500.0, GetPrivateField<double>(plugin, "_lastIgnoredSessionMeters"), 0.001);
+            Assert.IsTrue(plugin.DataStatus.StartsWith("Recorded "), plugin.DataStatus);
+        }
+
+        [TestMethod]
         public void ShouldIgnoreDistanceJumpForIgnoredLapIncrement_IgnoresLargeJumpForCachedDecision()
         {
             AffinityPlugin plugin = new AffinityPlugin();
@@ -378,6 +549,94 @@ namespace Affinity.Tests
             return AffinityGameProfileRegistry.CreateDefault().Resolve(gameName);
         }
 
+        private static AffinityPlugin CreatePlugin(IAffinityGameProfile profile)
+        {
+            AffinityPlugin plugin = new AffinityPlugin();
+            SetPrivateField(
+                plugin,
+                "_gameProfiles",
+                new AffinityGameProfileRegistry(new[] { profile }));
+            return plugin;
+        }
+
+        private static PluginManager CreatePluginManager()
+        {
+            PluginManager pluginManager =
+                (PluginManager)FormatterServices.GetUninitializedObject(typeof(PluginManager));
+            typeof(PluginManager)
+                .GetField("GeneratedProperties", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+                .SetValue(pluginManager, new ConcurrentDictionary<string, PropertyEntry>());
+
+            pluginManager.AddProperty("Affinity.IsGameRunning", typeof(AffinityPlugin), false);
+            pluginManager.AddProperty("Affinity.DataFilePath", typeof(AffinityPlugin), string.Empty);
+            pluginManager.AddProperty("Affinity.DebugLogPath", typeof(AffinityPlugin), string.Empty);
+            pluginManager.AddProperty("Affinity.GameName", typeof(AffinityPlugin), string.Empty);
+            pluginManager.AddProperty("Affinity.TrackName", typeof(AffinityPlugin), string.Empty);
+            pluginManager.AddProperty("Affinity.CarModel", typeof(AffinityPlugin), string.Empty);
+            pluginManager.AddProperty("Affinity.CurrentContextDistanceKm", typeof(AffinityPlugin), 0.0);
+            pluginManager.AddProperty("Affinity.CurrentContextDistanceMiles", typeof(AffinityPlugin), 0.0);
+            pluginManager.AddProperty("Affinity.SessionDistanceKm", typeof(AffinityPlugin), 0.0);
+            pluginManager.AddProperty("Affinity.SessionDistanceMiles", typeof(AffinityPlugin), 0.0);
+            return pluginManager;
+        }
+
+        private static TestStatusData CreateStatus(
+            int completedLaps,
+            double trackLengthMeters,
+            double trackPositionMeters,
+            double speedKmh)
+        {
+            TestStatusData status = new TestStatusData();
+            SetProperty(status, "CarModel", "Test Car");
+            SetProperty(status, "TrackName", "Test Track");
+            SetProperty(status, "CompletedLaps", completedLaps);
+            SetProperty(status, "TrackLength", trackLengthMeters);
+            SetProperty(status, "TrackPositionMeters", trackPositionMeters);
+            SetProperty(status, "TrackPositionPercent", trackPositionMeters / trackLengthMeters);
+            SetProperty(status, "SpeedKmh", speedKmh);
+            return status;
+        }
+
+        private static GameData CreateGameData(StatusDataBase status, Guid sessionId)
+        {
+            GameData data = new GameData();
+            SetMemberValue(data, "GameRunning", true);
+            SetMemberValue(data, "GameName", "Test Game");
+            SetMemberValue(data, "SessionId", sessionId);
+            SetMemberValue(data, "NewData", status);
+            return data;
+        }
+
+        private static void SetMemberValue(object instance, string memberName, object value)
+        {
+            const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+
+            PropertyInfo property = instance.GetType().GetProperty(memberName, flags);
+            if (property != null && property.SetMethod != null)
+            {
+                property.SetValue(instance, value);
+                return;
+            }
+
+            FieldInfo field = instance.GetType().GetField(memberName, flags);
+            Assert.IsNotNull(field, $"Expected {instance.GetType().Name} to expose writable member {memberName}.");
+            field.SetValue(instance, value);
+        }
+
+        private static void SetPrivateField(object instance, string fieldName, object value)
+        {
+            FieldInfo field = instance.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.IsNotNull(field, $"Expected {instance.GetType().Name} to expose field {fieldName}.");
+            field.SetValue(instance, value);
+        }
+
+        private static T GetPrivateField<T>(object instance, string fieldName)
+        {
+            FieldInfo field = instance.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.IsNotNull(field, $"Expected {instance.GetType().Name} to expose field {fieldName}.");
+            return (T)field.GetValue(instance);
+        }
+
         private static void SetProperty(StatusDataBase status, string propertyName, object value)
         {
             typeof(StatusDataBase)
@@ -403,6 +662,61 @@ namespace Affinity.Tests
             public override bool ShouldIgnoreLowSpeedLineWrap(AffinityDistanceSampleContext context)
             {
                 return true;
+            }
+        }
+
+        private sealed class RecordingDistanceProfile : AffinityGameProfileBase
+        {
+            public RecordingDistanceProfile()
+                : base("test", "Test", "test.jpg", "Test Game")
+            {
+            }
+
+            public bool IgnoreTransientReset { get; set; }
+
+            public bool IgnorePlaceholderSessionStart { get; set; }
+
+            public bool UseThresholdLapIncrementDecision { get; set; }
+
+            public bool UseIgnoredMarkerLapIncrementDecision { get; set; }
+
+            public List<AffinityDistanceSampleContext> TransientResetContexts { get; } =
+                new List<AffinityDistanceSampleContext>();
+
+            public List<AffinityDistanceSampleContext> PlaceholderSessionStartContexts { get; } =
+                new List<AffinityDistanceSampleContext>();
+
+            public List<AffinityDistanceSampleContext> LapIncrementContexts { get; } =
+                new List<AffinityDistanceSampleContext>();
+
+            public List<bool> LapIncrementDecisions { get; } = new List<bool>();
+
+            public override bool ShouldIgnoreTransientReset(AffinityDistanceSampleContext context)
+            {
+                TransientResetContexts.Add(context);
+                return IgnoreTransientReset;
+            }
+
+            public override bool ShouldIgnorePlaceholderSessionStart(AffinityDistanceSampleContext context)
+            {
+                PlaceholderSessionStartContexts.Add(context);
+                return IgnorePlaceholderSessionStart;
+            }
+
+            public override bool ShouldIgnoreLapIncrement(AffinityDistanceSampleContext context)
+            {
+                LapIncrementContexts.Add(context);
+                bool isNearLine = context.Status.TrackPositionMeters <= 5.0 ||
+                    context.Status.TrackPositionMeters >= context.TrackLengthMeters - 5.0;
+                bool decision = (UseThresholdLapIncrementDecision &&
+                        context.LapDelta > 0 &&
+                        context.CompletedLaps > 0 &&
+                        context.Status.SpeedKmh < 5.0 &&
+                        isNearLine &&
+                        context.LastObservedSessionMeters >= context.TrackLengthMeters) ||
+                    (UseIgnoredMarkerLapIncrementDecision && context.LastIgnoredSessionMeters < 0.0);
+                LapIncrementDecisions.Add(decision);
+                return decision;
             }
         }
     }

@@ -896,7 +896,7 @@ namespace Affinity
                     double sessionMeters = Math.Max(0.0, absoluteSessionMeters - _sessionDistanceOriginMeters);
                     double deltaMeters = sessionMeters - _lastObservedSessionMeters;
                     int lapDelta = completedLaps - _lastObservedCompletedLaps;
-                    AffinityDistanceSampleContext distanceSampleContext = new AffinityDistanceSampleContext
+                    AffinityDistanceSampleContext preDistanceSampleContext = new AffinityDistanceSampleContext
                     {
                         Status = data.NewData,
                         DistanceMode = profile.DistanceMode,
@@ -912,10 +912,10 @@ namespace Affinity
                         LastIgnoredSessionMeters = _lastIgnoredSessionMeters,
                         LastObservedCompletedLaps = _lastObservedCompletedLaps
                     };
-                    bool shouldIgnoreLapIncrement = profile.ShouldIgnoreLapIncrement(distanceSampleContext);
+                    bool shouldIgnorePreDistanceLapIncrement = profile.ShouldIgnoreLapIncrement(preDistanceSampleContext);
                     bool shouldIgnoreDistanceJumpForIgnoredLapIncrement = ShouldIgnoreDistanceJumpForIgnoredLapIncrement(
-                        shouldIgnoreLapIncrement,
-                        distanceSampleContext);
+                        shouldIgnorePreDistanceLapIncrement,
+                        preDistanceSampleContext);
                     bool shouldIgnoreRepeatedIgnoredDistanceJump = ShouldIgnoreRepeatedIgnoredDistanceJump(sessionMeters);
                     bool looksLikeDerivedLapBoundaryWrap = _sessionDistanceSource == SessionDistanceSource.Derived &&
                         trackLengthMeters > 0.0 &&
@@ -999,7 +999,25 @@ namespace Affinity
                         }
                     }
 
-                    if (lapDelta > 0 && shouldIgnoreLapIncrement)
+                    AffinityDistanceSampleContext postDistanceSampleContext = new AffinityDistanceSampleContext
+                    {
+                        Status = data.NewData,
+                        DistanceMode = profile.DistanceMode,
+                        CompletedLaps = completedLaps,
+                        LapDelta = lapDelta,
+                        TrackLengthMeters = trackLengthMeters,
+                        SessionMeters = sessionMeters,
+                        DeltaMeters = deltaMeters,
+                        SessionStatefulAbsoluteMeters = _sessionStatefulAbsoluteMeters,
+                        SessionStartTrackPositionMeters = _sessionStartTrackPositionMeters,
+                        LastTrackPositionWithinLapMeters = _lastTrackPositionWithinLapMeters,
+                        LastObservedSessionMeters = _lastObservedSessionMeters,
+                        LastIgnoredSessionMeters = _lastIgnoredSessionMeters,
+                        LastObservedCompletedLaps = _lastObservedCompletedLaps
+                    };
+                    bool shouldIgnorePostDistanceLapIncrement = profile.ShouldIgnoreLapIncrement(postDistanceSampleContext);
+
+                    if (lapDelta > 0 && shouldIgnorePostDistanceLapIncrement)
                     {
                         _lastObservedCompletedLaps = completedLaps;
                         DataStatus = "Ignoring low-speed telemetry transition at line";

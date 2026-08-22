@@ -159,6 +159,7 @@ namespace Affinity.Tests
                         {
                             "test",
                             data,
+                            profile,
                             "Automobilista2",
                             "Porsche 996 GT3 RSR",
                             "OultonPark-OultonPark_Fosters",

@@ -384,6 +384,44 @@ namespace Affinity.Tests
         }
 
         [TestMethod]
+        public void DataUpdate_ReusesResolvedProfileForLiveDebugAndDisplay()
+        {
+            string tempDirectory = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+            string debugLogPath = Path.Combine(tempDirectory, "Affinity.distance.debug.log");
+            string gameDebugLogPath = Path.Combine(tempDirectory, "Affinity.distance.debug.test.log");
+            try
+            {
+                ResolveOnceProfile profile = new ResolveOnceProfile();
+                AffinityPlugin plugin = CreatePlugin(profile);
+                plugin.Settings.EnableDebugLogging = true;
+                plugin.Settings.GameDebugLogging[profile.SettingsKey] = true;
+                SetPrivateField(plugin, "_debugLogPath", debugLogPath);
+                PluginManager pluginManager = CreatePluginManager();
+                TestStatusData status = CreateStatus(
+                    completedLaps: 0,
+                    trackLengthMeters: 1000.0,
+                    trackPositionMeters: 100.0,
+                    speedKmh: 50.0);
+                GameData data = CreateGameData(status, Guid.NewGuid());
+
+                plugin.DataUpdate(pluginManager, ref data);
+
+                Assert.IsTrue(File.Exists(gameDebugLogPath), "The supplied profile settings key should select the per-game debug log.");
+                Assert.IsTrue(File.ReadAllText(gameDebugLogPath).Contains("reason=session-start"));
+                Assert.AreEqual(1, profile.TrackDisplayCalls, "The live display path should delegate to the supplied profile.");
+                Assert.AreEqual("Test Track", profile.LastRawTrackName);
+                Assert.AreEqual(1, profile.MatchingResolveCalls, "The game profile should be resolved only once per telemetry sample.");
+            }
+            finally
+            {
+                if (Directory.Exists(tempDirectory))
+                {
+                    Directory.Delete(tempDirectory, recursive: true);
+                }
+            }
+        }
+
+        [TestMethod]
         public void DataUpdate_ReevaluatesLapIncrementAfterDistanceMutation()
         {
             string tempDirectory = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
@@ -662,6 +700,99 @@ namespace Affinity.Tests
             public override bool ShouldIgnoreLowSpeedLineWrap(AffinityDistanceSampleContext context)
             {
                 return true;
+            }
+        }
+
+        private sealed class ResolveOnceProfile : IAffinityGameProfile
+        {
+            public string SettingsKey => "test";
+
+            public string DisplayName => "Test";
+
+            public string LogoFileName => "test.jpg";
+
+            public bool IsSupported => true;
+
+            public int MatchingResolveCalls { get; private set; }
+
+            public int TrackDisplayCalls { get; private set; }
+
+            public string LastRawTrackName { get; private set; }
+
+            public AffinityDistanceMode DistanceMode => AffinityDistanceMode.StatefulDerived;
+
+            public bool CapturesSessionStartTrackPosition => false;
+
+            public bool UsesStationaryStartupAnchor => false;
+
+            public bool AcceptsInitialPositionSnap => false;
+
+            public bool UsesLapCounterDistanceFloor => false;
+
+            public bool Matches(string gameName)
+            {
+                if (!string.Equals(AffinityGameName.Normalize(gameName), "testgame", StringComparison.Ordinal))
+                {
+                    return false;
+                }
+
+                MatchingResolveCalls++;
+                return MatchingResolveCalls == 1;
+            }
+
+            public bool MatchesLogoName(string gameName)
+            {
+                return false;
+            }
+
+            public TelemetryDisposition EvaluateTelemetry(AffinityTelemetryContext context)
+            {
+                return TelemetryDisposition.Active;
+            }
+
+            public string GetTrackDisplayName(
+                string rawTrackNameWithConfig,
+                AffinityTrackDisplayContext context)
+            {
+                TrackDisplayCalls++;
+                LastRawTrackName = rawTrackNameWithConfig;
+                return $"Profile display: {rawTrackNameWithConfig}";
+            }
+
+            public CircuitDisplayParts GetCircuitDisplayParts(string trackDisplayName)
+            {
+                return new CircuitDisplayParts
+                {
+                    CircuitNameDisplay = trackDisplayName ?? string.Empty,
+                    CircuitLayoutDisplay = string.Empty
+                };
+            }
+
+            public bool CanPromoteTrackContext(
+                string previousTrackNameWithConfig,
+                string updatedTrackNameWithConfig)
+            {
+                return false;
+            }
+
+            public bool ShouldIgnoreTransientReset(AffinityDistanceSampleContext context)
+            {
+                return false;
+            }
+
+            public bool ShouldIgnoreLowSpeedLineWrap(AffinityDistanceSampleContext context)
+            {
+                return false;
+            }
+
+            public bool ShouldIgnoreLapIncrement(AffinityDistanceSampleContext context)
+            {
+                return false;
+            }
+
+            public bool ShouldIgnorePlaceholderSessionStart(AffinityDistanceSampleContext context)
+            {
+                return false;
             }
         }
 

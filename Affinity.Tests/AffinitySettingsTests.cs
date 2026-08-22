@@ -49,8 +49,9 @@ namespace Affinity.Tests
             MethodInfo method = typeof(AffinityPlugin).GetMethod(
                 "EnsureGameDebugLoggingConfigured",
                 BindingFlags.Instance | BindingFlags.NonPublic);
+            IAffinityGameProfile profile = AffinityGameProfileRegistry.CreateDefault().Resolve("LMU");
 
-            bool added = (bool)method.Invoke(plugin, new object[] { "LMU" });
+            bool added = (bool)method.Invoke(plugin, new object[] { profile });
 
             Assert.IsTrue(added);
             Assert.IsTrue(plugin.Settings.GameDebugLogging.ContainsKey("lmu"));

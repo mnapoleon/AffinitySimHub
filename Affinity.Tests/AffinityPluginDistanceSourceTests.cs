@@ -19,11 +19,12 @@ namespace Affinity.Tests
 
             object result = typeof(AffinityPlugin)
                 .GetMethod("ResolveSessionDistanceSource", BindingFlags.Instance | BindingFlags.NonPublic)
-                .Invoke(plugin, new object[] { "LMU", status });
+                .Invoke(plugin, new object[] { ResolveProfile("LMU"), status });
 
             Assert.AreEqual("Derived", result.ToString());
         }
 
+        [TestMethod]
         public void ResolveSessionDistanceSource_UsesDerivedDistanceForAssettoCorsaCompetizione()
         {
             AffinityPlugin plugin = new AffinityPlugin();
@@ -33,7 +34,7 @@ namespace Affinity.Tests
 
             object result = typeof(AffinityPlugin)
                 .GetMethod("ResolveSessionDistanceSource", BindingFlags.Instance | BindingFlags.NonPublic)
-                .Invoke(plugin, new object[] { "Assetto Corsa Competizione", status });
+                .Invoke(plugin, new object[] { ResolveProfile("Assetto Corsa Competizione"), status });
 
             Assert.AreEqual("Derived", result.ToString());
         }
@@ -48,7 +49,7 @@ namespace Affinity.Tests
 
             object result = typeof(AffinityPlugin)
                 .GetMethod("ResolveSessionDistanceSource", BindingFlags.Instance | BindingFlags.NonPublic)
-                .Invoke(plugin, new object[] { "ProjectMotorRacing", status });
+                .Invoke(plugin, new object[] { ResolveProfile("ProjectMotorRacing"), status });
 
             Assert.AreEqual("Derived", result.ToString());
         }
@@ -67,11 +68,11 @@ namespace Affinity.Tests
 
             object derivedSource = typeof(AffinityPlugin)
                 .GetMethod("ResolveSessionDistanceSource", BindingFlags.Instance | BindingFlags.NonPublic)
-                .Invoke(plugin, new object[] { "ProjectMotorRacing", status });
+                .Invoke(plugin, new object[] { ResolveProfile("ProjectMotorRacing"), status });
 
             object result = typeof(AffinityPlugin)
                 .GetMethod("GetAbsoluteSessionDistanceMeters", BindingFlags.Instance | BindingFlags.NonPublic)
-                .Invoke(plugin, new object[] { "ProjectMotorRacing", status, derivedSource });
+                .Invoke(plugin, new object[] { ResolveProfile("ProjectMotorRacing"), status, derivedSource });
 
             Assert.AreEqual(8765.0, (double)result, 0.001);
         }
@@ -90,11 +91,11 @@ namespace Affinity.Tests
 
             object derivedSource = typeof(AffinityPlugin)
                 .GetMethod("ResolveSessionDistanceSource", BindingFlags.Instance | BindingFlags.NonPublic)
-                .Invoke(plugin, new object[] { "RRRE", status });
+                .Invoke(plugin, new object[] { ResolveProfile("RRRE"), status });
 
             object result = typeof(AffinityPlugin)
                 .GetMethod("GetAbsoluteSessionDistanceMeters", BindingFlags.Instance | BindingFlags.NonPublic)
-                .Invoke(plugin, new object[] { "RRRE", status, derivedSource });
+                .Invoke(plugin, new object[] { ResolveProfile("RRRE"), status, derivedSource });
 
             Assert.AreEqual(518.75, (double)result, 0.001);
         }
@@ -112,7 +113,7 @@ namespace Affinity.Tests
 
             object anchorResult = typeof(AffinityPlugin)
                 .GetMethod("UpdateStatefulDerivedAbsoluteSessionDistanceMeters", BindingFlags.Instance | BindingFlags.NonPublic)
-                .Invoke(plugin, new object[] { "RRRE", anchorStatus, 1939.54 });
+                .Invoke(plugin, new object[] { ResolveProfile("RRRE"), anchorStatus, 1939.54 });
 
             Assert.AreEqual(0.0, (double)anchorResult, 0.001);
 
@@ -124,7 +125,7 @@ namespace Affinity.Tests
 
             object preWrapResult = typeof(AffinityPlugin)
                 .GetMethod("UpdateStatefulDerivedAbsoluteSessionDistanceMeters", BindingFlags.Instance | BindingFlags.NonPublic)
-                .Invoke(plugin, new object[] { "RRRE", preWrapStatus, 1939.54 });
+                .Invoke(plugin, new object[] { ResolveProfile("RRRE"), preWrapStatus, 1939.54 });
 
             Assert.AreEqual(498.12, (double)preWrapResult, 0.05);
 
@@ -136,7 +137,7 @@ namespace Affinity.Tests
 
             object postWrapResult = typeof(AffinityPlugin)
                 .GetMethod("UpdateStatefulDerivedAbsoluteSessionDistanceMeters", BindingFlags.Instance | BindingFlags.NonPublic)
-                .Invoke(plugin, new object[] { "RRRE", postWrapStatus, 1939.54 });
+                .Invoke(plugin, new object[] { ResolveProfile("RRRE"), postWrapStatus, 1939.54 });
 
             Assert.AreEqual(518.62, (double)postWrapResult, 0.05);
         }
@@ -154,7 +155,7 @@ namespace Affinity.Tests
 
             object anchorResult = typeof(AffinityPlugin)
                 .GetMethod("UpdateStatefulDerivedAbsoluteSessionDistanceMeters", BindingFlags.Instance | BindingFlags.NonPublic)
-                .Invoke(plugin, new object[] { "RRRE", anchorStatus, 20785.39 });
+                .Invoke(plugin, new object[] { ResolveProfile("RRRE"), anchorStatus, 20785.39 });
 
             Assert.AreEqual(0.0, (double)anchorResult, 0.001);
 
@@ -166,7 +167,7 @@ namespace Affinity.Tests
 
             object lineCrossingResult = typeof(AffinityPlugin)
                 .GetMethod("UpdateStatefulDerivedAbsoluteSessionDistanceMeters", BindingFlags.Instance | BindingFlags.NonPublic)
-                .Invoke(plugin, new object[] { "RRRE", lineCrossingStatus, 20785.39 });
+                .Invoke(plugin, new object[] { ResolveProfile("RRRE"), lineCrossingStatus, 20785.39 });
 
             Assert.AreEqual(20786.03, (double)lineCrossingResult, 0.05);
         }
@@ -185,11 +186,11 @@ namespace Affinity.Tests
 
             object derivedSource = typeof(AffinityPlugin)
                 .GetMethod("ResolveSessionDistanceSource", BindingFlags.Instance | BindingFlags.NonPublic)
-                .Invoke(plugin, new object[] { "LMU", status });
+                .Invoke(plugin, new object[] { ResolveProfile("LMU"), status });
 
             object result = typeof(AffinityPlugin)
                 .GetMethod("GetAbsoluteSessionDistanceMeters", BindingFlags.Instance | BindingFlags.NonPublic)
-                .Invoke(plugin, new object[] { "LMU", status, derivedSource });
+                .Invoke(plugin, new object[] { ResolveProfile("LMU"), status, derivedSource });
 
             Assert.AreEqual(5747.03, (double)result, 0.001);
         }
@@ -208,7 +209,7 @@ namespace Affinity.Tests
 
             object preSkipResult = typeof(AffinityPlugin)
                 .GetMethod("UpdateStatefulDerivedAbsoluteSessionDistanceMeters", BindingFlags.Instance | BindingFlags.NonPublic)
-                .Invoke(plugin, new object[] { "LMU", preSkipStatus, 4900.67 });
+                .Invoke(plugin, new object[] { ResolveProfile("LMU"), preSkipStatus, 4900.67 });
 
             Assert.AreEqual(0.0, (double)preSkipResult, 0.001);
 
@@ -221,7 +222,7 @@ namespace Affinity.Tests
 
             object postSkipResult = typeof(AffinityPlugin)
                 .GetMethod("UpdateStatefulDerivedAbsoluteSessionDistanceMeters", BindingFlags.Instance | BindingFlags.NonPublic)
-                .Invoke(plugin, new object[] { "LMU", postSkipStatus, 4900.67 });
+                .Invoke(plugin, new object[] { ResolveProfile("LMU"), postSkipStatus, 4900.67 });
 
             Assert.AreEqual(1137.37, (double)postSkipResult, 0.05);
 
@@ -234,7 +235,7 @@ namespace Affinity.Tests
 
             object resumedResult = typeof(AffinityPlugin)
                 .GetMethod("UpdateStatefulDerivedAbsoluteSessionDistanceMeters", BindingFlags.Instance | BindingFlags.NonPublic)
-                .Invoke(plugin, new object[] { "LMU", resumedStatus, 4900.67 });
+                .Invoke(plugin, new object[] { ResolveProfile("LMU"), resumedStatus, 4900.67 });
 
             Assert.AreEqual(1996.52, (double)resumedResult, 0.05);
         }
@@ -256,7 +257,7 @@ namespace Affinity.Tests
 
             object placeholderResult = typeof(AffinityPlugin)
                 .GetMethod("UpdateStatefulDerivedAbsoluteSessionDistanceMeters", BindingFlags.Instance | BindingFlags.NonPublic)
-                .Invoke(plugin, new object[] { "ProjectMotorRacing", placeholderStatus, 2462.0 });
+                .Invoke(plugin, new object[] { ResolveProfile("ProjectMotorRacing"), placeholderStatus, 2462.0 });
 
             Assert.AreEqual(0.0, (double)placeholderResult, 0.001);
 
@@ -268,7 +269,7 @@ namespace Affinity.Tests
 
             object flickerResult = typeof(AffinityPlugin)
                 .GetMethod("UpdateStatefulDerivedAbsoluteSessionDistanceMeters", BindingFlags.Instance | BindingFlags.NonPublic)
-                .Invoke(plugin, new object[] { "ProjectMotorRacing", flickerToLineStatus, 2462.0 });
+                .Invoke(plugin, new object[] { ResolveProfile("ProjectMotorRacing"), flickerToLineStatus, 2462.0 });
 
             Assert.AreEqual(0.0, (double)flickerResult, 0.001);
 
@@ -280,7 +281,7 @@ namespace Affinity.Tests
 
             object movingResult = typeof(AffinityPlugin)
                 .GetMethod("UpdateStatefulDerivedAbsoluteSessionDistanceMeters", BindingFlags.Instance | BindingFlags.NonPublic)
-                .Invoke(plugin, new object[] { "ProjectMotorRacing", movingStatus, 2462.0 });
+                .Invoke(plugin, new object[] { ResolveProfile("ProjectMotorRacing"), movingStatus, 2462.0 });
 
             Assert.AreEqual(1.33, (double)movingResult, 0.05);
         }
@@ -435,6 +436,11 @@ namespace Affinity.Tests
                 .Invoke(null, new object[] { 1.5, 0.0 });
 
             Assert.AreEqual(true, result);
+        }
+
+        private static IAffinityGameProfile ResolveProfile(string gameName)
+        {
+            return AffinityGameProfileRegistry.CreateDefault().Resolve(gameName);
         }
 
         private static void SetProperty(StatusDataBase status, string propertyName, object value)

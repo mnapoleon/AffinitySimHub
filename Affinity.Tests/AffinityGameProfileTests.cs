@@ -67,6 +67,22 @@ namespace Affinity.Tests
         }
 
         [TestMethod]
+        public void DistanceCapabilities_MatchExistingGameBranches()
+        {
+            AffinityGameProfileRegistry registry = AffinityGameProfileRegistry.CreateDefault();
+
+            Assert.IsTrue(registry.SupportedProfiles.All(item => item.DistanceMode == AffinityDistanceMode.StatefulDerived));
+            Assert.IsTrue(registry.Resolve("Automobilista2").CapturesSessionStartTrackPosition);
+            Assert.IsTrue(registry.Resolve("ProjectMotorRacing").CapturesSessionStartTrackPosition);
+            Assert.IsTrue(registry.Resolve("ProjectMotorRacing").UsesStationaryStartupAnchor);
+            Assert.IsTrue(registry.Resolve("Automobilista2").AcceptsInitialPositionSnap);
+            Assert.IsTrue(registry.Resolve("ProjectMotorRacing").AcceptsInitialPositionSnap);
+            Assert.IsTrue(registry.Resolve("RaceRoom Racing Experience").UsesLapCounterDistanceFloor);
+            Assert.IsFalse(registry.Resolve("iRacing").UsesLapCounterDistanceFloor);
+            Assert.AreEqual(AffinityDistanceMode.Automatic, registry.Resolve("Unknown").DistanceMode);
+        }
+
+        [TestMethod]
         public void TrackDisplay_MapsOnlyAssettoCorsaClassic()
         {
             Dictionary<string, string> map = new Dictionary<string, string>

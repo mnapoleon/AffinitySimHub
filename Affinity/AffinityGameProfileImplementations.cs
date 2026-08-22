@@ -128,6 +128,10 @@ namespace Affinity
         {
         }
 
+        public override bool CapturesSessionStartTrackPosition => true;
+
+        public override bool AcceptsInitialPositionSnap => true;
+
         public override TelemetryDisposition EvaluateTelemetry(AffinityTelemetryContext context)
         {
             TelemetryDisposition disposition = base.EvaluateTelemetry(context);
@@ -266,6 +270,12 @@ namespace Affinity
             : base("projectmotorracing", "Project Motor Racing", "299970.jpg", "Project Motor Racing")
         {
         }
+
+        public override bool CapturesSessionStartTrackPosition => true;
+
+        public override bool UsesStationaryStartupAnchor => true;
+
+        public override bool AcceptsInitialPositionSnap => true;
     }
 
     internal sealed class RFactor2Profile : AffinityGameProfileBase
@@ -293,6 +303,8 @@ namespace Affinity
                 "RRRE")
         {
         }
+
+        public override bool UsesLapCounterDistanceFloor => true;
 
         public override TelemetryDisposition EvaluateTelemetry(AffinityTelemetryContext context)
         {

@@ -56,6 +56,7 @@ namespace Affinity.Tests
                 new object[]
                 {
                     sessionId,
+                    ResolveProfile("Assetto Corsa Competizione"),
                     "Assetto Corsa Competizione",
                     "Ferrari 296 GT3",
                     "Brands Hatch Circuit",
@@ -125,6 +126,7 @@ namespace Affinity.Tests
                 new object[]
                 {
                     sessionId,
+                    ResolveProfile("Assetto Corsa Competizione"),
                     "Assetto Corsa Competizione",
                     "Lexus RCF GT3 2016",
                     "Circuit Zandvoort",
@@ -190,6 +192,7 @@ namespace Affinity.Tests
                 new object[]
                 {
                     sessionId,
+                    ResolveProfile("Assetto Corsa Competizione"),
                     "Assetto Corsa Competizione",
                     "Ferrari 296 GT3",
                     "Misano World Circuit",
@@ -198,6 +201,140 @@ namespace Affinity.Tests
 
             Assert.IsFalse(promoted);
             Assert.AreEqual("brands_hatch", plugin.CurrentTrackNameWithConfig);
+        }
+
+        [TestMethod]
+        public void TryPromoteAccTrackContext_UsesProfileDecision()
+        {
+            AffinityPlugin plugin = new AffinityPlugin();
+            Guid sessionId = Guid.NewGuid();
+            AffinityDatabase database = new AffinityDatabase();
+            database.Games["Assetto Corsa Competizione"] = new GameBucket
+            {
+                Cars =
+                {
+                    ["Ferrari 296 GT3"] = new CarBucket
+                    {
+                        Tracks =
+                        {
+                            ["brands_hatch"] = new TrackBucket
+                            {
+                                GameName = "Assetto Corsa Competizione",
+                                CarModel = "Ferrari 296 GT3",
+                                TrackName = "brands_hatch",
+                                TrackNameWithConfig = "brands_hatch"
+                            }
+                        }
+                    }
+                }
+            };
+
+            SetField(plugin, "_database", database);
+            SetField(plugin, "_activeSessionId", sessionId);
+            SetField(plugin, "_activeContextKey", "Assetto Corsa Competizione|Ferrari 296 GT3|brands_hatch");
+            SetProperty(plugin, "CurrentGameName", "Assetto Corsa Competizione");
+            SetProperty(plugin, "CurrentCarModel", "Ferrari 296 GT3");
+            SetProperty(plugin, "CurrentTrackName", "brands_hatch");
+            SetProperty(plugin, "CurrentTrackNameWithConfig", "brands_hatch");
+
+            MethodInfo method = typeof(AffinityPlugin).GetMethod(
+                "TryPromoteAccTrackContext",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+
+            Assert.IsNotNull(method, "Expected ACC track promotion helper to exist.");
+
+            bool promoted = (bool)method.Invoke(
+                plugin,
+                new object[]
+                {
+                    sessionId,
+                    new AlwaysPromoteTrackContextProfile(),
+                    "Assetto Corsa Competizione",
+                    "Ferrari 296 GT3",
+                    "Misano World Circuit",
+                    "Misano World Circuit"
+                });
+
+            Assert.IsTrue(promoted);
+            Assert.AreEqual("Misano World Circuit", plugin.CurrentTrackNameWithConfig);
+        }
+
+        [TestMethod]
+        public void TryPromoteAccTrackContext_MergesExistingDestinationBucket()
+        {
+            AffinityPlugin plugin = new AffinityPlugin();
+            Guid sessionId = Guid.NewGuid();
+            TrackBucket shortTrackBucket = new TrackBucket
+            {
+                GameName = "Assetto Corsa Competizione",
+                CarModel = "Ferrari 296 GT3",
+                TrackName = "brands_hatch",
+                TrackNameWithConfig = "brands_hatch",
+                TotalDistanceMeters = 1250.0,
+                UsedTime = 4.85
+            };
+            TrackBucket destinationBucket = new TrackBucket
+            {
+                GameName = "Assetto Corsa Competizione",
+                CarModel = "Ferrari 296 GT3",
+                TrackName = "Brands Hatch Circuit",
+                TrackNameWithConfig = "Brands Hatch Circuit",
+                TotalDistanceMeters = 2750.0,
+                UsedTime = 7.15
+            };
+            AffinityDatabase database = new AffinityDatabase();
+            database.Games["Assetto Corsa Competizione"] = new GameBucket
+            {
+                Cars =
+                {
+                    ["Ferrari 296 GT3"] = new CarBucket
+                    {
+                        Tracks =
+                        {
+                            ["brands_hatch"] = shortTrackBucket,
+                            ["Brands Hatch Circuit"] = destinationBucket
+                        }
+                    }
+                }
+            };
+
+            SetField(plugin, "_database", database);
+            SetField(plugin, "_activeSessionId", sessionId);
+            SetField(plugin, "_activeContextKey", "Assetto Corsa Competizione|Ferrari 296 GT3|brands_hatch");
+            SetProperty(plugin, "CurrentGameName", "Assetto Corsa Competizione");
+            SetProperty(plugin, "CurrentCarModel", "Ferrari 296 GT3");
+            SetProperty(plugin, "CurrentTrackName", "brands_hatch");
+            SetProperty(plugin, "CurrentTrackNameWithConfig", "brands_hatch");
+
+            MethodInfo method = typeof(AffinityPlugin).GetMethod(
+                "TryPromoteAccTrackContext",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+
+            Assert.IsNotNull(method, "Expected ACC track promotion helper to exist.");
+
+            bool promoted = (bool)method.Invoke(
+                plugin,
+                new object[]
+                {
+                    sessionId,
+                    ResolveProfile("Assetto Corsa Competizione"),
+                    "Assetto Corsa Competizione",
+                    "Ferrari 296 GT3",
+                    "Brands Hatch Circuit",
+                    "Brands Hatch Circuit"
+                });
+
+            Assert.IsTrue(promoted);
+            CarBucket carBucket = database.Games["Assetto Corsa Competizione"].Cars["Ferrari 296 GT3"];
+            Assert.IsFalse(carBucket.Tracks.ContainsKey("brands_hatch"));
+            Assert.AreSame(destinationBucket, carBucket.Tracks["Brands Hatch Circuit"]);
+            Assert.AreEqual(4000.0, destinationBucket.TotalDistanceMeters, 0.001);
+            Assert.AreEqual(12.0, destinationBucket.UsedTime, 0.001);
+        }
+
+        private static IAffinityGameProfile ResolveProfile(string gameName)
+        {
+            return AffinityGameProfileRegistry.CreateDefault().Resolve(gameName);
         }
 
         private static object GetField(object instance, string fieldName)
@@ -221,6 +358,21 @@ namespace Affinity.Tests
                 BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
             Assert.IsNotNull(property, $"Expected property {propertyName}.");
             property.SetValue(instance, value);
+        }
+
+        private sealed class AlwaysPromoteTrackContextProfile : AffinityGameProfileBase
+        {
+            public AlwaysPromoteTrackContextProfile()
+                : base("test", "Test", "test.jpg", "Test")
+            {
+            }
+
+            public override bool CanPromoteTrackContext(
+                string previousTrackNameWithConfig,
+                string updatedTrackNameWithConfig)
+            {
+                return true;
+            }
         }
     }
 }

@@ -226,7 +226,9 @@ namespace Affinity
 
         public virtual TelemetryDisposition EvaluateTelemetry(AffinityTelemetryContext context)
         {
-            return TelemetryDisposition.Active;
+            return AffinityReplayDetector.IsReplay(context.GameData)
+                ? TelemetryDisposition.Replay
+                : TelemetryDisposition.Active;
         }
 
         public virtual string GetTrackDisplayName(

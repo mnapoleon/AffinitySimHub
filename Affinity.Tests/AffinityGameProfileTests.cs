@@ -1,8 +1,10 @@
 using Affinity;
+using GameReaderCommon;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 
 namespace Affinity.Tests
 {
@@ -103,6 +105,267 @@ namespace Affinity.Tests
                 .CanPromoteTrackContext("barcelona", "Barcelona Grand Prix"));
         }
 
+        [TestMethod]
+        public void EvaluateTelemetry_UsesGenericReplayDetectionForSupportedAndFallbackProfiles()
+        {
+            GameData replayData = CreateGameDataWithStatus(new ReplayStatusData { IsGameReplay = true });
+            AffinityTelemetryContext context = new AffinityTelemetryContext
+            {
+                GameData = replayData,
+                Status = replayData.NewData,
+                RuntimeState = new AffinityGameRuntimeState()
+            };
+            AffinityGameProfileRegistry registry = AffinityGameProfileRegistry.CreateDefault();
+
+            Assert.AreEqual(TelemetryDisposition.Replay, registry.Resolve("iRacing").EvaluateTelemetry(context));
+            Assert.AreEqual(TelemetryDisposition.Replay, registry.Resolve("Unknown Game").EvaluateTelemetry(context));
+        }
+
+        [TestMethod]
+        public void EvaluateTelemetry_GameSpecificOverridesPreserveGenericReplayPrecedence()
+        {
+            GameData replayData = CreateGameDataWithStatus(new ReplayStatusData { IsGameReplay = true });
+            AffinityTelemetryContext context = new AffinityTelemetryContext
+            {
+                GameData = replayData,
+                Status = replayData.NewData,
+                CarModel = "Unknown Car",
+                TrackNameWithConfig = "Unknown Track",
+                RuntimeState = new AffinityGameRuntimeState()
+            };
+            AffinityGameProfileRegistry registry = AffinityGameProfileRegistry.CreateDefault();
+
+            Assert.AreEqual(TelemetryDisposition.Replay, registry.Resolve("Automobilista2").EvaluateTelemetry(context));
+            Assert.AreEqual(TelemetryDisposition.Replay, registry.Resolve("RRRE").EvaluateTelemetry(context));
+            Assert.AreEqual(TelemetryDisposition.Replay, registry.Resolve("LMU").EvaluateTelemetry(context));
+        }
+
+        [TestMethod]
+        public void EvaluateTelemetry_Automobilista2ReturnsInactiveInGarage()
+        {
+            IAffinityGameProfile profile = AffinityGameProfileRegistry.CreateDefault().Resolve("Automobilista2");
+            AffinityTelemetryContext context = CreateTelemetryContext(
+                new ProfileStatusData { IsInGarage = true },
+                new AffinityGameRuntimeState());
+
+            Assert.AreEqual(TelemetryDisposition.Inactive, profile.EvaluateTelemetry(context));
+        }
+
+        [TestMethod]
+        public void EvaluateTelemetry_Automobilista2ReturnsInactiveForSpectatorTelemetry()
+        {
+            IAffinityGameProfile profile = AffinityGameProfileRegistry.CreateDefault().Resolve("Automobilista2");
+            AffinityTelemetryContext context = CreateTelemetryContext(
+                new ProfileStatusData { IsSpectator = true },
+                new AffinityGameRuntimeState());
+
+            Assert.AreEqual(TelemetryDisposition.Inactive, profile.EvaluateTelemetry(context));
+        }
+
+        [TestMethod]
+        public void EvaluateTelemetry_Automobilista2ReturnsInactiveForObservedReplayGameState()
+        {
+            IAffinityGameProfile profile = AffinityGameProfileRegistry.CreateDefault().Resolve("Automobilista2");
+            AffinityTelemetryContext context = CreateTelemetryContext(
+                new ProfileStatusData
+                {
+                    RawData = new Automobilista2RawData
+                    {
+                        mViewedParticipantIndex = 3,
+                        mGameState = 6
+                    }
+                },
+                new AffinityGameRuntimeState());
+
+            Assert.AreEqual(TelemetryDisposition.Inactive, profile.EvaluateTelemetry(context));
+        }
+
+        [TestMethod]
+        public void EvaluateTelemetry_Automobilista2RejectsAChangedViewedParticipant()
+        {
+            IAffinityGameProfile profile = AffinityGameProfileRegistry.CreateDefault().Resolve("Automobilista2");
+            AffinityGameRuntimeState runtimeState = new AffinityGameRuntimeState();
+
+            TelemetryDisposition playerDisposition = profile.EvaluateTelemetry(CreateTelemetryContext(
+                new ProfileStatusData
+                {
+                    RawData = new Automobilista2RawData { mViewedParticipantIndex = 3 }
+                },
+                runtimeState));
+            TelemetryDisposition viewedParticipantDisposition = profile.EvaluateTelemetry(CreateTelemetryContext(
+                new ProfileStatusData
+                {
+                    RawData = new Automobilista2RawData { mViewedParticipantIndex = 7 }
+                },
+                runtimeState));
+
+            Assert.AreEqual(TelemetryDisposition.Active, playerDisposition);
+            Assert.AreEqual(3, runtimeState.Automobilista2PlayerViewedParticipantIndex);
+            Assert.AreEqual(TelemetryDisposition.Inactive, viewedParticipantDisposition);
+        }
+
+        [TestMethod]
+        public void EvaluateTelemetry_Automobilista2LearnsANewPlayerAfterRuntimeStateReset()
+        {
+            IAffinityGameProfile profile = AffinityGameProfileRegistry.CreateDefault().Resolve("Automobilista2");
+            AffinityGameRuntimeState runtimeState = new AffinityGameRuntimeState();
+
+            Assert.AreEqual(
+                TelemetryDisposition.Active,
+                profile.EvaluateTelemetry(CreateTelemetryContext(
+                    new ProfileStatusData
+                    {
+                        RawData = new Automobilista2RawData { mViewedParticipantIndex = 3 }
+                    },
+                    runtimeState)));
+
+            runtimeState.Reset();
+
+            Assert.AreEqual(
+                TelemetryDisposition.Active,
+                profile.EvaluateTelemetry(CreateTelemetryContext(
+                    new ProfileStatusData
+                    {
+                        RawData = new Automobilista2RawData { mViewedParticipantIndex = 7 }
+                    },
+                    runtimeState)));
+            Assert.AreEqual(7, runtimeState.Automobilista2PlayerViewedParticipantIndex);
+        }
+
+        [TestMethod]
+        public void EvaluateTelemetry_RaceRoomReturnsInactiveAfterFinish()
+        {
+            IAffinityGameProfile profile = AffinityGameProfileRegistry.CreateDefault().Resolve("RRRE");
+            AffinityTelemetryContext context = CreateTelemetryContext(
+                new ProfileStatusData
+                {
+                    RawData = new RaceRoomRawData { FinishStatus = 1 }
+                },
+                new AffinityGameRuntimeState());
+
+            Assert.AreEqual(TelemetryDisposition.Inactive, profile.EvaluateTelemetry(context));
+        }
+
+        [TestMethod]
+        public void EvaluateTelemetry_RaceRoomReturnsInactiveInGarage()
+        {
+            IAffinityGameProfile profile = AffinityGameProfileRegistry.CreateDefault().Resolve("RRRE");
+            AffinityTelemetryContext context = CreateTelemetryContext(
+                new ProfileStatusData
+                {
+                    RawData = new RaceRoomRawData
+                    {
+                        FinishStatus = 0,
+                        GamePlayerInGarage = 1
+                    }
+                },
+                new AffinityGameRuntimeState());
+
+            Assert.AreEqual(TelemetryDisposition.Inactive, profile.EvaluateTelemetry(context));
+        }
+
+        [TestMethod]
+        public void EvaluateTelemetry_RaceRoomRemainsActiveWhenFinishAndGarageFlagsAreZero()
+        {
+            IAffinityGameProfile profile = AffinityGameProfileRegistry.CreateDefault().Resolve("RRRE");
+            AffinityTelemetryContext context = CreateTelemetryContext(
+                new ProfileStatusData
+                {
+                    RawData = new RaceRoomRawData
+                    {
+                        FinishStatus = 0,
+                        GamePlayerInGarage = 0
+                    }
+                },
+                new AffinityGameRuntimeState());
+
+            Assert.AreEqual(TelemetryDisposition.Active, profile.EvaluateTelemetry(context));
+        }
+
+        [TestMethod]
+        public void EvaluateTelemetry_LeMansUltimateWaitsForMissingCarContext()
+        {
+            IAffinityGameProfile profile = AffinityGameProfileRegistry.CreateDefault().Resolve("LMU");
+            AffinityTelemetryContext context = CreateTelemetryContext(
+                new ProfileStatusData(),
+                new AffinityGameRuntimeState(),
+                carModel: "Unknown Car",
+                trackNameWithConfig: "Fuji Speedway");
+
+            Assert.AreEqual(TelemetryDisposition.WaitingForContext, profile.EvaluateTelemetry(context));
+        }
+
+        [TestMethod]
+        public void EvaluateTelemetry_LeMansUltimateWaitsForMissingTrackContext()
+        {
+            IAffinityGameProfile profile = AffinityGameProfileRegistry.CreateDefault().Resolve("LMU");
+            AffinityTelemetryContext context = CreateTelemetryContext(
+                new ProfileStatusData(),
+                new AffinityGameRuntimeState(),
+                carModel: "Porsche 963",
+                trackNameWithConfig: "Unknown Track");
+
+            Assert.AreEqual(TelemetryDisposition.WaitingForContext, profile.EvaluateTelemetry(context));
+        }
+
+        [TestMethod]
+        public void EvaluateTelemetry_LeMansUltimateIsActiveWithCompleteContext()
+        {
+            IAffinityGameProfile profile = AffinityGameProfileRegistry.CreateDefault().Resolve("LMU");
+            AffinityTelemetryContext context = CreateTelemetryContext(
+                new ProfileStatusData(),
+                new AffinityGameRuntimeState(),
+                carModel: "Porsche 963",
+                trackNameWithConfig: "Fuji Speedway");
+
+            Assert.AreEqual(TelemetryDisposition.Active, profile.EvaluateTelemetry(context));
+        }
+
+        private static AffinityTelemetryContext CreateTelemetryContext(
+            StatusDataBase status,
+            AffinityGameRuntimeState runtimeState,
+            string carModel = "Test Car",
+            string trackNameWithConfig = "Test Track")
+        {
+            GameData data = CreateGameDataWithStatus(status);
+            return new AffinityTelemetryContext
+            {
+                GameData = data,
+                Status = status,
+                CarModel = carModel,
+                TrackNameWithConfig = trackNameWithConfig,
+                RuntimeState = runtimeState
+            };
+        }
+
+        private static GameData CreateGameDataWithStatus(StatusDataBase status)
+        {
+            GameData data = new GameData();
+            SetMemberValue(data, "NewData", status);
+            return data;
+        }
+
+        private static void SetMemberValue(object instance, string memberName, object value)
+        {
+            const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+
+            PropertyInfo property = instance.GetType().GetProperty(memberName, flags);
+            if (property != null && property.SetMethod != null)
+            {
+                property.SetValue(instance, value);
+                return;
+            }
+
+            FieldInfo field = instance.GetType().GetField(memberName, flags);
+            if (field != null)
+            {
+                field.SetValue(instance, value);
+                return;
+            }
+
+            Assert.Fail($"Expected {instance.GetType().Name} to expose writable member {memberName}.");
+        }
+
         private static void AssertProfile(
             AffinityGameProfileRegistry registry,
             string alias,
@@ -135,6 +398,44 @@ namespace Affinity.Tests
                 : base(settingsKey, settingsKey, settingsKey + ".jpg", runtimeAlias)
             {
             }
+        }
+
+        private sealed class ReplayStatusData : StatusDataBase
+        {
+            public new bool IsGameReplay { get; set; }
+
+            public override object GetRawDataObject()
+            {
+                return null;
+            }
+        }
+
+        private sealed class ProfileStatusData : StatusDataBase
+        {
+            public bool IsInGarage { get; set; }
+
+            public bool IsSpectator { get; set; }
+
+            public object RawData { get; set; }
+
+            public override object GetRawDataObject()
+            {
+                return RawData;
+            }
+        }
+
+        private sealed class Automobilista2RawData
+        {
+            public int mViewedParticipantIndex;
+
+            public int mGameState;
+        }
+
+        private sealed class RaceRoomRawData
+        {
+            public int FinishStatus { get; set; }
+
+            public int GamePlayerInGarage { get; set; }
         }
     }
 }

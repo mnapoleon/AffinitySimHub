@@ -46,7 +46,6 @@ namespace Affinity
         private const double SaveThresholdUsedTimeSeconds = 30.0;
         private const double MinimumPersistedSessionMeters = 1.0;
         private const double MaxCountedTelemetryGapSeconds = 5.0;
-        private const int Automobilista2ObservedReplayGameState = 6;
         public const string RecentHighlightsRangeWeek = "Week";
         public const string RecentHighlightsRangeMonth = "Month";
         private static readonly string Version = ResolvePluginVersion();
@@ -118,6 +117,7 @@ namespace Affinity
 
         private bool _hasLoggedDataError;
         private readonly AffinityGameProfileRegistry _gameProfiles = DefaultGameProfiles;
+        private readonly AffinityGameRuntimeState _gameRuntimeState = new AffinityGameRuntimeState();
         private ImageSource _pictureIcon;
         private string _settingsPath = string.Empty;
         private string _databasePath = string.Empty;
@@ -170,7 +170,6 @@ namespace Affinity
         private double _pendingUsedTimeSecondsSinceSave;
         private DateTime _lastTelemetryDebugLogUtc = DateTime.MinValue;
         private DateTime _lastSessionSampleUtc = DateTime.MinValue;
-        private int _automobilista2PlayerViewedParticipantIndex = -1;
         private readonly AffinityOverviewTab _overviewTab = new AffinityOverviewTab();
         private readonly AffinitySettingsTab _settingsTab = new AffinitySettingsTab();
 
@@ -677,7 +676,7 @@ namespace Affinity
                 DateTime now = DateTime.UtcNow;
                 if (!data.GameRunning)
                 {
-                    _automobilista2PlayerViewedParticipantIndex = -1;
+                    _gameRuntimeState.Reset();
                 }
 
                 pluginManager.SetPropertyValue("Affinity.IsGameRunning", GetType(), data.GameRunning);
@@ -700,15 +699,23 @@ namespace Affinity
                 string carModel = NormalizeContextValue(data.NewData.CarModel, "Unknown Car");
                 string trackName = NormalizeContextValue(data.NewData.TrackName, "Unknown Track");
                 string trackNameWithConfig = NormalizeContextValue(data.NewData.TrackNameWithConfig, trackName);
-                bool isReplayTelemetry = IsReplayTelemetry(data);
-                bool isInactiveTelemetry = IsInactiveTelemetry(gameName, data.NewData);
-                if (isReplayTelemetry || isInactiveTelemetry)
+                IAffinityGameProfile profile = _gameProfiles.Resolve(gameName);
+                TelemetryDisposition disposition = profile.EvaluateTelemetry(new AffinityTelemetryContext
                 {
-                    string ignoreReason = isReplayTelemetry
+                    GameData = data,
+                    Status = data.NewData,
+                    CarModel = carModel,
+                    TrackNameWithConfig = trackNameWithConfig,
+                    RuntimeState = _gameRuntimeState
+                });
+                if (disposition == TelemetryDisposition.Replay ||
+                    disposition == TelemetryDisposition.Inactive)
+                {
+                    string ignoreReason = disposition == TelemetryDisposition.Replay
                         ? "replay-ignored"
                         : "inactive-ignored";
                     LogTelemetryDebugSnapshot(ignoreReason, data, gameName, carModel, trackNameWithConfig, data.SessionId, data.NewData, -1.0, 0.0, 0, false);
-                    DataStatus = isReplayTelemetry
+                    DataStatus = disposition == TelemetryDisposition.Replay
                         ? $"Ignoring replay telemetry for {gameName}"
                         : $"Ignoring inactive telemetry for {gameName}";
                     IsTelemetryActive = false;
@@ -720,7 +727,7 @@ namespace Affinity
                     return;
                 }
 
-                if (!IsSupportedGame(gameName))
+                if (!profile.IsSupported)
                 {
                     DataStatus = $"Unsupported game: {gameName}";
                     IsTelemetryActive = false;
@@ -732,7 +739,7 @@ namespace Affinity
                     return;
                 }
 
-                if (!HasReliableTelemetryContext(gameName, carModel, trackNameWithConfig))
+                if (disposition == TelemetryDisposition.WaitingForContext)
                 {
                     DataStatus = $"Waiting for {gameName} car/track telemetry";
                     IsTelemetryActive = false;
@@ -1873,7 +1880,7 @@ namespace Affinity
                 double sessionOdoMeters = status.SessionOdo > 0.0 ? status.SessionOdo : -1.0;
                 double sessionOdoKilometers = status.SessionOdo > 0.0 ? status.SessionOdo * MetersPerKilometer : -1.0;
                 double absoluteSessionMeters = GetAbsoluteSessionDistanceMeters(gameName, status, _sessionDistanceSource);
-                bool replayDetected = IsReplayTelemetry(data);
+                bool replayDetected = AffinityReplayDetector.IsReplay(data);
                 string gameDataIsGameReplay = GetDebugMemberValue(data, "IsGameReplay");
                 string gameDataGameReplay = GetDebugMemberValue(data, "GameReplay");
                 string gameDataReplayMode = GetDebugMemberValue(data, "ReplayMode");
@@ -1883,7 +1890,7 @@ namespace Affinity
                 string statusType = FormatDebugValue(status.GetType().FullName);
                 string gameDataExtra = GetDebugMemberValues(data, GameDataDebugMemberNames);
                 string statusExtra = GetDebugMemberValues(status, StatusDebugMemberNames);
-                object rawData = GetRawStatusDataObject(status);
+                object rawData = AffinityReplayDetector.GetRawStatusDataObject(status);
                 string rawDataType = FormatDebugValue(rawData?.GetType().FullName);
                 string rawDataExtra = GetDebugMemberValues(rawData, RawDataDebugMemberNames);
                 string line = string.Format(
@@ -1925,7 +1932,7 @@ namespace Affinity
                     statusExtra,
                     rawDataType,
                     rawDataExtra,
-                    _automobilista2PlayerViewedParticipantIndex);
+                    _gameRuntimeState.Automobilista2PlayerViewedParticipantIndex);
 
                 File.AppendAllText(debugLogPath, line + Environment.NewLine, Encoding.UTF8);
             }
@@ -2103,189 +2110,9 @@ namespace Affinity
             return _gameProfiles.Resolve(gameName).IsSupported;
         }
 
-        private bool HasReliableTelemetryContext(string gameName, string carModel, string trackNameWithConfig)
-        {
-            return AffinityGameLogic.HasReliableTelemetryContext(gameName, carModel, trackNameWithConfig);
-        }
-
-        private bool IsReplayTelemetry(GameData data)
-        {
-            // SimHub exposes replay state at runtime even though the local SDK stubs do not model it.
-            if (data == null)
-            {
-                return false;
-            }
-
-            if (TryGetBooleanMemberValue(data, "IsGameReplay", out bool isGameReplay))
-            {
-                if (isGameReplay)
-                {
-                    return true;
-                }
-            }
-
-            if (TryGetBooleanMemberValue(data, "GameReplay", out bool gameReplay))
-            {
-                if (gameReplay)
-                {
-                    return true;
-                }
-            }
-
-            if (TryGetMemberValue(data, "ReplayMode", out object gameReplayModeValue))
-            {
-                if (IsReplayModeActive(gameReplayModeValue))
-                {
-                    return true;
-                }
-            }
-
-            if (data.NewData == null)
-            {
-                return false;
-            }
-
-            if (TryGetBooleanMemberValue(data.NewData, "IsGameReplay", out bool statusReplay))
-            {
-                if (statusReplay)
-                {
-                    return true;
-                }
-            }
-
-            if (TryGetMemberValue(data.NewData, "ReplayMode", out object statusReplayModeValue) &&
-                IsReplayModeActive(statusReplayModeValue))
-            {
-                return true;
-            }
-
-            object rawData = GetRawStatusDataObject(data.NewData);
-            if (TryGetBooleanMemberValue(rawData, "IsReplayPlaying", out bool rawReplayPlaying) && rawReplayPlaying)
-            {
-                return true;
-            }
-
-            if (TryGetMemberValue(rawData, "Telemetry", out object telemetry) &&
-                TryGetBooleanMemberValue(telemetry, "IsReplayPlaying", out bool telemetryReplayPlaying) &&
-                telemetryReplayPlaying)
-            {
-                return true;
-            }
-
-            return false;
-        }
-
-        private bool IsInactiveTelemetry(string gameName, StatusDataBase status)
-        {
-            if (status == null)
-            {
-                return false;
-            }
-
-            if (IsRaceRoomGame(gameName) && IsRaceRoomInactiveTelemetry(status))
-            {
-                return true;
-            }
-
-            return IsAutomobilista2Game(gameName) &&
-                IsAutomobilista2InactiveTelemetry(status);
-        }
-
-        private bool IsAutomobilista2InactiveTelemetry(StatusDataBase status)
-        {
-            if (TryGetBooleanMemberValue(status, "IsInGarage", out bool isInGarage) && isInGarage ||
-                TryGetBooleanMemberValue(status, "IsSpectator", out bool isSpectator) && isSpectator)
-            {
-                return true;
-            }
-
-            object rawData = GetRawStatusDataObject(status);
-            if (TryGetIntegerMemberValue(rawData, "mGameState", out int gameState) &&
-                gameState == Automobilista2ObservedReplayGameState)
-            {
-                return true;
-            }
-
-            if (!TryGetIntegerMemberValue(rawData, "mViewedParticipantIndex", out int viewedParticipantIndex) ||
-                viewedParticipantIndex < 0)
-            {
-                return false;
-            }
-
-            if (_automobilista2PlayerViewedParticipantIndex < 0)
-            {
-                _automobilista2PlayerViewedParticipantIndex = viewedParticipantIndex;
-                return false;
-            }
-
-            return viewedParticipantIndex != _automobilista2PlayerViewedParticipantIndex;
-        }
-
-        private static bool IsRaceRoomInactiveTelemetry(StatusDataBase status)
-        {
-            object rawData = GetRawStatusDataObject(status);
-            return TryGetMemberValue(rawData, "FinishStatus", out object finishStatusValue) &&
-                TryGetBooleanValue(finishStatusValue, out bool isFinishedStatusActive) &&
-                isFinishedStatusActive ||
-                TryGetMemberValue(rawData, "GamePlayerInGarage", out object playerInGarageValue) &&
-                TryGetBooleanValue(playerInGarageValue, out bool isPlayerInGarage) &&
-                isPlayerInGarage;
-        }
-
-        private static bool IsReplayModeActive(object replayModeValue)
-        {
-            if (replayModeValue == null)
-            {
-                return false;
-            }
-
-            if (replayModeValue is string || replayModeValue.GetType().IsEnum)
-            {
-                string replayModeText = replayModeValue.ToString()?.Trim();
-                if (string.IsNullOrWhiteSpace(replayModeText))
-                {
-                    return false;
-                }
-
-                return !string.Equals(replayModeText, "None", StringComparison.OrdinalIgnoreCase) &&
-                    !string.Equals(replayModeText, "Off", StringComparison.OrdinalIgnoreCase) &&
-                    !string.Equals(replayModeText, "Disabled", StringComparison.OrdinalIgnoreCase) &&
-                    !string.Equals(replayModeText, "Live", StringComparison.OrdinalIgnoreCase);
-            }
-
-            return TryGetBooleanValue(replayModeValue, out bool replayModeFlag) &&
-                replayModeFlag;
-        }
-
-        private static bool TryGetBooleanMemberValue(object source, string memberName, out bool value)
-        {
-            value = false;
-            return TryGetMemberValue(source, memberName, out object rawValue) &&
-                TryGetBooleanValue(rawValue, out value);
-        }
-
-        private static bool TryGetIntegerMemberValue(object source, string memberName, out int value)
-        {
-            value = 0;
-            if (!TryGetMemberValue(source, memberName, out object rawValue) || rawValue == null)
-            {
-                return false;
-            }
-
-            try
-            {
-                value = Convert.ToInt32(rawValue, CultureInfo.InvariantCulture);
-                return true;
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
         private static string GetDebugMemberValue(object source, string memberName)
         {
-            if (!TryGetMemberValue(source, memberName, out object value))
+            if (!AffinityReplayDetector.TryGetMemberValue(source, memberName, out object value))
             {
                 return "<missing>";
             }
@@ -2315,7 +2142,7 @@ namespace Affinity
                     continue;
                 }
 
-                if (!TryGetMemberValue(source, memberName, out object value))
+                if (!AffinityReplayDetector.TryGetMemberValue(source, memberName, out object value))
                 {
                     continue;
                 }
@@ -2338,81 +2165,6 @@ namespace Affinity
             return value.ToString()
                 .Replace("\\", "\\\\")
                 .Replace("\"", "\\\"");
-        }
-
-        private static object GetRawStatusDataObject(StatusDataBase status)
-        {
-            if (status == null)
-            {
-                return null;
-            }
-
-            try
-            {
-                return status.GetRawDataObject();
-            }
-            catch
-            {
-                return null;
-            }
-        }
-
-        private static bool TryGetBooleanValue(object value, out bool result)
-        {
-            result = false;
-            if (value == null)
-            {
-                return false;
-            }
-
-            if (value is bool boolValue)
-            {
-                result = boolValue;
-                return true;
-            }
-
-            if (value is string stringValue)
-            {
-                return bool.TryParse(stringValue, out result);
-            }
-
-            try
-            {
-                result = Math.Abs(Convert.ToDouble(value, CultureInfo.InvariantCulture)) > 0.0001;
-                return true;
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
-        private static bool TryGetMemberValue(object source, string memberName, out object value)
-        {
-            value = null;
-            if (source == null || string.IsNullOrWhiteSpace(memberName))
-            {
-                return false;
-            }
-
-            Type sourceType = source.GetType();
-            const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.IgnoreCase;
-
-            PropertyInfo property = sourceType.GetProperty(memberName, flags);
-            if (property != null && property.GetIndexParameters().Length == 0)
-            {
-                value = property.GetValue(source);
-                return true;
-            }
-
-            FieldInfo field = sourceType.GetField(memberName, flags);
-            if (field != null)
-            {
-                value = field.GetValue(source);
-                return true;
-            }
-
-            return false;
         }
 
         private bool IsAssettoCorsaGame(string gameName)

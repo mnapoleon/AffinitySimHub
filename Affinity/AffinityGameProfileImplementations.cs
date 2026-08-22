@@ -121,9 +121,65 @@ namespace Affinity
 
     internal sealed class Automobilista2Profile : AffinityGameProfileBase
     {
+        private const int ObservedReplayGameState = 6;
+
         public Automobilista2Profile()
             : base("automobilista2", "Automobilista 2", "1066890.jpg", "Automobilista2")
         {
+        }
+
+        public override TelemetryDisposition EvaluateTelemetry(AffinityTelemetryContext context)
+        {
+            TelemetryDisposition disposition = base.EvaluateTelemetry(context);
+            if (disposition != TelemetryDisposition.Active)
+            {
+                return disposition;
+            }
+
+            if (AffinityReplayDetector.TryGetBooleanMemberValue(
+                    context.Status,
+                    "IsInGarage",
+                    out bool isInGarage) &&
+                isInGarage)
+            {
+                return TelemetryDisposition.Inactive;
+            }
+
+            if (AffinityReplayDetector.TryGetBooleanMemberValue(
+                    context.Status,
+                    "IsSpectator",
+                    out bool isSpectator) &&
+                isSpectator)
+            {
+                return TelemetryDisposition.Inactive;
+            }
+
+            object rawData = AffinityReplayDetector.GetRawStatusDataObject(context.Status);
+            if (AffinityReplayDetector.TryGetIntegerMemberValue(rawData, "mGameState", out int gameState) &&
+                gameState == ObservedReplayGameState)
+            {
+                return TelemetryDisposition.Inactive;
+            }
+
+            if (!AffinityReplayDetector.TryGetIntegerMemberValue(
+                    rawData,
+                    "mViewedParticipantIndex",
+                    out int viewedParticipantIndex) ||
+                viewedParticipantIndex < 0 ||
+                context.RuntimeState == null)
+            {
+                return TelemetryDisposition.Active;
+            }
+
+            if (context.RuntimeState.Automobilista2PlayerViewedParticipantIndex < 0)
+            {
+                context.RuntimeState.Automobilista2PlayerViewedParticipantIndex = viewedParticipantIndex;
+                return TelemetryDisposition.Active;
+            }
+
+            return viewedParticipantIndex != context.RuntimeState.Automobilista2PlayerViewedParticipantIndex
+                ? TelemetryDisposition.Inactive
+                : TelemetryDisposition.Active;
         }
     }
 
@@ -178,9 +234,29 @@ namespace Affinity
                 string.Equals(normalizedGameName, "lemansultimate", StringComparison.Ordinal);
         }
 
+        public override TelemetryDisposition EvaluateTelemetry(AffinityTelemetryContext context)
+        {
+            TelemetryDisposition disposition = base.EvaluateTelemetry(context);
+            if (disposition != TelemetryDisposition.Active)
+            {
+                return disposition;
+            }
+
+            return IsUnknownContextValue(context.CarModel, "Unknown Car") ||
+                IsUnknownContextValue(context.TrackNameWithConfig, "Unknown Track")
+                ? TelemetryDisposition.WaitingForContext
+                : TelemetryDisposition.Active;
+        }
+
         public override CircuitDisplayParts GetCircuitDisplayParts(string trackDisplayName)
         {
             return DuplicateCircuitDisplay(trackDisplayName);
+        }
+
+        private static bool IsUnknownContextValue(string value, string fallback)
+        {
+            return string.IsNullOrWhiteSpace(value) ||
+                string.Equals(value.Trim(), fallback, StringComparison.OrdinalIgnoreCase);
         }
     }
 
@@ -216,6 +292,35 @@ namespace Affinity
                 "R3E",
                 "RRRE")
         {
+        }
+
+        public override TelemetryDisposition EvaluateTelemetry(AffinityTelemetryContext context)
+        {
+            TelemetryDisposition disposition = base.EvaluateTelemetry(context);
+            if (disposition != TelemetryDisposition.Active)
+            {
+                return disposition;
+            }
+
+            object rawData = AffinityReplayDetector.GetRawStatusDataObject(context.Status);
+            if (AffinityReplayDetector.TryGetMemberValue(rawData, "FinishStatus", out object finishStatusValue) &&
+                AffinityReplayDetector.TryGetBooleanValue(finishStatusValue, out bool isFinishedStatusActive) &&
+                isFinishedStatusActive)
+            {
+                return TelemetryDisposition.Inactive;
+            }
+
+            if (AffinityReplayDetector.TryGetMemberValue(
+                    rawData,
+                    "GamePlayerInGarage",
+                    out object playerInGarageValue) &&
+                AffinityReplayDetector.TryGetBooleanValue(playerInGarageValue, out bool isPlayerInGarage) &&
+                isPlayerInGarage)
+            {
+                return TelemetryDisposition.Inactive;
+            }
+
+            return TelemetryDisposition.Active;
         }
     }
 }

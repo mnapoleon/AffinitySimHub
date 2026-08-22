@@ -195,6 +195,8 @@ namespace Affinity
 
         public bool DisplayInMiles { get; set; }
 
+        internal AffinityGameProfileRegistry GameProfiles { get; set; }
+
         public ImageSource GameLogo
         {
             get => _gameLogo;
@@ -626,7 +628,7 @@ namespace Affinity
         {
             List<DistanceSummary> activeRows = GetActiveTimePeriodRows().ToList();
             List<TrackDistanceSummary> unfilteredTrackSummaries =
-                AffinitySummaryBuilder.BuildTrackSummaries(activeRows, DisplayInMiles);
+                AffinitySummaryBuilder.BuildTrackSummaries(activeRows, DisplayInMiles, GameProfiles);
             List<CarDistanceSummary> unfilteredCarSummaries =
                 AffinitySummaryBuilder.BuildCarSummaries(activeRows, DisplayInMiles);
             List<TrackDistanceSummary> trackSummaries = ApplyResultLimit(SortTrackSummaries(
@@ -675,7 +677,10 @@ namespace Affinity
                     .ToList();
                 VisibleCarSummaries = carSummaries;
                 VisibleTrackSummaries = ApplyResultLimit(SortTrackSummaries(
-                    FilterTrackSummaries(AffinitySummaryBuilder.BuildTrackSummaries(filteredRows, DisplayInMiles)))).ToList();
+                    FilterTrackSummaries(AffinitySummaryBuilder.BuildTrackSummaries(
+                        filteredRows,
+                        DisplayInMiles,
+                        GameProfiles)))).ToList();
                 TopTrackSummary = VisibleTrackSummaries.FirstOrDefault();
                 TopCarSummary = selectedCar;
             }

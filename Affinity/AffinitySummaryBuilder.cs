@@ -102,6 +102,7 @@ namespace Affinity
                         GameLogoPath = tryResolveGameLogoPath?.Invoke(group.Key) ?? string.Empty,
                         GameLogo = tryResolveGameLogo?.Invoke(group.Key),
                         DisplayInMiles = displayInMiles,
+                        GameProfiles = gameProfiles,
                         TotalDistanceKm = group.Sum(summary => summary.TotalDistanceKm),
                         TotalDistanceMiles = group.Sum(summary => summary.TotalDistanceMiles),
                         TotalDistanceDisplay = displayInMiles

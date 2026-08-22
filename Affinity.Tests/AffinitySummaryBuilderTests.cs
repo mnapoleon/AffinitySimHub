@@ -289,7 +289,7 @@ namespace Affinity.Tests
         }
 
         [TestMethod]
-        public void BuildSnapshot_UsesProvidedProfileRegistryForTrackDisplayPolicy()
+        public void BuildSnapshot_UsesProvidedProfileRegistryAcrossTabRebuilds()
         {
             DistanceSummary row = new DistanceSummary
             {
@@ -309,12 +309,20 @@ namespace Affinity.Tests
                 displayInMiles: false,
                 assettoCorsaTrackMap: null,
                 gameProfiles: registry);
+            GameDistanceTab tab = snapshot.GameTabs.Single();
             TrackDistanceSummary track = snapshot.FeaturedTrackSummary;
 
             Assert.AreEqual("raw-track-layout", track.TrackName);
             Assert.AreEqual("Profile Track", track.TrackDisplayName);
             Assert.AreEqual("Profile Circuit", track.CircuitNameDisplay);
             Assert.AreEqual("Profile Layout", track.CircuitLayoutDisplay);
+            AssertProfileCircuitDisplay(tab.VisibleTrackSummaries.Single());
+            AssertProfileCircuitDisplay(tab.TopTrackSummary);
+
+            tab.ApplyCarFilter("Test Car");
+
+            AssertProfileCircuitDisplay(tab.VisibleTrackSummaries.Single());
+            AssertProfileCircuitDisplay(tab.TopTrackSummary);
         }
 
         [TestMethod]
@@ -405,6 +413,14 @@ namespace Affinity.Tests
                     CircuitLayoutDisplay = "Profile Layout"
                 };
             }
+        }
+
+        private static void AssertProfileCircuitDisplay(TrackDistanceSummary track)
+        {
+            Assert.AreEqual("raw-track-layout", track.TrackName);
+            Assert.AreEqual("Profile Track", track.TrackDisplayName);
+            Assert.AreEqual("Profile Circuit", track.CircuitNameDisplay);
+            Assert.AreEqual("Profile Layout", track.CircuitLayoutDisplay);
         }
     }
 }

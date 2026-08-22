@@ -819,7 +819,7 @@ namespace Affinity
                     _sessionDistanceSource = ResolveSessionDistanceSource(profile, data.NewData);
                     _sessionStartTrackPositionMeters = GetSessionStartTrackPositionMeters(profile, data.NewData);
                     _sessionStatefulAbsoluteMeters = 0.0;
-                    _lastTrackPositionWithinLapMeters = GetTrackPositionWithinLapMeters(data.NewData, data.NewData.TrackLength > 0.0 ? data.NewData.TrackLength : data.NewData.ReportedTrackLength);
+                    _lastTrackPositionWithinLapMeters = AffinityGameProfileBase.GetTrackPositionWithinLapMeters(data.NewData, data.NewData.TrackLength > 0.0 ? data.NewData.TrackLength : data.NewData.ReportedTrackLength);
                     _sessionDistanceOriginMeters = ShouldUseZeroSessionOrigin(profile, _sessionDistanceSource)
                         ? 0.0
                         : GetAbsoluteSessionDistanceMeters(profile, data.NewData, _sessionDistanceSource);
@@ -1888,7 +1888,7 @@ namespace Affinity
                 return false;
             }
 
-            string settingsKey = GetDebugLoggingSettingsKey(gameName);
+            string settingsKey = _gameProfiles.Resolve(gameName).SettingsKey;
             if (string.IsNullOrWhiteSpace(settingsKey))
             {
                 return false;
@@ -2063,7 +2063,7 @@ namespace Affinity
                 return -1.0;
             }
 
-            double trackPositionMeters = GetTrackPositionWithinLapMeters(status, trackLengthMeters);
+            double trackPositionMeters = AffinityGameProfileBase.GetTrackPositionWithinLapMeters(status, trackLengthMeters);
             if (trackPositionMeters < 0.0)
             {
                 return _sessionStatefulAbsoluteMeters;
@@ -2172,7 +2172,7 @@ namespace Affinity
                 return -1.0;
             }
 
-            double trackPositionMeters = GetTrackPositionWithinLapMeters(status, trackLengthMeters);
+            double trackPositionMeters = AffinityGameProfileBase.GetTrackPositionWithinLapMeters(status, trackLengthMeters);
             if (trackPositionMeters < 0.0)
             {
                 return -1.0;
@@ -2191,12 +2191,7 @@ namespace Affinity
             }
 
             double trackLengthMeters = status.TrackLength > 0.0 ? status.TrackLength : status.ReportedTrackLength;
-            return AffinityGameLogic.GetTrackPositionWithinLapMeters(status, trackLengthMeters);
-        }
-
-        private static double GetTrackPositionWithinLapMeters(StatusDataBase status, double trackLengthMeters)
-        {
-            return AffinityGameLogic.GetTrackPositionWithinLapMeters(status, trackLengthMeters);
+            return AffinityGameProfileBase.GetTrackPositionWithinLapMeters(status, trackLengthMeters);
         }
 
         private void PublishProperties(PluginManager pluginManager, string gameName, string trackName, string carModel, double totalKm, double sessionKm)
@@ -2236,11 +2231,6 @@ namespace Affinity
         private static string BuildContextKey(string gameName, string carModel, string trackNameWithConfig)
         {
             return $"{gameName}|{carModel}|{trackNameWithConfig}";
-        }
-
-        private bool IsSupportedGame(string gameName)
-        {
-            return _gameProfiles.Resolve(gameName).IsSupported;
         }
 
         private static string GetDebugMemberValue(object source, string memberName)
@@ -2340,7 +2330,7 @@ namespace Affinity
 
         private bool EnsureGameDebugLoggingConfigured(string gameName)
         {
-            string settingsKey = GetDebugLoggingSettingsKey(gameName);
+            string settingsKey = _gameProfiles.Resolve(gameName).SettingsKey;
             if (string.IsNullOrWhiteSpace(settingsKey))
             {
                 return false;
@@ -2416,7 +2406,7 @@ namespace Affinity
             string directory = Path.GetDirectoryName(_debugLogPath);
             string fileNameWithoutExtension = Path.GetFileNameWithoutExtension(_debugLogPath);
             string extension = Path.GetExtension(_debugLogPath);
-            string settingsKey = GetDebugLoggingSettingsKey(gameName);
+            string settingsKey = _gameProfiles.Resolve(gameName).SettingsKey;
 
             if (string.IsNullOrWhiteSpace(settingsKey))
             {
@@ -2426,14 +2416,9 @@ namespace Affinity
             return Path.Combine(directory ?? string.Empty, $"{fileNameWithoutExtension}.{settingsKey}{extension}");
         }
 
-        private string GetDebugLoggingSettingsKey(string gameName)
-        {
-            return _gameProfiles.Resolve(gameName).SettingsKey;
-        }
-
         private bool IsSupportedDebugLoggingSettingsKey(string settingsKey)
         {
-            return IsSupportedGame(settingsKey);
+            return _gameProfiles.Resolve(settingsKey).IsSupported;
         }
 
         private static string NormalizeContextValue(string value, string fallback)

@@ -270,6 +270,30 @@ namespace Affinity
             return false;
         }
 
+        internal static double GetTrackPositionWithinLapMeters(StatusDataBase status, double trackLengthMeters)
+        {
+            if (status == null || trackLengthMeters <= 0.0)
+            {
+                return -1.0;
+            }
+
+            double trackPositionMeters = status.TrackPositionMeters;
+            if (trackPositionMeters > trackLengthMeters + 1.0)
+            {
+                return trackPositionMeters;
+            }
+
+            if (trackPositionMeters < 0.0 && status.TrackPositionPercent > 0.0)
+            {
+                double trackPositionPercent = status.TrackPositionPercent > 1.0 && status.TrackPositionPercent <= 100.0
+                    ? status.TrackPositionPercent / 100.0
+                    : status.TrackPositionPercent;
+                trackPositionMeters = trackPositionPercent * trackLengthMeters;
+            }
+
+            return Math.Max(0.0, Math.Min(trackPositionMeters, trackLengthMeters));
+        }
+
         protected static CircuitDisplayParts DuplicateCircuitDisplay(string trackDisplayName)
         {
             string displayName = trackDisplayName ?? string.Empty;

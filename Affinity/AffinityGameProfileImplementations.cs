@@ -282,7 +282,7 @@ namespace Affinity
                 return false;
             }
 
-            double trackPositionMeters = AffinityGameLogic.GetTrackPositionWithinLapMeters(
+            double trackPositionMeters = AffinityGameProfileBase.GetTrackPositionWithinLapMeters(
                 context.Status,
                 context.TrackLengthMeters);
             bool nearLineAtExit = trackPositionMeters <= Math.Max(100.0, context.TrackLengthMeters * 0.025) ||
@@ -303,7 +303,7 @@ namespace Affinity
                 return false;
             }
 
-            double trackPositionMeters = AffinityGameLogic.GetTrackPositionWithinLapMeters(
+            double trackPositionMeters = AffinityGameProfileBase.GetTrackPositionWithinLapMeters(
                 context.Status,
                 context.TrackLengthMeters);
             bool nearLineAtExit = trackPositionMeters <= Math.Max(100.0, context.TrackLengthMeters * 0.025) ||
@@ -356,7 +356,7 @@ namespace Affinity
                 return false;
             }
 
-            double trackPositionMeters = AffinityGameLogic.GetTrackPositionWithinLapMeters(
+            double trackPositionMeters = AffinityGameProfileBase.GetTrackPositionWithinLapMeters(
                 context.Status,
                 context.TrackLengthMeters);
             bool nearLine = trackPositionMeters <= 5.0 ||
@@ -376,7 +376,7 @@ namespace Affinity
                 return false;
             }
 
-            double trackPositionMeters = AffinityGameLogic.GetTrackPositionWithinLapMeters(
+            double trackPositionMeters = AffinityGameProfileBase.GetTrackPositionWithinLapMeters(
                 context.Status,
                 context.TrackLengthMeters);
             bool nearLine = trackPositionMeters <= 5.0 ||

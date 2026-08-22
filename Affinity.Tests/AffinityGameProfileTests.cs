@@ -83,6 +83,68 @@ namespace Affinity.Tests
         }
 
         [TestMethod]
+        public void GetTrackPositionWithinLapMeters_UsesReportedMetersWhenValid()
+        {
+            ProfileStatusData status = new ProfileStatusData();
+            SetMemberValue(status, "TrackPositionMeters", 1250.0);
+            SetMemberValue(status, "TrackPositionPercent", 75.0);
+
+            Assert.AreEqual(
+                1250.0,
+                AffinityGameProfileBase.GetTrackPositionWithinLapMeters(status, 4000.0),
+                0.001);
+        }
+
+        [TestMethod]
+        public void GetTrackPositionWithinLapMeters_AcceptsFractionAndWholeNumberPercentFallbacks()
+        {
+            ProfileStatusData fractionStatus = new ProfileStatusData();
+            SetMemberValue(fractionStatus, "TrackPositionMeters", -1.0);
+            SetMemberValue(fractionStatus, "TrackPositionPercent", 0.25);
+
+            ProfileStatusData wholeNumberStatus = new ProfileStatusData();
+            SetMemberValue(wholeNumberStatus, "TrackPositionMeters", -1.0);
+            SetMemberValue(wholeNumberStatus, "TrackPositionPercent", 25.0);
+
+            Assert.AreEqual(
+                1000.0,
+                AffinityGameProfileBase.GetTrackPositionWithinLapMeters(fractionStatus, 4000.0),
+                0.001);
+            Assert.AreEqual(
+                1000.0,
+                AffinityGameProfileBase.GetTrackPositionWithinLapMeters(wholeNumberStatus, 4000.0),
+                0.001);
+        }
+
+        [TestMethod]
+        public void GetTrackPositionWithinLapMeters_ClampsNearOverrunAndPreservesRawPositionBeyondTolerance()
+        {
+            ProfileStatusData clampStatus = new ProfileStatusData();
+            SetMemberValue(clampStatus, "TrackPositionMeters", 4000.5);
+            SetMemberValue(clampStatus, "TrackPositionPercent", 0.0);
+
+            ProfileStatusData passthroughStatus = new ProfileStatusData();
+            SetMemberValue(passthroughStatus, "TrackPositionMeters", 4505.0);
+            SetMemberValue(passthroughStatus, "TrackPositionPercent", 0.0);
+
+            Assert.AreEqual(
+                4000.0,
+                AffinityGameProfileBase.GetTrackPositionWithinLapMeters(clampStatus, 4000.0),
+                0.001);
+            Assert.AreEqual(
+                4505.0,
+                AffinityGameProfileBase.GetTrackPositionWithinLapMeters(passthroughStatus, 4000.0),
+                0.001);
+        }
+
+        [TestMethod]
+        public void GetTrackPositionWithinLapMeters_ReturnsInvalidSentinelWithoutStatusOrTrackLength()
+        {
+            Assert.AreEqual(-1.0, AffinityGameProfileBase.GetTrackPositionWithinLapMeters(null, 4000.0), 0.001);
+            Assert.AreEqual(-1.0, AffinityGameProfileBase.GetTrackPositionWithinLapMeters(new ProfileStatusData(), 0.0), 0.001);
+        }
+
+        [TestMethod]
         public void ShouldIgnoreTransientReset_IRacingOwnsStoppedZeroDropRule()
         {
             ProfileStatusData status = new ProfileStatusData();

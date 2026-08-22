@@ -287,43 +287,42 @@ namespace Affinity.Tests
         }
 
         [TestMethod]
-        public void LooksLikeIgnoredLapIncrement_IgnoresLowSpeedLineIncrementForLmu()
+        public void UpdateStatefulDerivedAbsoluteSessionDistanceMeters_UsesProfileLineWrapDecision()
         {
             AffinityPlugin plugin = new AffinityPlugin();
-            TestStatusData status = new TestStatusData();
-
-            SetProperty(status, "CompletedLaps", 4);
-            SetProperty(status, "TrackPositionMeters", 85.41);
-            SetProperty(status, "TrackPositionPercent", 0.01883);
-            SetProperty(status, "SpeedKmh", 0.12);
             typeof(AffinityPlugin)
-                .GetField("_lastObservedSessionMeters", BindingFlags.Instance | BindingFlags.NonPublic)
-                .SetValue(plugin, 13529.19);
+                .GetField("_sessionStatefulAbsoluteMeters", BindingFlags.Instance | BindingFlags.NonPublic)
+                .SetValue(plugin, 200.0);
+            typeof(AffinityPlugin)
+                .GetField("_lastTrackPositionWithinLapMeters", BindingFlags.Instance | BindingFlags.NonPublic)
+                .SetValue(plugin, 1500.0);
+
+            TestStatusData status = new TestStatusData();
+            SetProperty(status, "TrackLength", 2000.0);
+            SetProperty(status, "CompletedLaps", 0);
+            SetProperty(status, "TrackPositionMeters", 100.0);
+            SetProperty(status, "SpeedKmh", 100.0);
 
             object result = typeof(AffinityPlugin)
-                .GetMethod("LooksLikeIgnoredLapIncrement", BindingFlags.Instance | BindingFlags.NonPublic)
-                .Invoke(plugin, new object[] { "LMU", status, 4, 1, 4535.80 });
+                .GetMethod("UpdateStatefulDerivedAbsoluteSessionDistanceMeters", BindingFlags.Instance | BindingFlags.NonPublic)
+                .Invoke(plugin, new object[] { new IgnoreLineWrapProfile(), status, 2000.0 });
 
-            Assert.AreEqual(true, result);
+            Assert.AreEqual(200.0, (double)result, 0.001);
         }
 
         [TestMethod]
-        public void ShouldIgnoreDistanceJumpForIgnoredLapIncrement_IgnoresLmuExitLapDistance()
+        public void ShouldIgnoreDistanceJumpForIgnoredLapIncrement_IgnoresLargeJumpForCachedDecision()
         {
             AffinityPlugin plugin = new AffinityPlugin();
-            TestStatusData status = new TestStatusData();
-
-            SetProperty(status, "CompletedLaps", 4);
-            SetProperty(status, "TrackPositionMeters", 102.70);
-            SetProperty(status, "TrackPositionPercent", 0.02403);
-            SetProperty(status, "SpeedKmh", 0.04);
-            typeof(AffinityPlugin)
-                .GetField("_lastObservedSessionMeters", BindingFlags.Instance | BindingFlags.NonPublic)
-                .SetValue(plugin, 12764.38);
+            AffinityDistanceSampleContext context = new AffinityDistanceSampleContext
+            {
+                TrackLengthMeters = 4273.22,
+                DeltaMeters = 4328.51
+            };
 
             object result = typeof(AffinityPlugin)
                 .GetMethod("ShouldIgnoreDistanceJumpForIgnoredLapIncrement", BindingFlags.Instance | BindingFlags.NonPublic)
-                .Invoke(plugin, new object[] { "LMU", status, 4, 1, 4273.22, 4328.51 });
+                .Invoke(plugin, new object[] { true, context });
 
             Assert.AreEqual(true, result);
         }
@@ -340,70 +339,6 @@ namespace Affinity.Tests
             object result = typeof(AffinityPlugin)
                 .GetMethod("ShouldIgnoreRepeatedIgnoredDistanceJump", BindingFlags.Instance | BindingFlags.NonPublic)
                 .Invoke(plugin, new object[] { 17092.89 });
-
-            Assert.AreEqual(true, result);
-        }
-
-        [TestMethod]
-        public void ShouldIgnorePlaceholderSessionStart_IgnoresLmuPostExitPlaceholder()
-        {
-            AffinityPlugin plugin = new AffinityPlugin();
-            TestStatusData status = new TestStatusData();
-
-            SetProperty(status, "CompletedLaps", 4);
-            SetProperty(status, "TrackLength", 4273.22);
-            SetProperty(status, "TrackPositionMeters", 102.69);
-            SetProperty(status, "TrackPositionPercent", 0.02403);
-            SetProperty(status, "SpeedKmh", 0.01);
-            typeof(AffinityPlugin)
-                .GetField("_lastIgnoredSessionMeters", BindingFlags.Instance | BindingFlags.NonPublic)
-                .SetValue(plugin, 17092.89);
-
-            object result = typeof(AffinityPlugin)
-                .GetMethod("ShouldIgnorePlaceholderSessionStart", BindingFlags.Instance | BindingFlags.NonPublic)
-                .Invoke(plugin, new object[] { "LMU", status, 4 });
-
-            Assert.AreEqual(true, result);
-        }
-
-        [TestMethod]
-        public void ShouldIgnorePlaceholderSessionStart_IgnoresLmuNegativeLapBoundarySentinel()
-        {
-            AffinityPlugin plugin = new AffinityPlugin();
-            TestStatusData status = new TestStatusData();
-
-            SetProperty(status, "CompletedLaps", 4);
-            SetProperty(status, "TrackLength", 4900.67);
-            SetProperty(status, "TrackPositionMeters", -4900.67);
-            SetProperty(status, "TrackPositionPercent", -1.0);
-            SetProperty(status, "SpeedKmh", 0.0);
-            typeof(AffinityPlugin)
-                .GetField("_lastIgnoredSessionMeters", BindingFlags.Instance | BindingFlags.NonPublic)
-                .SetValue(plugin, 19602.70);
-
-            object result = typeof(AffinityPlugin)
-                .GetMethod("ShouldIgnorePlaceholderSessionStart", BindingFlags.Instance | BindingFlags.NonPublic)
-                .Invoke(plugin, new object[] { "LMU", status, 4 });
-
-            Assert.AreEqual(true, result);
-        }
-
-        [TestMethod]
-        public void ShouldIgnorePlaceholderSessionStart_IgnoresLmuResetSessionOdoPlaceholder()
-        {
-            AffinityPlugin plugin = new AffinityPlugin();
-            TestStatusData status = new TestStatusData();
-
-            SetProperty(status, "CompletedLaps", 4);
-            SetProperty(status, "TrackLength", 5386.80);
-            SetProperty(status, "TrackPositionMeters", 91.63);
-            SetProperty(status, "TrackPositionPercent", 0.01701);
-            SetProperty(status, "SpeedKmh", 0.01);
-            SetProperty(status, "SessionOdo", 0.00006);
-
-            object result = typeof(AffinityPlugin)
-                .GetMethod("ShouldIgnorePlaceholderSessionStart", BindingFlags.Instance | BindingFlags.NonPublic)
-                .Invoke(plugin, new object[] { "LMU", status, 4 });
 
             Assert.AreEqual(true, result);
         }
@@ -455,6 +390,19 @@ namespace Affinity.Tests
             public override object GetRawDataObject()
             {
                 return null;
+            }
+        }
+
+        private sealed class IgnoreLineWrapProfile : AffinityGameProfileBase
+        {
+            public IgnoreLineWrapProfile()
+                : base("test", "Test", "test.jpg", "Test")
+            {
+            }
+
+            public override bool ShouldIgnoreLowSpeedLineWrap(AffinityDistanceSampleContext context)
+            {
+                return true;
             }
         }
     }

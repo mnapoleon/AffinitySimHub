@@ -194,6 +194,22 @@ namespace Affinity
         {
         }
 
+        public override bool ShouldIgnoreTransientReset(AffinityDistanceSampleContext context)
+        {
+            if (context.DistanceMode != AffinityDistanceMode.StatefulDerived ||
+                context.Status == null ||
+                context.LastObservedCompletedLaps <= 0 ||
+                context.LastObservedSessionMeters <= Math.Max(100.0, context.TrackLengthMeters * 0.25))
+            {
+                return false;
+            }
+
+            return context.CompletedLaps == 0 &&
+                context.Status.SpeedKmh < 1.0 &&
+                context.Status.TrackPositionMeters <= 1.0 &&
+                context.Status.TrackPositionPercent <= 0.001;
+        }
+
         public override CircuitDisplayParts GetCircuitDisplayParts(string trackDisplayName)
         {
             CircuitDisplayParts parts = base.GetCircuitDisplayParts(trackDisplayName);
@@ -257,6 +273,52 @@ namespace Affinity
             return DuplicateCircuitDisplay(trackDisplayName);
         }
 
+        public override bool ShouldIgnoreLapIncrement(AffinityDistanceSampleContext context)
+        {
+            if (context.Status == null ||
+                context.LapDelta <= 0 ||
+                context.TrackLengthMeters <= 0.0)
+            {
+                return false;
+            }
+
+            double trackPositionMeters = AffinityGameLogic.GetTrackPositionWithinLapMeters(
+                context.Status,
+                context.TrackLengthMeters);
+            bool nearLineAtExit = trackPositionMeters <= Math.Max(100.0, context.TrackLengthMeters * 0.025) ||
+                trackPositionMeters >= context.TrackLengthMeters - 5.0;
+
+            return context.CompletedLaps > 0 &&
+                context.Status.SpeedKmh < 1.0 &&
+                nearLineAtExit &&
+                context.LastObservedSessionMeters >= context.TrackLengthMeters;
+        }
+
+        public override bool ShouldIgnorePlaceholderSessionStart(AffinityDistanceSampleContext context)
+        {
+            if (context.Status == null ||
+                context.CompletedLaps <= 0 ||
+                context.TrackLengthMeters <= 0.0)
+            {
+                return false;
+            }
+
+            double trackPositionMeters = AffinityGameLogic.GetTrackPositionWithinLapMeters(
+                context.Status,
+                context.TrackLengthMeters);
+            bool nearLineAtExit = trackPositionMeters <= Math.Max(100.0, context.TrackLengthMeters * 0.025) ||
+                trackPositionMeters >= context.TrackLengthMeters - 5.0;
+            bool looksLikeNegativeLapBoundarySentinel = trackPositionMeters <= (-context.TrackLengthMeters + 5.0) ||
+                context.Status.TrackPositionPercent <= -0.99;
+            bool hasIgnoredSessionMarker = context.LastIgnoredSessionMeters >= 0.0;
+            bool looksLikeResetSessionOdo = context.Status.SessionOdo >= 0.0 &&
+                context.Status.SessionOdo <= 0.01;
+
+            return context.Status.SpeedKmh < 1.0 &&
+                (nearLineAtExit || looksLikeNegativeLapBoundarySentinel) &&
+                (hasIgnoredSessionMarker || looksLikeResetSessionOdo);
+        }
+
         private static bool IsUnknownContextValue(string value, string fallback)
         {
             return string.IsNullOrWhiteSpace(value) ||
@@ -283,6 +345,47 @@ namespace Affinity
         public RFactor2Profile()
             : base("rfactor2", "rFactor 2", "365960.jpg", "RFactor2")
         {
+        }
+
+        public override bool ShouldIgnoreLowSpeedLineWrap(AffinityDistanceSampleContext context)
+        {
+            if (context.Status == null ||
+                context.TrackLengthMeters <= 0.0 ||
+                Math.Abs(context.DeltaTrackPositionMeters) <= context.TrackLengthMeters * 0.5)
+            {
+                return false;
+            }
+
+            double trackPositionMeters = AffinityGameLogic.GetTrackPositionWithinLapMeters(
+                context.Status,
+                context.TrackLengthMeters);
+            bool nearLine = trackPositionMeters <= 5.0 ||
+                trackPositionMeters >= context.TrackLengthMeters - 5.0;
+
+            return Math.Max(0, context.CompletedLaps) == 0 &&
+                context.Status.SpeedKmh <= 80.0 &&
+                nearLine;
+        }
+
+        public override bool ShouldIgnoreLapIncrement(AffinityDistanceSampleContext context)
+        {
+            if (context.Status == null ||
+                context.LapDelta <= 0 ||
+                context.TrackLengthMeters <= 0.0)
+            {
+                return false;
+            }
+
+            double trackPositionMeters = AffinityGameLogic.GetTrackPositionWithinLapMeters(
+                context.Status,
+                context.TrackLengthMeters);
+            bool nearLine = trackPositionMeters <= 5.0 ||
+                trackPositionMeters >= context.TrackLengthMeters - 5.0;
+
+            return context.CompletedLaps > 0 &&
+                context.Status.SpeedKmh < 5.0 &&
+                nearLine &&
+                context.LastObservedSessionMeters >= context.TrackLengthMeters;
         }
 
         public override CircuitDisplayParts GetCircuitDisplayParts(string trackDisplayName)

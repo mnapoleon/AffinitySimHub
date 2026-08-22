@@ -83,6 +83,184 @@ namespace Affinity.Tests
         }
 
         [TestMethod]
+        public void ShouldIgnoreTransientReset_IRacingOwnsStoppedZeroDropRule()
+        {
+            ProfileStatusData status = new ProfileStatusData();
+            SetMemberValue(status, "TrackPositionMeters", 0.0);
+            SetMemberValue(status, "TrackPositionPercent", 0.0);
+            SetMemberValue(status, "SpeedKmh", 0.0);
+            AffinityDistanceSampleContext context = new AffinityDistanceSampleContext
+            {
+                Status = status,
+                DistanceMode = AffinityDistanceMode.StatefulDerived,
+                CompletedLaps = 0,
+                TrackLengthMeters = 2336.0,
+                LastObservedSessionMeters = 4860.0,
+                LastObservedCompletedLaps = 2
+            };
+            AffinityGameProfileRegistry registry = AffinityGameProfileRegistry.CreateDefault();
+
+            Assert.IsTrue(registry.Resolve("iRacing").ShouldIgnoreTransientReset(context));
+            Assert.IsTrue(registry.SupportedProfiles
+                .Where(profile => profile.SettingsKey != "iracing")
+                .All(profile => !profile.ShouldIgnoreTransientReset(context)));
+
+            context.DistanceMode = AffinityDistanceMode.Automatic;
+            Assert.IsFalse(registry.Resolve("iRacing").ShouldIgnoreTransientReset(context));
+        }
+
+        [TestMethod]
+        public void ShouldIgnoreLowSpeedLineWrap_RFactor2OwnsPitLineOscillationRule()
+        {
+            ProfileStatusData status = new ProfileStatusData();
+            SetMemberValue(status, "CompletedLaps", 0);
+            SetMemberValue(status, "TrackPositionMeters", 2.0);
+            SetMemberValue(status, "TrackPositionPercent", 0.00082);
+            SetMemberValue(status, "SpeedKmh", 77.76);
+            AffinityDistanceSampleContext context = new AffinityDistanceSampleContext
+            {
+                Status = status,
+                DistanceMode = AffinityDistanceMode.StatefulDerived,
+                CompletedLaps = 0,
+                TrackLengthMeters = 2414.02,
+                DeltaTrackPositionMeters = -2408.0
+            };
+            AffinityGameProfileRegistry registry = AffinityGameProfileRegistry.CreateDefault();
+
+            Assert.IsTrue(registry.Resolve("RFactor2").ShouldIgnoreLowSpeedLineWrap(context));
+            Assert.IsTrue(registry.SupportedProfiles
+                .Where(profile => profile.SettingsKey != "rfactor2")
+                .All(profile => !profile.ShouldIgnoreLowSpeedLineWrap(context)));
+        }
+
+        [TestMethod]
+        public void ShouldIgnoreLapIncrement_RFactor2OwnsNearStationaryLineRule()
+        {
+            ProfileStatusData status = new ProfileStatusData();
+            SetMemberValue(status, "CompletedLaps", 1);
+            SetMemberValue(status, "TrackPositionMeters", 2.0);
+            SetMemberValue(status, "TrackPositionPercent", 0.00082);
+            SetMemberValue(status, "SpeedKmh", 4.99);
+            AffinityDistanceSampleContext context = new AffinityDistanceSampleContext
+            {
+                Status = status,
+                DistanceMode = AffinityDistanceMode.StatefulDerived,
+                CompletedLaps = 1,
+                LapDelta = 1,
+                TrackLengthMeters = 2414.02,
+                LastObservedSessionMeters = 2414.02
+            };
+            AffinityGameProfileRegistry registry = AffinityGameProfileRegistry.CreateDefault();
+
+            Assert.IsTrue(registry.Resolve("RFactor2").ShouldIgnoreLapIncrement(context));
+            Assert.IsTrue(registry.SupportedProfiles
+                .Where(profile => profile.SettingsKey != "rfactor2")
+                .All(profile => !profile.ShouldIgnoreLapIncrement(context)));
+        }
+
+        [TestMethod]
+        public void ShouldIgnoreLapIncrement_LeMansUltimateOwnsExitLineRule()
+        {
+            ProfileStatusData status = new ProfileStatusData();
+            SetMemberValue(status, "CompletedLaps", 4);
+            SetMemberValue(status, "TrackPositionMeters", 85.41);
+            SetMemberValue(status, "TrackPositionPercent", 0.01883);
+            SetMemberValue(status, "SpeedKmh", 0.12);
+            AffinityDistanceSampleContext context = new AffinityDistanceSampleContext
+            {
+                Status = status,
+                DistanceMode = AffinityDistanceMode.StatefulDerived,
+                CompletedLaps = 4,
+                LapDelta = 1,
+                TrackLengthMeters = 4535.80,
+                LastObservedSessionMeters = 13529.19,
+                LastIgnoredSessionMeters = -1.0
+            };
+            AffinityGameProfileRegistry registry = AffinityGameProfileRegistry.CreateDefault();
+
+            Assert.IsTrue(registry.Resolve("LMU").ShouldIgnoreLapIncrement(context));
+            Assert.IsTrue(registry.SupportedProfiles
+                .Where(profile => profile.SettingsKey != "lmu")
+                .All(profile => !profile.ShouldIgnoreLapIncrement(context)));
+        }
+
+        [TestMethod]
+        public void ShouldIgnorePlaceholderSessionStart_LeMansUltimateOwnsAllPlaceholderRules()
+        {
+            AffinityGameProfileRegistry registry = AffinityGameProfileRegistry.CreateDefault();
+            IAffinityGameProfile lmuProfile = registry.Resolve("LMU");
+
+            ProfileStatusData priorIgnoredStatus = new ProfileStatusData();
+            SetMemberValue(priorIgnoredStatus, "TrackPositionMeters", 102.69);
+            SetMemberValue(priorIgnoredStatus, "TrackPositionPercent", 0.02403);
+            SetMemberValue(priorIgnoredStatus, "SpeedKmh", 0.01);
+            SetMemberValue(priorIgnoredStatus, "SessionOdo", 1.0);
+            AffinityDistanceSampleContext priorIgnoredContext = new AffinityDistanceSampleContext
+            {
+                Status = priorIgnoredStatus,
+                CompletedLaps = 4,
+                TrackLengthMeters = 4273.22,
+                LastIgnoredSessionMeters = 17092.89
+            };
+
+            ProfileStatusData negativeSentinelStatus = new ProfileStatusData();
+            SetMemberValue(negativeSentinelStatus, "TrackPositionMeters", -4900.67);
+            SetMemberValue(negativeSentinelStatus, "TrackPositionPercent", -1.0);
+            SetMemberValue(negativeSentinelStatus, "SpeedKmh", 0.0);
+            SetMemberValue(negativeSentinelStatus, "SessionOdo", 1.0);
+            AffinityDistanceSampleContext negativeSentinelContext = new AffinityDistanceSampleContext
+            {
+                Status = negativeSentinelStatus,
+                CompletedLaps = 4,
+                TrackLengthMeters = 4900.67,
+                LastIgnoredSessionMeters = 19602.70
+            };
+
+            ProfileStatusData negativePercentOnlyStatus = new ProfileStatusData();
+            SetMemberValue(negativePercentOnlyStatus, "TrackPositionMeters", 2450.0);
+            SetMemberValue(negativePercentOnlyStatus, "TrackPositionPercent", -1.0);
+            SetMemberValue(negativePercentOnlyStatus, "SpeedKmh", 0.0);
+            SetMemberValue(negativePercentOnlyStatus, "SessionOdo", 1.0);
+            AffinityDistanceSampleContext negativePercentOnlyContext = new AffinityDistanceSampleContext
+            {
+                Status = negativePercentOnlyStatus,
+                CompletedLaps = 4,
+                TrackLengthMeters = 4900.67,
+                LastIgnoredSessionMeters = 19602.70
+            };
+
+            ProfileStatusData resetSessionOdoStatus = new ProfileStatusData();
+            SetMemberValue(resetSessionOdoStatus, "TrackPositionMeters", 91.63);
+            SetMemberValue(resetSessionOdoStatus, "TrackPositionPercent", 0.01701);
+            SetMemberValue(resetSessionOdoStatus, "SpeedKmh", 0.01);
+            SetMemberValue(resetSessionOdoStatus, "SessionOdo", 0.00006);
+            AffinityDistanceSampleContext resetSessionOdoContext = new AffinityDistanceSampleContext
+            {
+                Status = resetSessionOdoStatus,
+                CompletedLaps = 4,
+                TrackLengthMeters = 5386.80,
+                LastIgnoredSessionMeters = -1.0
+            };
+
+            Assert.IsTrue(lmuProfile.ShouldIgnorePlaceholderSessionStart(priorIgnoredContext));
+            Assert.IsTrue(lmuProfile.ShouldIgnorePlaceholderSessionStart(negativeSentinelContext));
+            Assert.IsTrue(lmuProfile.ShouldIgnorePlaceholderSessionStart(negativePercentOnlyContext));
+            Assert.IsTrue(lmuProfile.ShouldIgnorePlaceholderSessionStart(resetSessionOdoContext));
+            Assert.IsTrue(registry.SupportedProfiles
+                .Where(profile => profile.SettingsKey != "lmu")
+                .All(profile => !profile.ShouldIgnorePlaceholderSessionStart(priorIgnoredContext)));
+            Assert.IsTrue(registry.SupportedProfiles
+                .Where(profile => profile.SettingsKey != "lmu")
+                .All(profile => !profile.ShouldIgnorePlaceholderSessionStart(negativeSentinelContext)));
+            Assert.IsTrue(registry.SupportedProfiles
+                .Where(profile => profile.SettingsKey != "lmu")
+                .All(profile => !profile.ShouldIgnorePlaceholderSessionStart(negativePercentOnlyContext)));
+            Assert.IsTrue(registry.SupportedProfiles
+                .Where(profile => profile.SettingsKey != "lmu")
+                .All(profile => !profile.ShouldIgnorePlaceholderSessionStart(resetSessionOdoContext)));
+        }
+
+        [TestMethod]
         public void TrackDisplay_MapsOnlyAssettoCorsaClassic()
         {
             Dictionary<string, string> map = new Dictionary<string, string>

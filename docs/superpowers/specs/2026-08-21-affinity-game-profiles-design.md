@@ -198,10 +198,24 @@ Validation runs serially:
 ```powershell
 dotnet test .\Affinity.Tests\Affinity.Tests.csproj /p:SimHubInstallPath=C:\does-not-exist
 dotnet build .\Affinity\Affinity.csproj /p:SimHubInstallPath=C:\does-not-exist
-dotnet build .\Affinity\Affinity.csproj
 ```
 
-The normal build may be blocked if SimHub has plugin DLLs locked. Routine deployment must leave the installed `ac_track_id_map.json` intact.
+The second command must be run freshly before deployment so the validated `Affinity\bin\Debug\net48` output is from the reviewed source. Deployment then uses exactly this source/destination manifest under `C:\Program Files (x86)\SimHub\`:
+
+| Source relative to `Affinity\bin\Debug\net48` | Destination relative to the SimHub root |
+| --- | --- |
+| `Affinity.dll` | `Affinity.dll` |
+| `System.Data.SQLite.dll` | `System.Data.SQLite.dll` |
+| `x64\SQLite.Interop.dll` | `x64\SQLite.Interop.dll` |
+| `x86\SQLite.Interop.dll` | `x86\SQLite.Interop.dll` |
+| `PluginsData\Affinity\sqlite-native\x64\SQLite.Interop.dll` | `PluginsData\Affinity\sqlite-native\x64\SQLite.Interop.dll` |
+| `PluginsData\Affinity\sqlite-native\x86\SQLite.Interop.dll` | `PluginsData\Affinity\sqlite-native\x86\SQLite.Interop.dll` |
+
+Before any copy, capture the installed `ac_track_id_map.json` SHA-256, length, and UTC last-write timestamp. Resolve the build and SimHub roots to canonical paths, canonicalize every source and destination, require exactly the six unique rows above, verify that every source exists and stays beneath the build root, verify that every destination stays beneath the SimHub root, and reject any manifest containing `ac_track_id_map.json`. Copy only those six files without invoking `CopyPluginToSimHub`. After copying, require every destination to match its source by SHA-256, length, and UTC last-write timestamp, then require the installed map's SHA-256, length, and UTC last-write timestamp to match the before-copy values.
+
+If SimHub locks a DLL, stop without bypassing the lock, report it, ask the user to close or restart SimHub, and rerun the complete deployment preflight and copy only afterward. A normal `dotnet build .\Affinity\Affinity.csproj` uses the default live path and the wildcard/full-output `CopyPluginToSimHub` target, so it is reserved for an explicit user request to refresh the installed map along with the full output.
+
+This section corrects the committed design history after implementation review. The original validation text listed the normal live-path build before verifying map preservation, but the actual Task 8 execution used the canonicalized six-file selective-copy workflow above and verified that the installed map was unchanged.
 
 ## Documentation
 

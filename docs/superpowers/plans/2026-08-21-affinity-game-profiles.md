@@ -1074,6 +1074,8 @@ git commit -m "docs: define Affinity game profile ownership"
 
 ### Task 8: Perform final serial verification and deploy to SimHub
 
+> **Historical correction after implementation review:** The original Task 8 text prescribed a normal build against the default live SimHub path and checked the installed map afterward. That ordering was unsafe because `CopyPluginToSimHub` recursively copies `$(TargetDir)`, which includes `ac_track_id_map.json`. Task 8 was actually completed with the map-safe six-file selective-copy workflow below; this correction makes the committed plan match that reviewed execution history.
+
 **Files:**
 - Verify only; no expected source changes.
 
@@ -1099,7 +1101,7 @@ dotnet test .\Affinity.Tests\Affinity.Tests.csproj /p:SimHubInstallPath=C:\does-
 
 Expected: exit code `0`; all tests pass.
 
-- [ ] **Step 3: Run the no-deploy plugin build**
+- [ ] **Step 3: Run a fresh no-deploy plugin build**
 
 ```powershell
 dotnet build .\Affinity\Affinity.csproj /p:SimHubInstallPath=C:\does-not-exist
@@ -1107,17 +1109,133 @@ dotnet build .\Affinity\Affinity.csproj /p:SimHubInstallPath=C:\does-not-exist
 
 Expected: exit code `0`; `Affinity.dll` builds for `net48` and SQLite native recovery copies are staged under build output.
 
-- [ ] **Step 4: Run the normal plugin build for SimHub deployment**
+- [ ] **Step 4: Capture the installed map state and deploy only the six runtime files**
+
+Run this as one block from an elevated PowerShell prompt after Step 3. It canonicalizes and bounds every source and destination, requires exactly the same six-file manifest used by release and beta packaging, records source evidence before copying, and excludes `ac_track_id_map.json`. It does not invoke `CopyPluginToSimHub`.
 
 ```powershell
-dotnet build .\Affinity\Affinity.csproj
+$ErrorActionPreference = 'Stop'
+
+$affinityBuildOutput = (Resolve-Path -LiteralPath '.\Affinity\bin\Debug\net48').Path.TrimEnd('\')
+$affinitySimHubInstall = (Resolve-Path -LiteralPath 'C:\Program Files (x86)\SimHub').Path.TrimEnd('\')
+$affinityBuildRootPrefix = $affinityBuildOutput + [IO.Path]::DirectorySeparatorChar
+$affinityInstallRootPrefix = $affinitySimHubInstall + [IO.Path]::DirectorySeparatorChar
+$affinityInstalledMap = Join-Path $affinitySimHubInstall 'ac_track_id_map.json'
+
+if (-not (Test-Path -LiteralPath $affinityInstalledMap -PathType Leaf)) {
+    throw "Installed track map is missing: $affinityInstalledMap"
+}
+
+$affinityMapBeforeItem = Get-Item -LiteralPath $affinityInstalledMap
+$affinityMapBefore = [pscustomobject]@{
+    Hash = (Get-FileHash -LiteralPath $affinityInstalledMap -Algorithm SHA256).Hash
+    Length = $affinityMapBeforeItem.Length
+    LastWriteTimeUtc = $affinityMapBeforeItem.LastWriteTimeUtc.ToString('o')
+}
+
+$affinityRuntimeFiles = @(
+    'Affinity.dll'
+    'System.Data.SQLite.dll'
+    'x64\SQLite.Interop.dll'
+    'x86\SQLite.Interop.dll'
+    'PluginsData\Affinity\sqlite-native\x64\SQLite.Interop.dll'
+    'PluginsData\Affinity\sqlite-native\x86\SQLite.Interop.dll'
+)
+
+$affinityUniqueRuntimeFiles = @($affinityRuntimeFiles | Select-Object -Unique)
+if ($affinityRuntimeFiles.Count -ne 6 -or $affinityUniqueRuntimeFiles.Count -ne 6) {
+    throw 'The runtime deployment manifest must contain exactly six unique files.'
+}
+
+if ($affinityRuntimeFiles | Where-Object { [IO.Path]::GetFileName($_) -ieq 'ac_track_id_map.json' }) {
+    throw 'The runtime deployment manifest must not contain ac_track_id_map.json.'
+}
+
+$affinityDeploymentManifest = foreach ($affinityRuntimeFile in $affinityRuntimeFiles) {
+    $affinitySourceCandidate = Join-Path $affinityBuildOutput $affinityRuntimeFile
+    if (-not (Test-Path -LiteralPath $affinitySourceCandidate -PathType Leaf)) {
+        throw "Validated build output is missing: $affinitySourceCandidate"
+    }
+
+    $affinitySourcePath = (Resolve-Path -LiteralPath $affinitySourceCandidate).Path
+    $affinityDestinationPath = [IO.Path]::GetFullPath(
+        (Join-Path $affinitySimHubInstall $affinityRuntimeFile))
+
+    if (-not $affinitySourcePath.StartsWith(
+        $affinityBuildRootPrefix,
+        [StringComparison]::OrdinalIgnoreCase)) {
+        throw "Runtime source escapes the build root: $affinitySourcePath"
+    }
+
+    if (-not $affinityDestinationPath.StartsWith(
+        $affinityInstallRootPrefix,
+        [StringComparison]::OrdinalIgnoreCase)) {
+        throw "Runtime destination escapes the SimHub root: $affinityDestinationPath"
+    }
+
+    $affinitySourceItem = Get-Item -LiteralPath $affinitySourcePath
+    [pscustomobject]@{
+        RelativePath = $affinityRuntimeFile
+        SourcePath = $affinitySourcePath
+        DestinationPath = $affinityDestinationPath
+        SourceHash = (Get-FileHash -LiteralPath $affinitySourcePath -Algorithm SHA256).Hash
+        SourceLength = $affinitySourceItem.Length
+        SourceLastWriteTimeUtc = $affinitySourceItem.LastWriteTimeUtc.ToString('o')
+    }
+}
+
+$affinityDeploymentResults = foreach ($affinityDeploymentFile in $affinityDeploymentManifest) {
+    $affinityDestinationDirectory = Split-Path -Path $affinityDeploymentFile.DestinationPath -Parent
+    New-Item -ItemType Directory -Path $affinityDestinationDirectory -Force | Out-Null
+    Copy-Item -LiteralPath $affinityDeploymentFile.SourcePath `
+        -Destination $affinityDeploymentFile.DestinationPath -Force -ErrorAction Stop
+
+    $affinityDestinationItem = Get-Item -LiteralPath $affinityDeploymentFile.DestinationPath
+    $affinityDestinationHash = (Get-FileHash `
+        -LiteralPath $affinityDeploymentFile.DestinationPath -Algorithm SHA256).Hash
+    $affinityDestinationTimestamp = $affinityDestinationItem.LastWriteTimeUtc.ToString('o')
+
+    if ($affinityDestinationHash -ne $affinityDeploymentFile.SourceHash -or
+        $affinityDestinationItem.Length -ne $affinityDeploymentFile.SourceLength -or
+        $affinityDestinationTimestamp -ne $affinityDeploymentFile.SourceLastWriteTimeUtc) {
+        throw "Deployed file does not match its source: $($affinityDeploymentFile.RelativePath)"
+    }
+
+    [pscustomobject]@{
+        RelativePath = $affinityDeploymentFile.RelativePath
+        SourcePath = $affinityDeploymentFile.SourcePath
+        DestinationPath = $affinityDeploymentFile.DestinationPath
+        Hash = $affinityDestinationHash
+        Length = $affinityDestinationItem.Length
+        LastWriteTimeUtc = $affinityDestinationTimestamp
+    }
+}
+
+$affinityMapAfterItem = Get-Item -LiteralPath $affinityInstalledMap
+$affinityMapAfter = [pscustomobject]@{
+    Hash = (Get-FileHash -LiteralPath $affinityInstalledMap -Algorithm SHA256).Hash
+    Length = $affinityMapAfterItem.Length
+    LastWriteTimeUtc = $affinityMapAfterItem.LastWriteTimeUtc.ToString('o')
+}
+
+if ($affinityMapAfter.Hash -ne $affinityMapBefore.Hash -or
+    $affinityMapAfter.Length -ne $affinityMapBefore.Length -or
+    $affinityMapAfter.LastWriteTimeUtc -ne $affinityMapBefore.LastWriteTimeUtc) {
+    throw 'The installed ac_track_id_map.json changed during runtime deployment.'
+}
+
+$affinityDeploymentResults | Format-Table -AutoSize
+$affinityMapBefore
+$affinityMapAfter
 ```
 
-Expected: exit code `0` and plugin output copies into `C:\Program Files (x86)\SimHub\`. If SimHub locks a DLL, stop without forcing the copy, report the lock, ask the user to close or restart SimHub, and retry only after that.
+Expected: exactly `Affinity.dll`, `System.Data.SQLite.dll`, both top-level `x86`/`x64` `SQLite.Interop.dll` files, and both `PluginsData\Affinity\sqlite-native` recovery copies deploy to `C:\Program Files (x86)\SimHub\`. Every destination matches its source by SHA-256, length, and UTC last-write timestamp; the installed map matches its before-copy SHA-256, length, and UTC last-write timestamp.
 
-- [ ] **Step 5: Verify deployment did not replace the live track map**
+- [ ] **Step 5: Record deployment evidence and handle any lock without bypassing it**
 
-Confirm the routine deployment copied plugin binaries and dependencies but did not intentionally stage or copy a replacement `C:\Program Files (x86)\SimHub\ac_track_id_map.json`. If the project target would copy that file during the normal build, use the repo's established selective-copy workflow for binaries and leave the installed map intact.
+Record the six source/destination rows and the before/after map values reported by Step 4. If SimHub locks a DLL, the copy must stop at that error; do not force around the lock. Report the lock, ask the user to close or restart SimHub, and rerun the complete Step 4 block only after that so it captures a new before-copy map baseline and revalidates all six files.
+
+Do not run `dotnet build .\Affinity\Affinity.csproj` against the default/live path during routine deployment. The `CopyPluginToSimHub` wildcard/full-output target is reserved for an explicit user request to refresh the installed `ac_track_id_map.json` along with the full build output.
 
 - [ ] **Step 6: Prepare the final commit or PR metadata**
 

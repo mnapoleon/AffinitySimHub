@@ -220,28 +220,39 @@ dotnet test .\Affinity.Tests\Affinity.Tests.csproj /p:SimHubInstallPath=C:\does-
 
 ### Live deploy into SimHub
 
-The plugin project includes a post-build target that copies:
+`Affinity.csproj` has a `CopyPluginToSimHub` post-build target that copies every file under `$(TargetDir)` when `SimHubInstallPath` exists. Because the build output includes `ac_track_id_map.json`, a normal build against the default live path also overwrites the installed map. Reserve that broad build/copy path for an explicit request to refresh the map.
 
-- `Affinity.dll`
-- `Affinity.pdb`
-- `ac_track_id_map.json`
-- `System.Data.SQLite.dll`
-- `x64\SQLite.Interop.dll`
-- `x86\SQLite.Interop.dll`
-
-into the configured SimHub install path when that path exists.
-
-The default path is:
-
-- `C:\Program Files (x86)\SimHub\`
-
-So a normal build against the default install can deploy directly into SimHub:
+For routine deployment, first run the no-deploy build above. Then, from an elevated PowerShell prompt, copy the same six-file runtime manifest validated by the release and beta workflows:
 
 ```powershell
-dotnet build .\Affinity\Affinity.csproj
+$affinityBuildOutput = (Resolve-Path '.\Affinity\bin\Debug\net48').Path
+$affinitySimHubInstall = 'C:\Program Files (x86)\SimHub'
+$affinityRuntimeFiles = @(
+    'Affinity.dll'
+    'System.Data.SQLite.dll'
+    'x64\SQLite.Interop.dll'
+    'x86\SQLite.Interop.dll'
+    'PluginsData\Affinity\sqlite-native\x64\SQLite.Interop.dll'
+    'PluginsData\Affinity\sqlite-native\x86\SQLite.Interop.dll'
+)
+
+foreach ($affinityRuntimeFile in $affinityRuntimeFiles) {
+    $affinitySourcePath = Join-Path $affinityBuildOutput $affinityRuntimeFile
+    $affinityDestinationPath = Join-Path $affinitySimHubInstall $affinityRuntimeFile
+    $affinityDestinationDirectory = Split-Path -Path $affinityDestinationPath -Parent
+
+    if (-not (Test-Path -LiteralPath $affinitySourcePath)) {
+        throw "Validated build output is missing: $affinitySourcePath"
+    }
+
+    New-Item -ItemType Directory -Path $affinityDestinationDirectory -Force | Out-Null
+    Copy-Item -LiteralPath $affinitySourcePath -Destination $affinityDestinationPath -Force
+}
 ```
 
-If SimHub is open and the DLL is locked, close or restart SimHub and rebuild.
+This manifest updates the plugin and SQLite binaries while deliberately excluding `ac_track_id_map.json`; the installed map remains intact. It also excludes `Affinity.pdb`, which is not part of the release workflow's required runtime payload.
+
+If SimHub is open and a DLL is locked, do not force the copy. Close or restart SimHub, then rerun the explicit copy. Use a normal build with the live `SimHubInstallPath` only when the user explicitly asks to refresh `ac_track_id_map.json` along with the full output.
 
 ### Release ZIP
 
@@ -373,4 +384,4 @@ If you only need the shortest path to productive work:
 3. Run `dotnet build .\Affinity\Affinity.csproj /p:SimHubInstallPath=C:\does-not-exist`.
 4. Make your change.
 5. Re-run tests and build.
-6. Build against the real SimHub install when you want to deploy the plugin locally.
+6. Use the explicit map-safe copy workflow above when you want to deploy the plugin locally.

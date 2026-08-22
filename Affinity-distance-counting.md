@@ -119,8 +119,8 @@ All alias matching removes non-alphanumeric characters and ignores case. Profile
 
 LMU and rFactor 2 implement `ShouldIgnoreLapIncrement`. The plugin deliberately evaluates that decision twice with distinct snapshots:
 
-1. Before mutating distance state, the decision can suppress a large distance jump associated with an invalid lap increment.
-2. After the distance branch has updated `LastObservedSessionMeters` or `LastIgnoredSessionMeters`, the plugin constructs a fresh context and asks again whether to accept the lap-counter change and how to log it.
+1. After stateful accumulation and session/delta calculation, but before the distance-acceptance branch updates the plugin's `_lastObservedSessionMeters` or `_lastIgnoredSessionMeters`, the first decision feeds the generic half-lap distance-jump guard for an invalid lap increment.
+2. After the distance branch has updated `_lastObservedSessionMeters` or `_lastIgnoredSessionMeters`, the plugin constructs a fresh context and asks again whether to accept the lap-counter change and how to log it.
 
 The post-distance decision must not reuse the pre-distance result because the decision inputs can change during the distance branch.
 

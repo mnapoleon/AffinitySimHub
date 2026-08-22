@@ -25,7 +25,7 @@ Use these practices for each AffinitySimHub change unless the user explicitly as
 
 1. For game-support changes, cover the full surface:
    - supported game detection
-   - display and storage name
+   - display name and preservation of raw persistence identity
    - runtime distance rules
    - logo mapping
    - debug logging setting
@@ -63,9 +63,8 @@ When investigating telemetry issues, compare persisted DB rows, Affinity debug l
 2. Default validation commands:
    - `dotnet test .\Affinity.Tests\Affinity.Tests.csproj /p:SimHubInstallPath=C:\does-not-exist`
    - `dotnet build .\Affinity\Affinity.csproj /p:SimHubInstallPath=C:\does-not-exist`
-3. If runtime plugin behavior or UI changed, also run the normal plugin build so it copies plugin binaries into SimHub when possible:
-   - `dotnet build .\Affinity\Affinity.csproj`
-4. Routine SimHub deployment must not overwrite the live `ac_track_id_map.json`; leave the installed map intact unless the user explicitly asks to refresh it.
+3. If runtime plugin behavior or UI changed, use the no-deploy build above, then copy the validated runtime manifest explicitly from `Affinity\bin\Debug\net48` into SimHub. The manifest is `Affinity.dll`, `System.Data.SQLite.dll`, both top-level `x86`/`x64` `SQLite.Interop.dll` files, and both `PluginsData\Affinity\sqlite-native` recovery copies. Use the map-safe PowerShell workflow documented under "Live deploy into SimHub" in `README.md`.
+4. Do not use a normal `dotnet build .\Affinity\Affinity.csproj` for routine deployment. The `CopyPluginToSimHub` post-build target copies every file under `$(TargetDir)`, including `ac_track_id_map.json`. Reserve that broad build/copy path for an explicit user request to refresh the installed map; otherwise leave the installed map intact.
 5. If SimHub has files locked, do not force the copy. Report the lock, ask the user to close or restart SimHub, then retry the copy when asked.
 6. When packaging or release behavior changes, check both the project build output and GitHub workflow/archive contents so shipping artifacts match runtime expectations.
 

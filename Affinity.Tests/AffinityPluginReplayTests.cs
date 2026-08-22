@@ -6,227 +6,124 @@ using Affinity;
 using GameReaderCommon;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using SimHub.Plugins;
+
 namespace Affinity.Tests
 {
     [TestClass]
     public class AffinityPluginReplayTests
     {
         [TestMethod]
-        public void IsReplayTelemetry_ReturnsTrueWhenIsGameReplayIsTrue()
+        public void IsReplay_ReturnsTrueWhenGameDataIsGameReplayIsTrue()
         {
-            AffinityPlugin plugin = new AffinityPlugin();
-            GameData data = CreateReplayFlagGameData(isGameReplay: true);
+            GameData data = new ReplayFlagGameData { IsGameReplay = true };
 
-            object result = typeof(AffinityPlugin)
-                .GetMethod("IsReplayTelemetry", BindingFlags.Instance | BindingFlags.NonPublic)
-                .Invoke(plugin, new object[] { data });
-
-            Assert.AreEqual(true, result);
+            Assert.IsTrue(AffinityReplayDetector.IsReplay(data));
         }
 
         [TestMethod]
-        public void IsReplayTelemetry_ReturnsTrueWhenReplayModeIsActive()
+        public void IsReplay_ReturnsTrueWhenGameDataGameReplayIsTrue()
         {
-            AffinityPlugin plugin = new AffinityPlugin();
-            GameData data = CreateReplayModeGameData("Playing");
-
-            object result = typeof(AffinityPlugin)
-                .GetMethod("IsReplayTelemetry", BindingFlags.Instance | BindingFlags.NonPublic)
-                .Invoke(plugin, new object[] { data });
-
-            Assert.AreEqual(true, result);
-        }
-
-        [TestMethod]
-        public void IsReplayTelemetry_ReturnsFalseWhenReplayModeIsLive()
-        {
-            AffinityPlugin plugin = new AffinityPlugin();
-            GameData data = CreateReplayModeGameData("Live");
-
-            object result = typeof(AffinityPlugin)
-                .GetMethod("IsReplayTelemetry", BindingFlags.Instance | BindingFlags.NonPublic)
-                .Invoke(plugin, new object[] { data });
-
-            Assert.AreEqual(false, result);
-        }
-
-        [TestMethod]
-        public void IsReplayTelemetry_ReturnsTrueWhenStatusIsGameReplayIsTrue()
-        {
-            AffinityPlugin plugin = new AffinityPlugin();
             GameData data = new GameData();
-            SetMemberValue(data, "NewData", new ReplayFlagStatusData { IsGameReplay = true });
+            SetMemberValue(data, "GameReplay", true);
 
-            object result = typeof(AffinityPlugin)
-                .GetMethod("IsReplayTelemetry", BindingFlags.Instance | BindingFlags.NonPublic)
-                .Invoke(plugin, new object[] { data });
-
-            Assert.AreEqual(true, result);
+            Assert.IsTrue(AffinityReplayDetector.IsReplay(data));
         }
 
         [TestMethod]
-        public void IsReplayTelemetry_ReturnsTrueWhenRawTelemetryIsReplayPlaying()
+        public void IsReplay_ReturnsTrueWhenGameDataReplayModeIsActive()
         {
-            AffinityPlugin plugin = new AffinityPlugin();
-            GameData data = new GameData();
-            SetMemberValue(
-                data,
-                "NewData",
-                new InactiveStatusData
+            GameData data = new ReplayModeGameData { ReplayMode = "Playing" };
+
+            Assert.IsTrue(AffinityReplayDetector.IsReplay(data));
+        }
+
+        [DataTestMethod]
+        [DataRow("None")]
+        [DataRow("Off")]
+        [DataRow("Disabled")]
+        [DataRow("Live")]
+        public void IsReplay_ReturnsFalseWhenGameDataReplayModeIsInactive(string replayMode)
+        {
+            GameData data = new ReplayModeGameData { ReplayMode = replayMode };
+
+            Assert.IsFalse(AffinityReplayDetector.IsReplay(data));
+        }
+
+        [TestMethod]
+        public void IsReplay_ReturnsTrueWhenStatusIsGameReplayIsTrue()
+        {
+            GameData data = CreateGameDataWithStatus(new ReplayFlagStatusData { IsGameReplay = true });
+
+            Assert.IsTrue(AffinityReplayDetector.IsReplay(data));
+        }
+
+        [TestMethod]
+        public void IsReplay_ReturnsTrueWhenStatusReplayModeIsActive()
+        {
+            GameData data = CreateGameDataWithStatus(CreateStatusData("Playing"));
+
+            Assert.IsTrue(AffinityReplayDetector.IsReplay(data));
+        }
+
+        [TestMethod]
+        public void IsReplay_ReturnsTrueWhenRawDataIsReplayPlaying()
+        {
+            GameData data = CreateGameDataWithStatus(
+                new RawStatusData
                 {
-                    RawData = new RawIracingData
+                    RawData = new RawReplayData { IsReplayPlaying = true }
+                });
+
+            Assert.IsTrue(AffinityReplayDetector.IsReplay(data));
+        }
+
+        [TestMethod]
+        public void IsReplay_ReturnsTrueWhenNestedRawTelemetryIsReplayPlaying()
+        {
+            GameData data = CreateGameDataWithStatus(
+                new RawStatusData
+                {
+                    RawData = new RawReplayData
                     {
-                        Telemetry = new RawIracingTelemetry
+                        Telemetry = new RawReplayTelemetry
                         {
                             IsReplayPlaying = true
                         }
                     }
                 });
 
-            object result = typeof(AffinityPlugin)
-                .GetMethod("IsReplayTelemetry", BindingFlags.Instance | BindingFlags.NonPublic)
-                .Invoke(plugin, new object[] { data });
-
-            Assert.AreEqual(true, result);
-        }
-
-        [TestMethod]
-        public void IsRaceRoomInactiveTelemetry_ReturnsTrueWhenFinishStatusIsNonZero()
-        {
-            AffinityPlugin plugin = new AffinityPlugin();
-            StatusDataBase status = new RawFinishStatusStatusData(new RawFinishStatusData { FinishStatus = 1 });
-
-            object result = typeof(AffinityPlugin)
-                .GetMethod("IsInactiveTelemetry", BindingFlags.Instance | BindingFlags.NonPublic)
-                .Invoke(plugin, new object[] { "RRRE", status });
-
-            Assert.AreEqual(true, result);
-        }
-
-        [TestMethod]
-        public void IsRaceRoomInactiveTelemetry_ReturnsFalseWhenFinishStatusIsZero()
-        {
-            AffinityPlugin plugin = new AffinityPlugin();
-            StatusDataBase status = new RawFinishStatusStatusData(new RawFinishStatusData { FinishStatus = 0 });
-
-            object result = typeof(AffinityPlugin)
-                .GetMethod("IsInactiveTelemetry", BindingFlags.Instance | BindingFlags.NonPublic)
-                .Invoke(plugin, new object[] { "RRRE", status });
-
-            Assert.AreEqual(false, result);
-        }
-
-        [TestMethod]
-        public void IsRaceRoomInactiveTelemetry_ReturnsTrueWhenPlayerIsInGarage()
-        {
-            AffinityPlugin plugin = new AffinityPlugin();
-            StatusDataBase status = new RawFinishStatusStatusData(new RawFinishStatusData
-            {
-                FinishStatus = 0,
-                GamePlayerInGarage = 1
-            });
-
-            object result = typeof(AffinityPlugin)
-                .GetMethod("IsInactiveTelemetry", BindingFlags.Instance | BindingFlags.NonPublic)
-                .Invoke(plugin, new object[] { "RRRE", status });
-
-            Assert.AreEqual(true, result);
-        }
-
-        [TestMethod]
-        public void IsInactiveTelemetry_ReturnsTrueForAutomobilista2GarageTelemetry()
-        {
-            AffinityPlugin plugin = new AffinityPlugin();
-            StatusDataBase status = new InactiveStatusData
-            {
-                IsInGarage = true
-            };
-
-            object result = typeof(AffinityPlugin)
-                .GetMethod("IsInactiveTelemetry", BindingFlags.Instance | BindingFlags.NonPublic)
-                .Invoke(plugin, new object[] { "Automobilista2", status });
-
-            Assert.AreEqual(true, result);
-        }
-
-        [TestMethod]
-        public void IsInactiveTelemetry_ReturnsTrueForAutomobilista2SpectatorTelemetry()
-        {
-            AffinityPlugin plugin = new AffinityPlugin();
-            StatusDataBase status = new InactiveStatusData
-            {
-                IsSpectator = true
-            };
-
-            object result = typeof(AffinityPlugin)
-                .GetMethod("IsInactiveTelemetry", BindingFlags.Instance | BindingFlags.NonPublic)
-                .Invoke(plugin, new object[] { "Automobilista2", status });
-
-            Assert.AreEqual(true, result);
-        }
-
-        [TestMethod]
-        public void IsInactiveTelemetry_ReturnsTrueForAutomobilista2ViewedParticipantChange()
-        {
-            AffinityPlugin plugin = new AffinityPlugin();
-            StatusDataBase playerStatus = new InactiveStatusData
-            {
-                RawData = new Automobilista2RawData { mViewedParticipantIndex = 3 }
-            };
-            StatusDataBase monitoredStatus = new InactiveStatusData
-            {
-                RawData = new Automobilista2RawData { mViewedParticipantIndex = 7 }
-            };
-
-            MethodInfo method = typeof(AffinityPlugin)
-                .GetMethod("IsInactiveTelemetry", BindingFlags.Instance | BindingFlags.NonPublic);
-
-            Assert.AreEqual(false, method.Invoke(plugin, new object[] { "Automobilista2", playerStatus }));
-            Assert.AreEqual(true, method.Invoke(plugin, new object[] { "Automobilista2", monitoredStatus }));
-        }
-
-        [TestMethod]
-        public void IsInactiveTelemetry_ReturnsTrueForAutomobilista2ReplayGameState()
-        {
-            AffinityPlugin plugin = new AffinityPlugin();
-            StatusDataBase status = new InactiveStatusData
-            {
-                RawData = new Automobilista2RawData
-                {
-                    mViewedParticipantIndex = 0,
-                    mGameState = 6
-                }
-            };
-
-            object result = typeof(AffinityPlugin)
-                .GetMethod("IsInactiveTelemetry", BindingFlags.Instance | BindingFlags.NonPublic)
-                .Invoke(plugin, new object[] { "Automobilista2", status });
-
-            Assert.AreEqual(true, result);
+            Assert.IsTrue(AffinityReplayDetector.IsReplay(data));
         }
 
         [TestMethod]
         public void DataUpdate_ClearsAutomobilista2ViewedParticipantIndexWhenGameStops()
         {
             AffinityPlugin plugin = new AffinityPlugin();
-            MethodInfo method = typeof(AffinityPlugin)
-                .GetMethod("IsInactiveTelemetry", BindingFlags.Instance | BindingFlags.NonPublic);
-            StatusDataBase playerStatus = new InactiveStatusData
+            AffinityGameRuntimeState runtimeState = GetRuntimeState(plugin);
+            IAffinityGameProfile profile = AffinityGameProfileRegistry.CreateDefault().Resolve("Automobilista2");
+            StatusDataBase playerStatus = new RawStatusData
             {
                 RawData = new Automobilista2RawData { mViewedParticipantIndex = 3 }
             };
-            StatusDataBase nextRacePlayerStatus = new InactiveStatusData
+            StatusDataBase nextRacePlayerStatus = new RawStatusData
             {
                 RawData = new Automobilista2RawData { mViewedParticipantIndex = 7 }
             };
             GameData stoppedData = new GameData();
             SetMemberValue(stoppedData, "GameRunning", false);
 
-            Assert.AreEqual(false, method.Invoke(plugin, new object[] { "Automobilista2", playerStatus }));
+            Assert.AreEqual(
+                TelemetryDisposition.Active,
+                profile.EvaluateTelemetry(CreateTelemetryContext(playerStatus, runtimeState)));
+            Assert.AreEqual(3, runtimeState.Automobilista2PlayerViewedParticipantIndex);
 
             plugin.DataUpdate(CreatePluginManager(), ref stoppedData);
 
-            Assert.AreEqual(false, method.Invoke(plugin, new object[] { "Automobilista2", nextRacePlayerStatus }));
+            Assert.AreEqual(-1, runtimeState.Automobilista2PlayerViewedParticipantIndex);
+            Assert.AreEqual(
+                TelemetryDisposition.Active,
+                profile.EvaluateTelemetry(CreateTelemetryContext(nextRacePlayerStatus, runtimeState)));
+            Assert.AreEqual(7, runtimeState.Automobilista2PlayerViewedParticipantIndex);
         }
 
         [TestMethod]
@@ -242,15 +139,17 @@ namespace Affinity.Tests
                 plugin.Settings.GameDebugLogging["automobilista2"] = true;
                 SetMemberValue(plugin, "_debugLogPath", debugLogPath);
 
-                StatusDataBase status = new InactiveStatusData
+                AffinityGameRuntimeState runtimeState = GetRuntimeState(plugin);
+                StatusDataBase status = new RawStatusData
                 {
                     RawData = new Automobilista2RawData { mViewedParticipantIndex = 3 }
                 };
-                GameData data = new GameData();
-                SetMemberValue(data, "NewData", status);
-                typeof(AffinityPlugin)
-                    .GetMethod("IsInactiveTelemetry", BindingFlags.Instance | BindingFlags.NonPublic)
-                    .Invoke(plugin, new object[] { "Automobilista2", status });
+                GameData data = CreateGameDataWithStatus(status);
+                IAffinityGameProfile profile = AffinityGameProfileRegistry.CreateDefault().Resolve("Automobilista2");
+
+                Assert.AreEqual(
+                    TelemetryDisposition.Active,
+                    profile.EvaluateTelemetry(CreateTelemetryContext(data, status, runtimeState)));
 
                 typeof(AffinityPlugin)
                     .GetMethod("LogTelemetryDebugSnapshot", BindingFlags.Instance | BindingFlags.NonPublic)
@@ -260,6 +159,7 @@ namespace Affinity.Tests
                         {
                             "test",
                             data,
+                            profile,
                             "Automobilista2",
                             "Porsche 996 GT3 RSR",
                             "OultonPark-OultonPark_Fosters",
@@ -283,16 +183,40 @@ namespace Affinity.Tests
             }
         }
 
-        private static GameData CreateReplayFlagGameData(bool isGameReplay)
+        private static AffinityGameRuntimeState GetRuntimeState(AffinityPlugin plugin)
         {
-            ReplayFlagGameData data = new ReplayFlagGameData { IsGameReplay = isGameReplay };
-            return data;
+            FieldInfo field = typeof(AffinityPlugin)
+                .GetField("_gameRuntimeState", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.IsNotNull(field);
+            return (AffinityGameRuntimeState)field.GetValue(plugin);
         }
 
-        private static GameData CreateReplayModeGameData(string replayMode)
+        private static AffinityTelemetryContext CreateTelemetryContext(
+            StatusDataBase status,
+            AffinityGameRuntimeState runtimeState)
+        {
+            return CreateTelemetryContext(CreateGameDataWithStatus(status), status, runtimeState);
+        }
+
+        private static AffinityTelemetryContext CreateTelemetryContext(
+            GameData data,
+            StatusDataBase status,
+            AffinityGameRuntimeState runtimeState)
+        {
+            return new AffinityTelemetryContext
+            {
+                GameData = data,
+                Status = status,
+                CarModel = "Test Car",
+                TrackNameWithConfig = "Test Track",
+                RuntimeState = runtimeState
+            };
+        }
+
+        private static GameData CreateGameDataWithStatus(StatusDataBase status)
         {
             GameData data = new GameData();
-            SetMemberValue(data, "NewData", CreateStatusData(replayMode));
+            SetMemberValue(data, "NewData", status);
             return data;
         }
 
@@ -334,6 +258,11 @@ namespace Affinity.Tests
             public bool IsGameReplay { get; set; }
         }
 
+        private sealed class ReplayModeGameData : GameData
+        {
+            public object ReplayMode { get; set; }
+        }
+
         private sealed class ReplayFlagStatusData : StatusDataBase
         {
             public new bool IsGameReplay { get; set; }
@@ -344,34 +273,8 @@ namespace Affinity.Tests
             }
         }
 
-        private sealed class RawFinishStatusStatusData : StatusDataBase
+        private sealed class RawStatusData : StatusDataBase
         {
-            private readonly object _rawData;
-
-            public RawFinishStatusStatusData(object rawData)
-            {
-                _rawData = rawData;
-            }
-
-            public override object GetRawDataObject()
-            {
-                return _rawData;
-            }
-        }
-
-        private sealed class RawFinishStatusData
-        {
-            public int FinishStatus { get; set; }
-
-            public int GamePlayerInGarage { get; set; }
-        }
-
-        private sealed class InactiveStatusData : StatusDataBase
-        {
-            public bool IsInGarage { get; set; }
-
-            public bool IsSpectator { get; set; }
-
             public object RawData { get; set; }
 
             public override object GetRawDataObject()
@@ -383,16 +286,16 @@ namespace Affinity.Tests
         private sealed class Automobilista2RawData
         {
             public int mViewedParticipantIndex;
-
-            public int mGameState;
         }
 
-        private sealed class RawIracingData
+        private sealed class RawReplayData
         {
-            public RawIracingTelemetry Telemetry { get; set; }
+            public bool IsReplayPlaying { get; set; }
+
+            public RawReplayTelemetry Telemetry { get; set; }
         }
 
-        private sealed class RawIracingTelemetry
+        private sealed class RawReplayTelemetry
         {
             public bool IsReplayPlaying { get; set; }
         }
@@ -404,6 +307,5 @@ namespace Affinity.Tests
                 return null;
             }
         }
-
     }
 }

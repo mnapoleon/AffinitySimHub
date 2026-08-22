@@ -46,39 +46,15 @@ namespace Affinity
         private const double SaveThresholdUsedTimeSeconds = 30.0;
         private const double MinimumPersistedSessionMeters = 1.0;
         private const double MaxCountedTelemetryGapSeconds = 5.0;
-        private const int Automobilista2ObservedReplayGameState = 6;
         public const string RecentHighlightsRangeWeek = "Week";
         public const string RecentHighlightsRangeMonth = "Month";
         private static readonly string Version = ResolvePluginVersion();
-        private static readonly IReadOnlyDictionary<string, string> GameLogoFileNames =
-            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-            {
-                ["assettocorsa"] = "244210.jpg",
-                ["assettocorsacompetizione"] = "805550.jpg",
-                ["assettocorsaevo"] = "3058630.jpg",
-                ["automobilista2"] = "1066890.jpg",
-                ["iracing"] = "iRacing.jpg",
-                ["lmu"] = "2399420.jpg",
-                ["projectmotorracing"] = "299970.jpg",
-                ["raceroomracingexperience"] = "211500.jpg",
-                ["rfactor2"] = "365960.jpg"
-            };
+        private static readonly AffinityGameProfileRegistry DefaultGameProfiles =
+            AffinityGameProfileRegistry.CreateDefault();
         private static readonly IReadOnlyList<GameTabFilterOption> RecentHighlightsRangeOptionsValue = new List<GameTabFilterOption>
         {
             new GameTabFilterOption(RecentHighlightsRangeWeek, "Week"),
             new GameTabFilterOption(RecentHighlightsRangeMonth, "Month")
-        };
-        private static readonly KeyValuePair<string, string>[] DefaultGameDebugLoggingEntries =
-        {
-            new KeyValuePair<string, string>("assettocorsa", "Assetto Corsa"),
-            new KeyValuePair<string, string>("assettocorsacompetizione", "Assetto Corsa Competizione"),
-            new KeyValuePair<string, string>("assettocorsaevo", "Assetto Corsa EVO"),
-            new KeyValuePair<string, string>("automobilista2", "Automobilista 2"),
-            new KeyValuePair<string, string>("iracing", "iRacing"),
-            new KeyValuePair<string, string>("lmu", "Le Mans Ultimate"),
-            new KeyValuePair<string, string>("projectmotorracing", "Project Motor Racing"),
-            new KeyValuePair<string, string>("rfactor2", "rFactor 2"),
-            new KeyValuePair<string, string>("raceroomracingexperience", "RaceRoom Racing Experience")
         };
         private static readonly string[] GameDataDebugMemberNames =
         {
@@ -140,6 +116,8 @@ namespace Affinity
         };
 
         private bool _hasLoggedDataError;
+        private readonly AffinityGameProfileRegistry _gameProfiles = DefaultGameProfiles;
+        private readonly AffinityGameRuntimeState _gameRuntimeState = new AffinityGameRuntimeState();
         private ImageSource _pictureIcon;
         private string _settingsPath = string.Empty;
         private string _databasePath = string.Empty;
@@ -149,6 +127,7 @@ namespace Affinity
         private AffinityDatabase _database = new AffinityDatabase();
         private AffinitySqliteRepository _sqliteRepository;
         private Dictionary<string, string> _assettoCorsaTrackMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        private AffinityTrackDisplayContext _trackDisplayContext = new AffinityTrackDisplayContext(null);
         private string _currentGameName = "No active game";
         private string _currentCarModel = "Unknown car";
         private string _currentTrackName = "Unknown track";
@@ -191,7 +170,6 @@ namespace Affinity
         private double _pendingUsedTimeSecondsSinceSave;
         private DateTime _lastTelemetryDebugLogUtc = DateTime.MinValue;
         private DateTime _lastSessionSampleUtc = DateTime.MinValue;
-        private int _automobilista2PlayerViewedParticipantIndex = -1;
         private readonly AffinityOverviewTab _overviewTab = new AffinityOverviewTab();
         private readonly AffinitySettingsTab _settingsTab = new AffinitySettingsTab();
 
@@ -669,6 +647,7 @@ namespace Affinity
             Settings = LoadSettings();
             EnsureDefaultGameDebugLoggingSettings();
             _assettoCorsaTrackMap = LoadAssettoCorsaTrackMap();
+            _trackDisplayContext = new AffinityTrackDisplayContext(_assettoCorsaTrackMap);
             EnsureSqliteNativeLibraryReady();
             InitializeDatabase();
             _database = LoadRuntimeDatabase();
@@ -683,7 +662,7 @@ namespace Affinity
             pluginManager.AddProperty("Affinity.SessionDistanceKm", GetType(), 0.0);
             pluginManager.AddProperty("Affinity.SessionDistanceMiles", GetType(), 0.0);
             pluginManager.AddProperty("Affinity.DataFilePath", GetType(), _databasePath);
-            pluginManager.AddProperty("Affinity.DebugLogPath", GetType(), GetDebugLogPath(string.Empty));
+            pluginManager.AddProperty("Affinity.DebugLogPath", GetType(), GetDebugLogPathForSettingsKey(string.Empty));
 
             RefreshDistanceSummaries();
             RefreshGameDebugLoggingOptions();
@@ -697,12 +676,12 @@ namespace Affinity
                 DateTime now = DateTime.UtcNow;
                 if (!data.GameRunning)
                 {
-                    _automobilista2PlayerViewedParticipantIndex = -1;
+                    _gameRuntimeState.Reset();
                 }
 
                 pluginManager.SetPropertyValue("Affinity.IsGameRunning", GetType(), data.GameRunning);
                 pluginManager.SetPropertyValue("Affinity.DataFilePath", GetType(), _databasePath);
-                pluginManager.SetPropertyValue("Affinity.DebugLogPath", GetType(), GetDebugLogPath(string.Empty));
+                pluginManager.SetPropertyValue("Affinity.DebugLogPath", GetType(), GetDebugLogPathForSettingsKey(string.Empty));
 
                 if (!data.GameRunning || data.NewData == null)
                 {
@@ -720,15 +699,23 @@ namespace Affinity
                 string carModel = NormalizeContextValue(data.NewData.CarModel, "Unknown Car");
                 string trackName = NormalizeContextValue(data.NewData.TrackName, "Unknown Track");
                 string trackNameWithConfig = NormalizeContextValue(data.NewData.TrackNameWithConfig, trackName);
-                bool isReplayTelemetry = IsReplayTelemetry(data);
-                bool isInactiveTelemetry = IsInactiveTelemetry(gameName, data.NewData);
-                if (isReplayTelemetry || isInactiveTelemetry)
+                IAffinityGameProfile profile = _gameProfiles.Resolve(gameName);
+                TelemetryDisposition disposition = profile.EvaluateTelemetry(new AffinityTelemetryContext
                 {
-                    string ignoreReason = isReplayTelemetry
+                    GameData = data,
+                    Status = data.NewData,
+                    CarModel = carModel,
+                    TrackNameWithConfig = trackNameWithConfig,
+                    RuntimeState = _gameRuntimeState
+                });
+                if (disposition == TelemetryDisposition.Replay ||
+                    disposition == TelemetryDisposition.Inactive)
+                {
+                    string ignoreReason = disposition == TelemetryDisposition.Replay
                         ? "replay-ignored"
                         : "inactive-ignored";
-                    LogTelemetryDebugSnapshot(ignoreReason, data, gameName, carModel, trackNameWithConfig, data.SessionId, data.NewData, -1.0, 0.0, 0, false);
-                    DataStatus = isReplayTelemetry
+                    LogTelemetryDebugSnapshot(ignoreReason, data, profile, gameName, carModel, trackNameWithConfig, data.SessionId, data.NewData, -1.0, 0.0, 0, false);
+                    DataStatus = disposition == TelemetryDisposition.Replay
                         ? $"Ignoring replay telemetry for {gameName}"
                         : $"Ignoring inactive telemetry for {gameName}";
                     IsTelemetryActive = false;
@@ -740,7 +727,7 @@ namespace Affinity
                     return;
                 }
 
-                if (!IsSupportedGame(gameName))
+                if (!profile.IsSupported)
                 {
                     DataStatus = $"Unsupported game: {gameName}";
                     IsTelemetryActive = false;
@@ -752,7 +739,7 @@ namespace Affinity
                     return;
                 }
 
-                if (!HasReliableTelemetryContext(gameName, carModel, trackNameWithConfig))
+                if (disposition == TelemetryDisposition.WaitingForContext)
                 {
                     DataStatus = $"Waiting for {gameName} car/track telemetry";
                     IsTelemetryActive = false;
@@ -764,17 +751,17 @@ namespace Affinity
                     return;
                 }
 
-                if (EnsureGameDebugLoggingConfigured(gameName))
+                if (EnsureGameDebugLoggingConfigured(profile))
                 {
                     RefreshGameDebugLoggingOptions();
                 }
-                pluginManager.SetPropertyValue("Affinity.DebugLogPath", GetType(), GetDebugLogPath(gameName));
+                pluginManager.SetPropertyValue("Affinity.DebugLogPath", GetType(), GetDebugLogPathForSettingsKey(profile.SettingsKey));
 
                 string contextKey = BuildContextKey(gameName, carModel, trackNameWithConfig);
                 Guid sessionId = data.SessionId;
                 double absoluteSessionMeters = -1.0;
                 int completedLaps = Math.Max(0, data.NewData.CompletedLaps);
-                bool shouldDebugTelemetry = ShouldDebugTelemetry(gameName);
+                bool shouldDebugTelemetry = ShouldDebugTelemetry(profile);
                 bool bucketTimeUpdated = AccumulateActiveSessionTime(now);
 
                 bool activeContextChanged =
@@ -784,14 +771,30 @@ namespace Affinity
                 bool promotedAccTrackContext = false;
                 if (activeContextChanged && !data.NewData.IsSessionRestart)
                 {
-                    promotedAccTrackContext = TryPromoteAccTrackContext(sessionId, gameName, carModel, trackName, trackNameWithConfig);
+                    promotedAccTrackContext = TryPromoteAccTrackContext(sessionId, profile, gameName, carModel, trackName, trackNameWithConfig);
                 }
 
                 if (activeContextChanged && !promotedAccTrackContext)
                 {
                     FinalizeActiveSession(refreshSummaries: bucketTimeUpdated);
 
-                    if (ShouldIgnorePlaceholderSessionStart(gameName, data.NewData, completedLaps))
+                    double placeholderTrackLengthMeters = data.NewData.TrackLength > 0.0
+                        ? data.NewData.TrackLength
+                        : data.NewData.ReportedTrackLength;
+                    AffinityDistanceSampleContext placeholderStartContext = new AffinityDistanceSampleContext
+                    {
+                        Status = data.NewData,
+                        DistanceMode = profile.DistanceMode,
+                        CompletedLaps = completedLaps,
+                        TrackLengthMeters = placeholderTrackLengthMeters,
+                        SessionStatefulAbsoluteMeters = _sessionStatefulAbsoluteMeters,
+                        SessionStartTrackPositionMeters = _sessionStartTrackPositionMeters,
+                        LastTrackPositionWithinLapMeters = _lastTrackPositionWithinLapMeters,
+                        LastObservedSessionMeters = _lastObservedSessionMeters,
+                        LastIgnoredSessionMeters = _lastIgnoredSessionMeters,
+                        LastObservedCompletedLaps = _lastObservedCompletedLaps
+                    };
+                    if (profile.ShouldIgnorePlaceholderSessionStart(placeholderStartContext))
                     {
                         double lastIgnoredSessionMeters = _lastIgnoredSessionMeters;
                         ResetActiveSession(clearContext: false);
@@ -813,13 +816,13 @@ namespace Affinity
                     _activeSessionId = sessionId;
                     _activeStorageSessionUid = Guid.NewGuid().ToString("N");
                     _activeSessionStartedUtc = now;
-                    _sessionDistanceSource = ResolveSessionDistanceSource(gameName, data.NewData);
-                    _sessionStartTrackPositionMeters = GetSessionStartTrackPositionMeters(gameName, data.NewData);
+                    _sessionDistanceSource = ResolveSessionDistanceSource(profile, data.NewData);
+                    _sessionStartTrackPositionMeters = GetSessionStartTrackPositionMeters(profile, data.NewData);
                     _sessionStatefulAbsoluteMeters = 0.0;
-                    _lastTrackPositionWithinLapMeters = GetTrackPositionWithinLapMeters(data.NewData, data.NewData.TrackLength > 0.0 ? data.NewData.TrackLength : data.NewData.ReportedTrackLength);
-                    _sessionDistanceOriginMeters = ShouldUseZeroSessionOrigin(gameName, _sessionDistanceSource)
+                    _lastTrackPositionWithinLapMeters = AffinityGameProfileBase.GetTrackPositionWithinLapMeters(data.NewData, data.NewData.TrackLength > 0.0 ? data.NewData.TrackLength : data.NewData.ReportedTrackLength);
+                    _sessionDistanceOriginMeters = ShouldUseZeroSessionOrigin(profile, _sessionDistanceSource)
                         ? 0.0
-                        : GetAbsoluteSessionDistanceMeters(gameName, data.NewData, _sessionDistanceSource);
+                        : GetAbsoluteSessionDistanceMeters(profile, data.NewData, _sessionDistanceSource);
                     _lastObservedSessionMeters = 0.0;
                     _lastObservedCompletedLaps = completedLaps;
                     _lastSessionSampleUtc = now;
@@ -833,16 +836,29 @@ namespace Affinity
 
                     if (shouldDebugTelemetry)
                     {
-                        LogTelemetryDebugSnapshot("session-start", data, gameName, carModel, trackNameWithConfig, sessionId, data.NewData, -1.0, 0.0, 0, false);
+                        LogTelemetryDebugSnapshot("session-start", data, profile, gameName, carModel, trackNameWithConfig, sessionId, data.NewData, -1.0, 0.0, 0, false);
                     }
                 }
                 else
                 {
                     double trackLengthMeters = data.NewData.TrackLength > 0.0 ? data.NewData.TrackLength : data.NewData.ReportedTrackLength;
-                    bool usesStatefulDerivedDistance = UsesStatefulDerivedDistance(gameName) &&
+                    bool usesStatefulDerivedDistance = profile.DistanceMode == AffinityDistanceMode.StatefulDerived &&
                         _sessionDistanceSource == SessionDistanceSource.Derived;
+                    AffinityDistanceSampleContext transientResetContext = new AffinityDistanceSampleContext
+                    {
+                        Status = data.NewData,
+                        DistanceMode = profile.DistanceMode,
+                        CompletedLaps = completedLaps,
+                        TrackLengthMeters = trackLengthMeters,
+                        SessionStatefulAbsoluteMeters = _sessionStatefulAbsoluteMeters,
+                        SessionStartTrackPositionMeters = _sessionStartTrackPositionMeters,
+                        LastTrackPositionWithinLapMeters = _lastTrackPositionWithinLapMeters,
+                        LastObservedSessionMeters = _lastObservedSessionMeters,
+                        LastIgnoredSessionMeters = _lastIgnoredSessionMeters,
+                        LastObservedCompletedLaps = _lastObservedCompletedLaps
+                    };
 
-                    if (usesStatefulDerivedDistance && LooksLikeTransientIracingZeroDrop(gameName, data.NewData, completedLaps, trackLengthMeters))
+                    if (usesStatefulDerivedDistance && profile.ShouldIgnoreTransientReset(transientResetContext))
                     {
                         SessionDistanceKm = _lastObservedSessionMeters / MetersPerKilometer;
                         DataStatus = "Ignoring transient iRacing telemetry reset";
@@ -850,7 +866,7 @@ namespace Affinity
 
                         if (shouldDebugTelemetry)
                         {
-                            LogTelemetryDebugSnapshot("transient-zero-drop", data, gameName, carModel, trackNameWithConfig, sessionId, data.NewData, 0.0, _lastObservedSessionMeters, completedLaps - _lastObservedCompletedLaps, false);
+                            LogTelemetryDebugSnapshot("transient-zero-drop", data, profile, gameName, carModel, trackNameWithConfig, sessionId, data.NewData, 0.0, _lastObservedSessionMeters, completedLaps - _lastObservedCompletedLaps, false);
                         }
 
                         PublishProperties(
@@ -865,11 +881,11 @@ namespace Affinity
 
                     if (usesStatefulDerivedDistance)
                     {
-                        absoluteSessionMeters = UpdateStatefulDerivedAbsoluteSessionDistanceMeters(gameName, data.NewData, trackLengthMeters);
+                        absoluteSessionMeters = UpdateStatefulDerivedAbsoluteSessionDistanceMeters(profile, data.NewData, trackLengthMeters);
                     }
                     else
                     {
-                        absoluteSessionMeters = GetAbsoluteSessionDistanceMeters(gameName, data.NewData, _sessionDistanceSource);
+                        absoluteSessionMeters = GetAbsoluteSessionDistanceMeters(profile, data.NewData, _sessionDistanceSource);
                     }
 
                     if (absoluteSessionMeters < 0.0)
@@ -880,13 +896,26 @@ namespace Affinity
                     double sessionMeters = Math.Max(0.0, absoluteSessionMeters - _sessionDistanceOriginMeters);
                     double deltaMeters = sessionMeters - _lastObservedSessionMeters;
                     int lapDelta = completedLaps - _lastObservedCompletedLaps;
+                    AffinityDistanceSampleContext preDistanceSampleContext = new AffinityDistanceSampleContext
+                    {
+                        Status = data.NewData,
+                        DistanceMode = profile.DistanceMode,
+                        CompletedLaps = completedLaps,
+                        LapDelta = lapDelta,
+                        TrackLengthMeters = trackLengthMeters,
+                        SessionMeters = sessionMeters,
+                        DeltaMeters = deltaMeters,
+                        SessionStatefulAbsoluteMeters = _sessionStatefulAbsoluteMeters,
+                        SessionStartTrackPositionMeters = _sessionStartTrackPositionMeters,
+                        LastTrackPositionWithinLapMeters = _lastTrackPositionWithinLapMeters,
+                        LastObservedSessionMeters = _lastObservedSessionMeters,
+                        LastIgnoredSessionMeters = _lastIgnoredSessionMeters,
+                        LastObservedCompletedLaps = _lastObservedCompletedLaps
+                    };
+                    bool shouldIgnorePreDistanceLapIncrement = profile.ShouldIgnoreLapIncrement(preDistanceSampleContext);
                     bool shouldIgnoreDistanceJumpForIgnoredLapIncrement = ShouldIgnoreDistanceJumpForIgnoredLapIncrement(
-                        gameName,
-                        data.NewData,
-                        completedLaps,
-                        lapDelta,
-                        trackLengthMeters,
-                        deltaMeters);
+                        shouldIgnorePreDistanceLapIncrement,
+                        preDistanceSampleContext);
                     bool shouldIgnoreRepeatedIgnoredDistanceJump = ShouldIgnoreRepeatedIgnoredDistanceJump(sessionMeters);
                     bool looksLikeDerivedLapBoundaryWrap = _sessionDistanceSource == SessionDistanceSource.Derived &&
                         trackLengthMeters > 0.0 &&
@@ -899,8 +928,7 @@ namespace Affinity
                         completedLaps == 0 &&
                         _lastObservedSessionMeters <= 25.0 &&
                         sessionMeters >= Math.Max(200.0, trackLengthMeters * 0.25) &&
-                        !IsAutomobilista2Game(gameName) &&
-                        !IsProjectMotorRacingGame(gameName) &&
+                        !profile.AcceptsInitialPositionSnap &&
                         data.NewData.SpeedKmh < 5.0;
                     TrackBucket bucket = GetOrCreateTrackBucket(gameName, carModel, trackName, trackNameWithConfig);
                     bool bucketUpdated = false;
@@ -914,7 +942,7 @@ namespace Affinity
 
                         if (shouldDebugTelemetry)
                         {
-                            LogTelemetryDebugSnapshot("lap-wrap-wait", data, gameName, carModel, trackNameWithConfig, sessionId, data.NewData, deltaMeters, sessionMeters, lapDelta, false);
+                            LogTelemetryDebugSnapshot("lap-wrap-wait", data, profile, gameName, carModel, trackNameWithConfig, sessionId, data.NewData, deltaMeters, sessionMeters, lapDelta, false);
                         }
                     }
                     else if (looksLikeInitialPositionSnap)
@@ -927,7 +955,7 @@ namespace Affinity
 
                         if (shouldDebugTelemetry)
                         {
-                            LogTelemetryDebugSnapshot("initial-snap", data, gameName, carModel, trackNameWithConfig, sessionId, data.NewData, deltaMeters, sessionMeters, lapDelta, true);
+                            LogTelemetryDebugSnapshot("initial-snap", data, profile, gameName, carModel, trackNameWithConfig, sessionId, data.NewData, deltaMeters, sessionMeters, lapDelta, true);
                         }
                     }
                     else if (shouldIgnoreDistanceJumpForIgnoredLapIncrement || shouldIgnoreRepeatedIgnoredDistanceJump)
@@ -939,7 +967,7 @@ namespace Affinity
 
                         if (shouldDebugTelemetry)
                         {
-                            LogTelemetryDebugSnapshot("lap-distance-ignored", data, gameName, carModel, trackNameWithConfig, sessionId, data.NewData, deltaMeters, sessionMeters, lapDelta, false);
+                            LogTelemetryDebugSnapshot("lap-distance-ignored", data, profile, gameName, carModel, trackNameWithConfig, sessionId, data.NewData, deltaMeters, sessionMeters, lapDelta, false);
                         }
                     }
                     else if (deltaMeters > 0.0)
@@ -954,7 +982,7 @@ namespace Affinity
 
                         if (shouldDebugTelemetry && ShouldLogTelemetryProgress(deltaMeters, lapDelta, trackLengthMeters))
                         {
-                            LogTelemetryDebugSnapshot("progress", data, gameName, carModel, trackNameWithConfig, sessionId, data.NewData, deltaMeters, sessionMeters, lapDelta, false);
+                            LogTelemetryDebugSnapshot("progress", data, profile, gameName, carModel, trackNameWithConfig, sessionId, data.NewData, deltaMeters, sessionMeters, lapDelta, false);
                         }
                     }
                     else if (sessionMeters + 1.0 < _lastObservedSessionMeters)
@@ -967,13 +995,29 @@ namespace Affinity
 
                         if (shouldDebugTelemetry)
                         {
-                            LogTelemetryDebugSnapshot("distance-reset", data, gameName, carModel, trackNameWithConfig, sessionId, data.NewData, deltaMeters, sessionMeters, lapDelta, false);
+                            LogTelemetryDebugSnapshot("distance-reset", data, profile, gameName, carModel, trackNameWithConfig, sessionId, data.NewData, deltaMeters, sessionMeters, lapDelta, false);
                         }
                     }
 
-                    bool shouldIgnoreLapIncrement = LooksLikeIgnoredLapIncrement(gameName, data.NewData, completedLaps, lapDelta, trackLengthMeters);
+                    AffinityDistanceSampleContext postDistanceSampleContext = new AffinityDistanceSampleContext
+                    {
+                        Status = data.NewData,
+                        DistanceMode = profile.DistanceMode,
+                        CompletedLaps = completedLaps,
+                        LapDelta = lapDelta,
+                        TrackLengthMeters = trackLengthMeters,
+                        SessionMeters = sessionMeters,
+                        DeltaMeters = deltaMeters,
+                        SessionStatefulAbsoluteMeters = _sessionStatefulAbsoluteMeters,
+                        SessionStartTrackPositionMeters = _sessionStartTrackPositionMeters,
+                        LastTrackPositionWithinLapMeters = _lastTrackPositionWithinLapMeters,
+                        LastObservedSessionMeters = _lastObservedSessionMeters,
+                        LastIgnoredSessionMeters = _lastIgnoredSessionMeters,
+                        LastObservedCompletedLaps = _lastObservedCompletedLaps
+                    };
+                    bool shouldIgnorePostDistanceLapIncrement = profile.ShouldIgnoreLapIncrement(postDistanceSampleContext);
 
-                    if (lapDelta > 0 && shouldIgnoreLapIncrement)
+                    if (lapDelta > 0 && shouldIgnorePostDistanceLapIncrement)
                     {
                         _lastObservedCompletedLaps = completedLaps;
                         DataStatus = "Ignoring low-speed telemetry transition at line";
@@ -981,7 +1025,7 @@ namespace Affinity
 
                         if (shouldDebugTelemetry)
                         {
-                            LogTelemetryDebugSnapshot("lap-increment-ignored", data, gameName, carModel, trackNameWithConfig, sessionId, data.NewData, deltaMeters, sessionMeters, lapDelta, false);
+                            LogTelemetryDebugSnapshot("lap-increment-ignored", data, profile, gameName, carModel, trackNameWithConfig, sessionId, data.NewData, deltaMeters, sessionMeters, lapDelta, false);
                         }
                     }
                     else if (lapDelta > 0)
@@ -992,7 +1036,7 @@ namespace Affinity
 
                         if (shouldDebugTelemetry)
                         {
-                            LogTelemetryDebugSnapshot("lap-change", data, gameName, carModel, trackNameWithConfig, sessionId, data.NewData, deltaMeters, sessionMeters, lapDelta, false);
+                            LogTelemetryDebugSnapshot("lap-change", data, profile, gameName, carModel, trackNameWithConfig, sessionId, data.NewData, deltaMeters, sessionMeters, lapDelta, false);
                         }
                     }
                     else if (completedLaps < _lastObservedCompletedLaps)
@@ -1003,7 +1047,7 @@ namespace Affinity
 
                         if (shouldDebugTelemetry)
                         {
-                            LogTelemetryDebugSnapshot("lap-reset", data, gameName, carModel, trackNameWithConfig, sessionId, data.NewData, deltaMeters, sessionMeters, lapDelta, false);
+                            LogTelemetryDebugSnapshot("lap-reset", data, profile, gameName, carModel, trackNameWithConfig, sessionId, data.NewData, deltaMeters, sessionMeters, lapDelta, false);
                         }
                     }
 
@@ -1011,14 +1055,17 @@ namespace Affinity
                     {
                         CurrentContextDistanceKm = bucket.TotalDistanceMeters / MetersPerKilometer;
                         CurrentContextUsedTime = bucket.UsedTime;
-                        DataStatus = $"Recorded {CurrentContextDistanceKm:F2} km for {CurrentContext}";
+                        string currentTrackDisplayName = profile.GetTrackDisplayName(
+                            CurrentTrackNameWithConfig,
+                            _trackDisplayContext);
+                        DataStatus = $"Recorded {CurrentContextDistanceKm:F2} km for {CurrentGameName} / {CurrentCarModel} / {currentTrackDisplayName}";
                         IsTelemetryActive = true;
 
                         RefreshLiveSummariesIfNeeded(force: false);
                     }
                     else if (shouldDebugTelemetry && ShouldLogTelemetryHeartbeat())
                     {
-                        LogTelemetryDebugSnapshot("heartbeat", data, gameName, carModel, trackNameWithConfig, sessionId, data.NewData, deltaMeters, sessionMeters, lapDelta, false);
+                        LogTelemetryDebugSnapshot("heartbeat", data, profile, gameName, carModel, trackNameWithConfig, sessionId, data.NewData, deltaMeters, sessionMeters, lapDelta, false);
                     }
                 }
 
@@ -1035,7 +1082,13 @@ namespace Affinity
                 CurrentContextDistanceKm = currentBucket.TotalDistanceMeters / MetersPerKilometer;
                 CurrentContextUsedTime = currentBucket.UsedTime;
                 IsTelemetryActive = true;
-                PublishProperties(pluginManager, gameName, GetDisplayTrackNameWithConfig(gameName, trackNameWithConfig), carModel, CurrentContextDistanceKm, SessionDistanceKm);
+                PublishProperties(
+                    pluginManager,
+                    gameName,
+                    profile.GetTrackDisplayName(trackNameWithConfig, _trackDisplayContext),
+                    carModel,
+                    CurrentContextDistanceKm,
+                    SessionDistanceKm);
                 _hasLoggedDataError = false;
             }
             catch (Exception ex)
@@ -1332,7 +1385,8 @@ namespace Affinity
                 displayInMiles: Settings.DisplayInMiles,
                 assettoCorsaTrackMap: _assettoCorsaTrackMap,
                 tryResolveGameLogoPath: TryResolveGameLogoPath,
-                tryResolveGameLogo: TryLoadGameLogo);
+                tryResolveGameLogo: TryLoadGameLogo,
+                gameProfiles: _gameProfiles);
             DateTime nowLocal = DateTime.Now;
             AffinitySummarySnapshot thisMonthSnapshot = BuildMonthlySummarySnapshot(nowLocal);
             AffinitySummarySnapshot lastMonthSnapshot = BuildMonthlySummarySnapshot(nowLocal.AddMonths(-1));
@@ -1390,7 +1444,13 @@ namespace Affinity
                 .Where(summary => string.Equals(summary.GameName, selectedTab.GameName, StringComparison.OrdinalIgnoreCase))
                 .ToList();
             GameDistanceTab periodTab = AffinitySummaryBuilder
-                .BuildSnapshot(periodRows, Settings.DisplayInMiles, _assettoCorsaTrackMap, TryResolveGameLogoPath, TryLoadGameLogo)
+                .BuildSnapshot(
+                    periodRows,
+                    Settings.DisplayInMiles,
+                    _assettoCorsaTrackMap,
+                    TryResolveGameLogoPath,
+                    TryLoadGameLogo,
+                    _gameProfiles)
                 .GameTabs
                 .FirstOrDefault(tab => string.Equals(tab.GameName, selectedTab.GameName, StringComparison.OrdinalIgnoreCase));
 
@@ -1639,21 +1699,27 @@ namespace Affinity
             return trackBucket;
         }
 
-        private bool TryPromoteAccTrackContext(Guid sessionId, string gameName, string carModel, string trackName, string trackNameWithConfig)
+        private bool TryPromoteAccTrackContext(
+            Guid sessionId,
+            IAffinityGameProfile profile,
+            string rawGameName,
+            string carModel,
+            string trackName,
+            string trackNameWithConfig)
         {
-            if (!IsAssettoCorsaCompetizioneGame(gameName) ||
+            if (profile == null ||
                 _activeSessionId == Guid.Empty ||
                 _activeSessionId != sessionId ||
-                !string.Equals(CurrentGameName, gameName, StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(CurrentGameName, rawGameName, StringComparison.OrdinalIgnoreCase) ||
                 !string.Equals(CurrentCarModel, carModel, StringComparison.OrdinalIgnoreCase) ||
-                !AffinityGameLogic.IsAccTrackNameUpgrade(CurrentTrackNameWithConfig, trackNameWithConfig))
+                !profile.CanPromoteTrackContext(CurrentTrackNameWithConfig, trackNameWithConfig))
             {
                 return false;
             }
 
             TrackBucket promotedBucket = PromoteTrackBucket(
                 _database,
-                gameName,
+                rawGameName,
                 carModel,
                 CurrentTrackNameWithConfig,
                 trackName,
@@ -1665,7 +1731,7 @@ namespace Affinity
 
             CurrentTrackName = trackName;
             CurrentTrackNameWithConfig = trackNameWithConfig;
-            _activeContextKey = BuildContextKey(gameName, carModel, trackNameWithConfig);
+            _activeContextKey = BuildContextKey(rawGameName, carModel, trackNameWithConfig);
             CurrentContextDistanceKm = promotedBucket.TotalDistanceMeters / MetersPerKilometer;
             CurrentContextUsedTime = promotedBucket.UsedTime;
             return true;
@@ -1755,9 +1821,11 @@ namespace Affinity
             return left >= right ? left : right;
         }
 
-        private SessionDistanceSource ResolveSessionDistanceSource(string gameName, StatusDataBase status)
+        private SessionDistanceSource ResolveSessionDistanceSource(IAffinityGameProfile profile, StatusDataBase status)
         {
-            if (IsAssettoCorsaGame(gameName) || IsRaceRoomGame(gameName) || IsAutomobilista2Game(gameName) || IsProjectMotorRacingGame(gameName) || IsIRacingGame(gameName) || IsRFactor2Game(gameName) || IsLmuGame(gameName))
+            AffinityDistanceMode distanceMode = profile?.DistanceMode ?? AffinityDistanceMode.Automatic;
+            if (distanceMode == AffinityDistanceMode.StatefulDerived ||
+                distanceMode == AffinityDistanceMode.Derived)
             {
                 return SessionDistanceSource.Derived;
             }
@@ -1785,7 +1853,10 @@ namespace Affinity
                 : SessionDistanceSource.Unknown;
         }
 
-        private double GetAbsoluteSessionDistanceMeters(string gameName, StatusDataBase status, SessionDistanceSource source)
+        private double GetAbsoluteSessionDistanceMeters(
+            IAffinityGameProfile profile,
+            StatusDataBase status,
+            SessionDistanceSource source)
         {
             if (status == null)
             {
@@ -1796,7 +1867,7 @@ namespace Affinity
             switch (source)
             {
                 case SessionDistanceSource.Derived:
-                    if (UsesStatefulDerivedDistance(gameName))
+                    if (profile?.DistanceMode == AffinityDistanceMode.StatefulDerived)
                     {
                         return _sessionStatefulAbsoluteMeters;
                     }
@@ -1811,19 +1882,22 @@ namespace Affinity
             }
         }
 
-        private bool ShouldUseZeroSessionOrigin(string gameName, SessionDistanceSource source)
+        private static bool ShouldUseZeroSessionOrigin(
+            IAffinityGameProfile profile,
+            SessionDistanceSource source)
         {
-            return source == SessionDistanceSource.Derived && IsAssettoCorsaGame(gameName) && !UsesStatefulDerivedDistance(gameName);
+            return source == SessionDistanceSource.Derived &&
+                profile?.DistanceMode == AffinityDistanceMode.Derived;
         }
 
-        private bool ShouldDebugTelemetry(string gameName)
+        private bool ShouldDebugTelemetry(IAffinityGameProfile profile)
         {
             if (!Settings.EnableDebugLogging)
             {
                 return false;
             }
 
-            string settingsKey = GetDebugLoggingSettingsKey(gameName);
+            string settingsKey = profile?.SettingsKey;
             if (string.IsNullOrWhiteSpace(settingsKey))
             {
                 return false;
@@ -1865,12 +1939,24 @@ namespace Affinity
             return true;
         }
 
-        private void LogTelemetryDebugSnapshot(string reason, GameData data, string gameName, string carModel, string trackNameWithConfig, Guid sessionId, StatusDataBase status, double deltaMeters, double sessionMeters, int lapDelta, bool looksLikeInitialPositionSnap)
+        private void LogTelemetryDebugSnapshot(
+            string reason,
+            GameData data,
+            IAffinityGameProfile profile,
+            string gameName,
+            string carModel,
+            string trackNameWithConfig,
+            Guid sessionId,
+            StatusDataBase status,
+            double deltaMeters,
+            double sessionMeters,
+            int lapDelta,
+            bool looksLikeInitialPositionSnap)
         {
             try
             {
-                string debugLogPath = GetDebugLogPath(gameName);
-                if (string.IsNullOrWhiteSpace(debugLogPath) || status == null || !ShouldDebugTelemetry(gameName))
+                string debugLogPath = GetDebugLogPathForSettingsKey(profile?.SettingsKey);
+                if (string.IsNullOrWhiteSpace(debugLogPath) || status == null || !ShouldDebugTelemetry(profile))
                 {
                     return;
                 }
@@ -1885,8 +1971,8 @@ namespace Affinity
                 double derivedSessionMeters = GetDerivedSessionDistanceMeters(status, trackLengthMeters);
                 double sessionOdoMeters = status.SessionOdo > 0.0 ? status.SessionOdo : -1.0;
                 double sessionOdoKilometers = status.SessionOdo > 0.0 ? status.SessionOdo * MetersPerKilometer : -1.0;
-                double absoluteSessionMeters = GetAbsoluteSessionDistanceMeters(gameName, status, _sessionDistanceSource);
-                bool replayDetected = IsReplayTelemetry(data);
+                double absoluteSessionMeters = GetAbsoluteSessionDistanceMeters(profile, status, _sessionDistanceSource);
+                bool replayDetected = AffinityReplayDetector.IsReplay(data);
                 string gameDataIsGameReplay = GetDebugMemberValue(data, "IsGameReplay");
                 string gameDataGameReplay = GetDebugMemberValue(data, "GameReplay");
                 string gameDataReplayMode = GetDebugMemberValue(data, "ReplayMode");
@@ -1896,7 +1982,7 @@ namespace Affinity
                 string statusType = FormatDebugValue(status.GetType().FullName);
                 string gameDataExtra = GetDebugMemberValues(data, GameDataDebugMemberNames);
                 string statusExtra = GetDebugMemberValues(status, StatusDebugMemberNames);
-                object rawData = GetRawStatusDataObject(status);
+                object rawData = AffinityReplayDetector.GetRawStatusDataObject(status);
                 string rawDataType = FormatDebugValue(rawData?.GetType().FullName);
                 string rawDataExtra = GetDebugMemberValues(rawData, RawDataDebugMemberNames);
                 string line = string.Format(
@@ -1938,7 +2024,7 @@ namespace Affinity
                     statusExtra,
                     rawDataType,
                     rawDataExtra,
-                    _automobilista2PlayerViewedParticipantIndex);
+                    _gameRuntimeState.Automobilista2PlayerViewedParticipantIndex);
 
                 File.AppendAllText(debugLogPath, line + Environment.NewLine, Encoding.UTF8);
             }
@@ -1948,20 +2034,23 @@ namespace Affinity
             }
         }
 
-        private double UpdateStatefulDerivedAbsoluteSessionDistanceMeters(string gameName, StatusDataBase status, double trackLengthMeters)
+        private double UpdateStatefulDerivedAbsoluteSessionDistanceMeters(
+            IAffinityGameProfile profile,
+            StatusDataBase status,
+            double trackLengthMeters)
         {
             if (status == null || trackLengthMeters <= 0.0)
             {
                 return -1.0;
             }
 
-            double trackPositionMeters = GetTrackPositionWithinLapMeters(status, trackLengthMeters);
+            double trackPositionMeters = AffinityGameProfileBase.GetTrackPositionWithinLapMeters(status, trackLengthMeters);
             if (trackPositionMeters < 0.0)
             {
                 return _sessionStatefulAbsoluteMeters;
             }
 
-            if (ShouldIgnoreStatefulStartupPlaceholder(gameName, status, trackPositionMeters))
+            if (ShouldIgnoreStatefulStartupPlaceholder(profile, status, trackPositionMeters))
             {
                 return _sessionStatefulAbsoluteMeters;
             }
@@ -1973,7 +2062,21 @@ namespace Affinity
             }
 
             double deltaTrackPositionMeters = trackPositionMeters - _lastTrackPositionWithinLapMeters;
-            if (LooksLikeIgnoredLowSpeedLineWrap(gameName, status, deltaTrackPositionMeters, trackLengthMeters))
+            AffinityDistanceSampleContext lineWrapContext = new AffinityDistanceSampleContext
+            {
+                Status = status,
+                DistanceMode = profile?.DistanceMode ?? AffinityDistanceMode.Automatic,
+                CompletedLaps = Math.Max(0, status.CompletedLaps),
+                TrackLengthMeters = trackLengthMeters,
+                DeltaTrackPositionMeters = deltaTrackPositionMeters,
+                SessionStatefulAbsoluteMeters = _sessionStatefulAbsoluteMeters,
+                SessionStartTrackPositionMeters = _sessionStartTrackPositionMeters,
+                LastTrackPositionWithinLapMeters = _lastTrackPositionWithinLapMeters,
+                LastObservedSessionMeters = _lastObservedSessionMeters,
+                LastIgnoredSessionMeters = _lastIgnoredSessionMeters,
+                LastObservedCompletedLaps = _lastObservedCompletedLaps
+            };
+            if (profile?.ShouldIgnoreLowSpeedLineWrap(lineWrapContext) == true)
             {
                 _lastTrackPositionWithinLapMeters = trackPositionMeters;
                 return _sessionStatefulAbsoluteMeters;
@@ -1993,7 +2096,7 @@ namespace Affinity
                 _sessionStatefulAbsoluteMeters += deltaTrackPositionMeters;
             }
 
-            if (IsRaceRoomGame(gameName) && Math.Max(0, status.CompletedLaps) > 0)
+            if (profile?.UsesLapCounterDistanceFloor == true && Math.Max(0, status.CompletedLaps) > 0)
             {
                 double lapCounterSessionMeters = GetDerivedSessionDistanceMeters(status, trackLengthMeters);
                 if (lapCounterSessionMeters > _sessionStatefulAbsoluteMeters)
@@ -2006,9 +2109,12 @@ namespace Affinity
             return _sessionStatefulAbsoluteMeters;
         }
 
-        private bool ShouldIgnoreStatefulStartupPlaceholder(string gameName, StatusDataBase status, double trackPositionMeters)
+        private bool ShouldIgnoreStatefulStartupPlaceholder(
+            IAffinityGameProfile profile,
+            StatusDataBase status,
+            double trackPositionMeters)
         {
-            if (!IsProjectMotorRacingGame(gameName) ||
+            if (profile?.UsesStationaryStartupAnchor != true ||
                 status == null ||
                 Math.Max(0, status.CompletedLaps) != 0 ||
                 status.SpeedKmh > 1.0 ||
@@ -2047,7 +2153,7 @@ namespace Affinity
                 return -1.0;
             }
 
-            double trackPositionMeters = GetTrackPositionWithinLapMeters(status, trackLengthMeters);
+            double trackPositionMeters = AffinityGameProfileBase.GetTrackPositionWithinLapMeters(status, trackLengthMeters);
             if (trackPositionMeters < 0.0)
             {
                 return -1.0;
@@ -2056,20 +2162,17 @@ namespace Affinity
             return Math.Max(0, status.CompletedLaps) * trackLengthMeters + trackPositionMeters;
         }
 
-        private double GetSessionStartTrackPositionMeters(string gameName, StatusDataBase status)
+        private static double GetSessionStartTrackPositionMeters(
+            IAffinityGameProfile profile,
+            StatusDataBase status)
         {
-            if ((!IsAutomobilista2Game(gameName) && !IsProjectMotorRacingGame(gameName)) || status == null)
+            if (profile?.CapturesSessionStartTrackPosition != true || status == null)
             {
                 return -1.0;
             }
 
             double trackLengthMeters = status.TrackLength > 0.0 ? status.TrackLength : status.ReportedTrackLength;
-            return AffinityGameLogic.GetTrackPositionWithinLapMeters(status, trackLengthMeters);
-        }
-
-        private static double GetTrackPositionWithinLapMeters(StatusDataBase status, double trackLengthMeters)
-        {
-            return AffinityGameLogic.GetTrackPositionWithinLapMeters(status, trackLengthMeters);
+            return AffinityGameProfileBase.GetTrackPositionWithinLapMeters(status, trackLengthMeters);
         }
 
         private void PublishProperties(PluginManager pluginManager, string gameName, string trackName, string carModel, double totalKm, double sessionKm)
@@ -2111,194 +2214,9 @@ namespace Affinity
             return $"{gameName}|{carModel}|{trackNameWithConfig}";
         }
 
-        private bool IsSupportedGame(string gameName)
-        {
-            return AffinityGameLogic.IsSupportedGame(gameName);
-        }
-
-        private bool HasReliableTelemetryContext(string gameName, string carModel, string trackNameWithConfig)
-        {
-            return AffinityGameLogic.HasReliableTelemetryContext(gameName, carModel, trackNameWithConfig);
-        }
-
-        private bool IsReplayTelemetry(GameData data)
-        {
-            // SimHub exposes replay state at runtime even though the local SDK stubs do not model it.
-            if (data == null)
-            {
-                return false;
-            }
-
-            if (TryGetBooleanMemberValue(data, "IsGameReplay", out bool isGameReplay))
-            {
-                if (isGameReplay)
-                {
-                    return true;
-                }
-            }
-
-            if (TryGetBooleanMemberValue(data, "GameReplay", out bool gameReplay))
-            {
-                if (gameReplay)
-                {
-                    return true;
-                }
-            }
-
-            if (TryGetMemberValue(data, "ReplayMode", out object gameReplayModeValue))
-            {
-                if (IsReplayModeActive(gameReplayModeValue))
-                {
-                    return true;
-                }
-            }
-
-            if (data.NewData == null)
-            {
-                return false;
-            }
-
-            if (TryGetBooleanMemberValue(data.NewData, "IsGameReplay", out bool statusReplay))
-            {
-                if (statusReplay)
-                {
-                    return true;
-                }
-            }
-
-            if (TryGetMemberValue(data.NewData, "ReplayMode", out object statusReplayModeValue) &&
-                IsReplayModeActive(statusReplayModeValue))
-            {
-                return true;
-            }
-
-            object rawData = GetRawStatusDataObject(data.NewData);
-            if (TryGetBooleanMemberValue(rawData, "IsReplayPlaying", out bool rawReplayPlaying) && rawReplayPlaying)
-            {
-                return true;
-            }
-
-            if (TryGetMemberValue(rawData, "Telemetry", out object telemetry) &&
-                TryGetBooleanMemberValue(telemetry, "IsReplayPlaying", out bool telemetryReplayPlaying) &&
-                telemetryReplayPlaying)
-            {
-                return true;
-            }
-
-            return false;
-        }
-
-        private bool IsInactiveTelemetry(string gameName, StatusDataBase status)
-        {
-            if (status == null)
-            {
-                return false;
-            }
-
-            if (IsRaceRoomGame(gameName) && IsRaceRoomInactiveTelemetry(status))
-            {
-                return true;
-            }
-
-            return IsAutomobilista2Game(gameName) &&
-                IsAutomobilista2InactiveTelemetry(status);
-        }
-
-        private bool IsAutomobilista2InactiveTelemetry(StatusDataBase status)
-        {
-            if (TryGetBooleanMemberValue(status, "IsInGarage", out bool isInGarage) && isInGarage ||
-                TryGetBooleanMemberValue(status, "IsSpectator", out bool isSpectator) && isSpectator)
-            {
-                return true;
-            }
-
-            object rawData = GetRawStatusDataObject(status);
-            if (TryGetIntegerMemberValue(rawData, "mGameState", out int gameState) &&
-                gameState == Automobilista2ObservedReplayGameState)
-            {
-                return true;
-            }
-
-            if (!TryGetIntegerMemberValue(rawData, "mViewedParticipantIndex", out int viewedParticipantIndex) ||
-                viewedParticipantIndex < 0)
-            {
-                return false;
-            }
-
-            if (_automobilista2PlayerViewedParticipantIndex < 0)
-            {
-                _automobilista2PlayerViewedParticipantIndex = viewedParticipantIndex;
-                return false;
-            }
-
-            return viewedParticipantIndex != _automobilista2PlayerViewedParticipantIndex;
-        }
-
-        private static bool IsRaceRoomInactiveTelemetry(StatusDataBase status)
-        {
-            object rawData = GetRawStatusDataObject(status);
-            return TryGetMemberValue(rawData, "FinishStatus", out object finishStatusValue) &&
-                TryGetBooleanValue(finishStatusValue, out bool isFinishedStatusActive) &&
-                isFinishedStatusActive ||
-                TryGetMemberValue(rawData, "GamePlayerInGarage", out object playerInGarageValue) &&
-                TryGetBooleanValue(playerInGarageValue, out bool isPlayerInGarage) &&
-                isPlayerInGarage;
-        }
-
-        private static bool IsReplayModeActive(object replayModeValue)
-        {
-            if (replayModeValue == null)
-            {
-                return false;
-            }
-
-            if (replayModeValue is string || replayModeValue.GetType().IsEnum)
-            {
-                string replayModeText = replayModeValue.ToString()?.Trim();
-                if (string.IsNullOrWhiteSpace(replayModeText))
-                {
-                    return false;
-                }
-
-                return !string.Equals(replayModeText, "None", StringComparison.OrdinalIgnoreCase) &&
-                    !string.Equals(replayModeText, "Off", StringComparison.OrdinalIgnoreCase) &&
-                    !string.Equals(replayModeText, "Disabled", StringComparison.OrdinalIgnoreCase) &&
-                    !string.Equals(replayModeText, "Live", StringComparison.OrdinalIgnoreCase);
-            }
-
-            return TryGetBooleanValue(replayModeValue, out bool replayModeFlag) &&
-                replayModeFlag;
-        }
-
-        private static bool TryGetBooleanMemberValue(object source, string memberName, out bool value)
-        {
-            value = false;
-            return TryGetMemberValue(source, memberName, out object rawValue) &&
-                TryGetBooleanValue(rawValue, out value);
-        }
-
-        private static bool TryGetIntegerMemberValue(object source, string memberName, out int value)
-        {
-            value = 0;
-            if (!TryGetMemberValue(source, memberName, out object rawValue) || rawValue == null)
-            {
-                return false;
-            }
-
-            try
-            {
-                value = Convert.ToInt32(rawValue, CultureInfo.InvariantCulture);
-                return true;
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
         private static string GetDebugMemberValue(object source, string memberName)
         {
-            if (!TryGetMemberValue(source, memberName, out object value))
+            if (!AffinityReplayDetector.TryGetMemberValue(source, memberName, out object value))
             {
                 return "<missing>";
             }
@@ -2328,7 +2246,7 @@ namespace Affinity
                     continue;
                 }
 
-                if (!TryGetMemberValue(source, memberName, out object value))
+                if (!AffinityReplayDetector.TryGetMemberValue(source, memberName, out object value))
                 {
                     continue;
                 }
@@ -2353,235 +2271,18 @@ namespace Affinity
                 .Replace("\"", "\\\"");
         }
 
-        private static object GetRawStatusDataObject(StatusDataBase status)
+        private bool ShouldIgnoreDistanceJumpForIgnoredLapIncrement(
+            bool shouldIgnoreLapIncrement,
+            AffinityDistanceSampleContext context)
         {
-            if (status == null)
-            {
-                return null;
-            }
-
-            try
-            {
-                return status.GetRawDataObject();
-            }
-            catch
-            {
-                return null;
-            }
-        }
-
-        private static bool TryGetBooleanValue(object value, out bool result)
-        {
-            result = false;
-            if (value == null)
+            if (context.DeltaMeters <= 0.0 ||
+                !shouldIgnoreLapIncrement ||
+                context.TrackLengthMeters <= 0.0)
             {
                 return false;
             }
 
-            if (value is bool boolValue)
-            {
-                result = boolValue;
-                return true;
-            }
-
-            if (value is string stringValue)
-            {
-                return bool.TryParse(stringValue, out result);
-            }
-
-            try
-            {
-                result = Math.Abs(Convert.ToDouble(value, CultureInfo.InvariantCulture)) > 0.0001;
-                return true;
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
-        private static bool TryGetMemberValue(object source, string memberName, out object value)
-        {
-            value = null;
-            if (source == null || string.IsNullOrWhiteSpace(memberName))
-            {
-                return false;
-            }
-
-            Type sourceType = source.GetType();
-            const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.IgnoreCase;
-
-            PropertyInfo property = sourceType.GetProperty(memberName, flags);
-            if (property != null && property.GetIndexParameters().Length == 0)
-            {
-                value = property.GetValue(source);
-                return true;
-            }
-
-            FieldInfo field = sourceType.GetField(memberName, flags);
-            if (field != null)
-            {
-                value = field.GetValue(source);
-                return true;
-            }
-
-            return false;
-        }
-
-        private bool IsAssettoCorsaGame(string gameName)
-        {
-            return AffinityGameLogic.IsAssettoCorsaGame(gameName);
-        }
-
-        private bool IsAssettoCorsaCompetizioneGame(string gameName)
-        {
-            return AffinityGameLogic.IsAssettoCorsaCompetizioneGame(gameName);
-        }
-
-        private bool IsRaceRoomGame(string gameName)
-        {
-            return AffinityGameLogic.IsRaceRoomGame(gameName);
-        }
-
-        private bool IsAutomobilista2Game(string gameName)
-        {
-            return AffinityGameLogic.IsAutomobilista2Game(gameName);
-        }
-
-        private bool IsProjectMotorRacingGame(string gameName)
-        {
-            return AffinityGameLogic.IsProjectMotorRacingGame(gameName);
-        }
-
-        private bool IsIRacingGame(string gameName)
-        {
-            return AffinityGameLogic.IsIRacingGame(gameName);
-        }
-
-        private bool IsRFactor2Game(string gameName)
-        {
-            return AffinityGameLogic.IsRFactor2Game(gameName);
-        }
-
-        private bool IsLmuGame(string gameName)
-        {
-            return AffinityGameLogic.IsLmuGame(gameName);
-        }
-
-        private bool UsesStatefulDerivedDistance(string gameName)
-        {
-            return IsAssettoCorsaGame(gameName) ||
-                IsRaceRoomGame(gameName) ||
-                IsAutomobilista2Game(gameName) ||
-                IsProjectMotorRacingGame(gameName) ||
-                IsIRacingGame(gameName) ||
-                IsRFactor2Game(gameName) ||
-                IsLmuGame(gameName);
-        }
-
-        private bool LooksLikeTransientIracingZeroDrop(string gameName, StatusDataBase status, int completedLaps, double trackLengthMeters)
-        {
-            if (!IsIRacingGame(gameName) ||
-                status == null ||
-                _sessionDistanceSource != SessionDistanceSource.Derived ||
-                _lastObservedCompletedLaps <= 0 ||
-                _lastObservedSessionMeters <= Math.Max(100.0, trackLengthMeters * 0.25))
-            {
-                return false;
-            }
-
-            return completedLaps == 0 &&
-                status.SpeedKmh < 1.0 &&
-                status.TrackPositionMeters <= 1.0 &&
-                status.TrackPositionPercent <= 0.001;
-        }
-
-        private bool LooksLikeIgnoredLowSpeedLineWrap(string gameName, StatusDataBase status, double deltaTrackPositionMeters, double trackLengthMeters)
-        {
-            if (!IsRFactor2Game(gameName) ||
-                status == null ||
-                trackLengthMeters <= 0.0 ||
-                Math.Abs(deltaTrackPositionMeters) <= trackLengthMeters * 0.5)
-            {
-                return false;
-            }
-
-            double trackPositionMeters = GetTrackPositionWithinLapMeters(status, trackLengthMeters);
-            bool nearLine = trackPositionMeters <= 5.0 || trackPositionMeters >= trackLengthMeters - 5.0;
-
-            return Math.Max(0, status.CompletedLaps) == 0 &&
-                status.SpeedKmh <= 80.0 &&
-                nearLine;
-        }
-
-        private bool LooksLikeIgnoredLapIncrement(string gameName, StatusDataBase status, int completedLaps, int lapDelta, double trackLengthMeters)
-        {
-            if ((!IsRFactor2Game(gameName) && !IsLmuGame(gameName)) ||
-                status == null ||
-                lapDelta <= 0 ||
-                trackLengthMeters <= 0.0)
-            {
-                return false;
-            }
-
-            double trackPositionMeters = GetTrackPositionWithinLapMeters(status, trackLengthMeters);
-            if (IsLmuGame(gameName))
-            {
-                bool nearLineAtExit = trackPositionMeters <= Math.Max(100.0, trackLengthMeters * 0.025) ||
-                    trackPositionMeters >= trackLengthMeters - 5.0;
-
-                return completedLaps > 0 &&
-                    status.SpeedKmh < 1.0 &&
-                    nearLineAtExit &&
-                    _lastObservedSessionMeters >= trackLengthMeters;
-            }
-
-            bool nearLine = trackPositionMeters <= 5.0 || trackPositionMeters >= trackLengthMeters - 5.0;
-
-            return completedLaps > 0 &&
-                status.SpeedKmh < 5.0 &&
-                nearLine &&
-                _lastObservedSessionMeters >= trackLengthMeters;
-        }
-
-        private bool ShouldIgnoreDistanceJumpForIgnoredLapIncrement(string gameName, StatusDataBase status, int completedLaps, int lapDelta, double trackLengthMeters, double deltaMeters)
-        {
-            if (deltaMeters <= 0.0 ||
-                !LooksLikeIgnoredLapIncrement(gameName, status, completedLaps, lapDelta, trackLengthMeters) ||
-                trackLengthMeters <= 0.0)
-            {
-                return false;
-            }
-
-            return deltaMeters >= trackLengthMeters * 0.5;
-        }
-
-        private bool ShouldIgnorePlaceholderSessionStart(string gameName, StatusDataBase status, int completedLaps)
-        {
-            if (!IsLmuGame(gameName) ||
-                status == null ||
-                completedLaps <= 0)
-            {
-                return false;
-            }
-
-            double trackLengthMeters = status.TrackLength > 0.0 ? status.TrackLength : status.ReportedTrackLength;
-            if (trackLengthMeters <= 0.0)
-            {
-                return false;
-            }
-
-            double trackPositionMeters = GetTrackPositionWithinLapMeters(status, trackLengthMeters);
-            bool nearLineAtExit = trackPositionMeters <= Math.Max(100.0, trackLengthMeters * 0.025) ||
-                trackPositionMeters >= trackLengthMeters - 5.0;
-            bool looksLikeNegativeLapBoundarySentinel = trackPositionMeters <= (-trackLengthMeters + 5.0) ||
-                status.TrackPositionPercent <= -0.99;
-            bool hasIgnoredSessionMarker = _lastIgnoredSessionMeters >= 0.0;
-            bool looksLikeResetSessionOdo = status.SessionOdo >= 0.0 && status.SessionOdo <= 0.01;
-
-            return status.SpeedKmh < 1.0 &&
-                (nearLineAtExit || looksLikeNegativeLapBoundarySentinel) &&
-                (hasIgnoredSessionMarker || looksLikeResetSessionOdo);
+            return context.DeltaMeters >= context.TrackLengthMeters * 0.5;
         }
 
         private bool ShouldIgnoreRepeatedIgnoredDistanceJump(double sessionMeters)
@@ -2599,18 +2300,18 @@ namespace Affinity
 
             RemoveUnsupportedGameDebugLoggingSettings();
 
-            foreach (KeyValuePair<string, string> entry in DefaultGameDebugLoggingEntries)
+            foreach (IAffinityGameProfile profile in _gameProfiles.SupportedProfiles)
             {
-                if (!Settings.GameDebugLogging.ContainsKey(entry.Key))
+                if (!Settings.GameDebugLogging.ContainsKey(profile.SettingsKey))
                 {
-                    Settings.GameDebugLogging[entry.Key] = false;
+                    Settings.GameDebugLogging[profile.SettingsKey] = false;
                 }
             }
         }
 
-        private bool EnsureGameDebugLoggingConfigured(string gameName)
+        private bool EnsureGameDebugLoggingConfigured(IAffinityGameProfile profile)
         {
-            string settingsKey = GetDebugLoggingSettingsKey(gameName);
+            string settingsKey = profile?.SettingsKey;
             if (string.IsNullOrWhiteSpace(settingsKey))
             {
                 return false;
@@ -2632,33 +2333,15 @@ namespace Affinity
 
         private void RefreshGameDebugLoggingOptions()
         {
-            List<KeyValuePair<string, string>> entries = new List<KeyValuePair<string, string>>();
-
-            foreach (KeyValuePair<string, string> entry in DefaultGameDebugLoggingEntries)
-            {
-                entries.Add(entry);
-            }
-
-            foreach (string settingsKey in Settings.GameDebugLogging.Keys.OrderBy(key => GetDebugLoggingDisplayName(key)))
-            {
-                if (entries.Any(entry => string.Equals(entry.Key, settingsKey, StringComparison.Ordinal)))
-                {
-                    continue;
-                }
-
-                if (!IsSupportedDebugLoggingSettingsKey(settingsKey))
-                {
-                    continue;
-                }
-
-                entries.Add(new KeyValuePair<string, string>(settingsKey, GetDebugLoggingDisplayName(settingsKey)));
-            }
-
             GameDebugLoggingOptions.Clear();
-            foreach (KeyValuePair<string, string> entry in entries.OrderBy(item => item.Value))
+            foreach (IAffinityGameProfile profile in _gameProfiles.SupportedProfiles.OrderBy(item => item.DisplayName))
             {
-                bool isEnabled = Settings.GameDebugLogging.TryGetValue(entry.Key, out bool configuredEnabled) && configuredEnabled;
-                GameDebugLoggingOptions.Add(new GameDebugLoggingOption(entry.Key, entry.Value, isEnabled, UpdateGameDebugLoggingSetting));
+                bool enabled = Settings.GameDebugLogging.TryGetValue(profile.SettingsKey, out bool configured) && configured;
+                GameDebugLoggingOptions.Add(new GameDebugLoggingOption(
+                    profile.SettingsKey,
+                    profile.DisplayName,
+                    enabled,
+                    UpdateGameDebugLoggingSetting));
             }
         }
 
@@ -2694,7 +2377,7 @@ namespace Affinity
             }
         }
 
-        private string GetDebugLogPath(string gameName)
+        private string GetDebugLogPathForSettingsKey(string settingsKey)
         {
             if (string.IsNullOrWhiteSpace(_debugLogPath))
             {
@@ -2704,7 +2387,6 @@ namespace Affinity
             string directory = Path.GetDirectoryName(_debugLogPath);
             string fileNameWithoutExtension = Path.GetFileNameWithoutExtension(_debugLogPath);
             string extension = Path.GetExtension(_debugLogPath);
-            string settingsKey = GetDebugLoggingSettingsKey(gameName);
 
             if (string.IsNullOrWhiteSpace(settingsKey))
             {
@@ -2714,46 +2396,9 @@ namespace Affinity
             return Path.Combine(directory ?? string.Empty, $"{fileNameWithoutExtension}.{settingsKey}{extension}");
         }
 
-        private string GetDebugLoggingSettingsKey(string gameName)
-        {
-            return AffinityGameLogic.GetDebugLoggingSettingsKey(gameName);
-        }
-
-        private string GetDebugLoggingDisplayName(string settingsKey)
-        {
-            switch (settingsKey)
-            {
-                case "assettocorsa":
-                    return "Assetto Corsa";
-                case "assettocorsacompetizione":
-                    return "Assetto Corsa Competizione";
-                case "assettocorsaevo":
-                    return "Assetto Corsa EVO";
-                case "automobilista2":
-                    return "Automobilista 2";
-                case "iracing":
-                    return "iRacing";
-                case "lmu":
-                    return "Le Mans Ultimate";
-                case "projectmotorracing":
-                    return "Project Motor Racing";
-                case "rfactor2":
-                    return "rFactor 2";
-                case "raceroomracingexperience":
-                    return "RaceRoom Racing Experience";
-                default:
-                    return settingsKey;
-            }
-        }
-
         private bool IsSupportedDebugLoggingSettingsKey(string settingsKey)
         {
-            return IsSupportedGame(settingsKey);
-        }
-
-        private static string NormalizeGameName(string gameName)
-        {
-            return AffinityGameLogic.NormalizeGameName(gameName);
+            return _gameProfiles.Resolve(settingsKey).IsSupported;
         }
 
         private static string NormalizeContextValue(string value, string fallback)
@@ -2763,7 +2408,8 @@ namespace Affinity
 
         private string GetDisplayTrackNameWithConfig(string gameName, string rawTrackNameWithConfig)
         {
-            return AffinityGameLogic.GetDisplayTrackNameWithConfig(gameName, rawTrackNameWithConfig, _assettoCorsaTrackMap);
+            IAffinityGameProfile profile = _gameProfiles.Resolve(gameName);
+            return profile.GetTrackDisplayName(rawTrackNameWithConfig, _trackDisplayContext);
         }
 
         private void OnPropertyChanged([CallerMemberName] string propertyName = null)
@@ -2887,7 +2533,8 @@ namespace Affinity
                 Settings.DisplayInMiles,
                 _assettoCorsaTrackMap,
                 TryResolveGameLogoPath,
-                TryLoadGameLogo);
+                TryLoadGameLogo,
+                _gameProfiles);
         }
 
         private void BuildRecentHighlightsSummarySnapshots(
@@ -2932,7 +2579,11 @@ namespace Affinity
                     .Where(summary => summary.LastUpdatedUtc >= startUtc && summary.LastUpdatedUtc < endUtc)
                     .ToList();
 
-            return AffinitySummaryBuilder.BuildSnapshot(rows, Settings.DisplayInMiles, _assettoCorsaTrackMap);
+            return AffinitySummaryBuilder.BuildSnapshot(
+                rows,
+                Settings.DisplayInMiles,
+                _assettoCorsaTrackMap,
+                gameProfiles: _gameProfiles);
         }
 
         private void ApplySummarySnapshot(
@@ -3008,7 +2659,7 @@ namespace Affinity
 
             foreach (GameDistanceTab tab in GameTabs)
             {
-                EnsureGameDebugLoggingConfigured(tab.GameName);
+                EnsureGameDebugLoggingConfigured(_gameProfiles.Resolve(tab.GameName));
             }
 
             RefreshGameDebugLoggingOptions();
@@ -3077,10 +2728,10 @@ namespace Affinity
 
         internal static string TryGetGameLogoFileName(string gameName)
         {
-            string normalizedGameName = NormalizeGameLogoLookupName(gameName);
-            return GameLogoFileNames.TryGetValue(normalizedGameName, out string fileName)
-                ? fileName
-                : null;
+            IAffinityGameProfile profile = DefaultGameProfiles.ResolveLogo(gameName);
+            return string.IsNullOrWhiteSpace(profile.LogoFileName)
+                ? null
+                : profile.LogoFileName;
         }
 
         internal static string TryGetGameLogoPath(string logosDirectory, string gameName)
@@ -3095,23 +2746,6 @@ namespace Affinity
             return File.Exists(fullPath)
                 ? fullPath
                 : null;
-        }
-
-        private static string NormalizeGameLogoLookupName(string gameName)
-        {
-            string normalized = AffinityGameLogic.NormalizeGameName(gameName);
-            switch (normalized)
-            {
-                case "r3e":
-                case "rrre":
-                    return "raceroomracingexperience";
-                case "rfactor2":
-                    return "rfactor2";
-                case "lemansultimate":
-                    return "lmu";
-                default:
-                    return normalized;
-            }
         }
 
         internal string ResolveSimHubLogosDirectory()
@@ -3129,7 +2763,10 @@ namespace Affinity
 
         private ImageSource TryLoadGameLogo(string gameName)
         {
-            string cacheKey = NormalizeGameLogoLookupName(gameName);
+            IAffinityGameProfile profile = _gameProfiles.ResolveLogo(gameName);
+            string cacheKey = string.IsNullOrWhiteSpace(profile.SettingsKey)
+                ? AffinityGameName.Normalize(gameName)
+                : profile.SettingsKey;
             if (_gameLogoCache.TryGetValue(cacheKey, out ImageSource cachedLogo))
             {
                 return cachedLogo;

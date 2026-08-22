@@ -244,7 +244,7 @@ INNER JOIN tracks t ON t.id = tc.track_id
 WHERE g.normalized_name = @gameName
   AND c.normalized_model_name = @carModel
   AND t.normalized_track_name_with_config = @trackNameWithConfig;";
-                command.Parameters.AddWithValue("@gameName", NormalizeGameName(gameName));
+                command.Parameters.AddWithValue("@gameName", AffinityGameName.Normalize(gameName));
                 command.Parameters.AddWithValue("@carModel", NormalizeIdentityValue(carModel));
                 command.Parameters.AddWithValue("@trackNameWithConfig", NormalizeIdentityValue(trackNameWithConfig));
 
@@ -388,7 +388,7 @@ ON CONFLICT(normalized_name) DO UPDATE SET
     name = excluded.name
 RETURNING id;";
                 command.Parameters.AddWithValue("@name", string.IsNullOrWhiteSpace(gameName) ? "Unknown Game" : gameName.Trim());
-                command.Parameters.AddWithValue("@normalizedName", NormalizeGameName(gameName));
+                command.Parameters.AddWithValue("@normalizedName", AffinityGameName.Normalize(gameName));
                 return Convert.ToInt64(command.ExecuteScalar(), CultureInfo.InvariantCulture);
             }
         }
@@ -508,11 +508,6 @@ RETURNING id;";
                 command.Parameters.AddWithValue("@trackId", trackId);
                 return Convert.ToInt64(command.ExecuteScalar(), CultureInfo.InvariantCulture);
             }
-        }
-
-        private static string NormalizeGameName(string gameName)
-        {
-            return AffinityGameLogic.NormalizeGameName(gameName);
         }
 
         private static string NormalizeIdentityValue(string value)

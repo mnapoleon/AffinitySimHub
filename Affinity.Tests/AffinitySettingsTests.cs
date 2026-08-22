@@ -49,8 +49,9 @@ namespace Affinity.Tests
             MethodInfo method = typeof(AffinityPlugin).GetMethod(
                 "EnsureGameDebugLoggingConfigured",
                 BindingFlags.Instance | BindingFlags.NonPublic);
+            IAffinityGameProfile profile = AffinityGameProfileRegistry.CreateDefault().Resolve("LMU");
 
-            bool added = (bool)method.Invoke(plugin, new object[] { "LMU" });
+            bool added = (bool)method.Invoke(plugin, new object[] { profile });
 
             Assert.IsTrue(added);
             Assert.IsTrue(plugin.Settings.GameDebugLogging.ContainsKey("lmu"));
@@ -88,6 +89,33 @@ namespace Affinity.Tests
 
             Assert.AreEqual("Assetto Corsa Competizione", option.DisplayName);
             Assert.IsFalse(option.IsEnabled);
+        }
+
+        [TestMethod]
+        public void RefreshGameDebugLoggingOptions_MatchesSupportedProfilesInDisplayNameOrder()
+        {
+            AffinityPlugin plugin = new AffinityPlugin();
+            plugin.Settings.GameDebugLogging["iracing"] = true;
+            MethodInfo method = typeof(AffinityPlugin).GetMethod(
+                "RefreshGameDebugLoggingOptions",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+
+            method.Invoke(plugin, null);
+
+            IAffinityGameProfile[] expectedProfiles = AffinityGameProfileRegistry.CreateDefault()
+                .SupportedProfiles
+                .OrderBy(profile => profile.DisplayName)
+                .ToArray();
+            CollectionAssert.AreEqual(
+                expectedProfiles.Select(profile => profile.SettingsKey).ToArray(),
+                plugin.GameDebugLoggingOptions.Select(option => option.SettingsKey).ToArray());
+            CollectionAssert.AreEqual(
+                expectedProfiles.Select(profile => profile.DisplayName).ToArray(),
+                plugin.GameDebugLoggingOptions.Select(option => option.DisplayName).ToArray());
+            Assert.IsTrue(plugin.GameDebugLoggingOptions.Single(option => option.SettingsKey == "iracing").IsEnabled);
+            Assert.IsTrue(plugin.GameDebugLoggingOptions
+                .Where(option => option.SettingsKey != "iracing")
+                .All(option => !option.IsEnabled));
         }
 
         [TestMethod]

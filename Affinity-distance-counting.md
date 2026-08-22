@@ -26,16 +26,25 @@ Each active `game / car / track` bucket stores:
 
 Affinity does not store lap totals anymore.
 
+The stored identities remain the telemetry-provided game, car, track, and track-with-configuration strings after the existing trim and missing-value fallback. Resolving a game profile does not replace those values with a profile settings key, display name, or mapped track label.
+
+## Ownership Boundary
+
+`AffinityGameProfileRegistry.SupportedProfiles` is the catalog of the nine shipped simulators. Each immutable `IAffinityGameProfile` owns its simulator's aliases and metadata, display rules, telemetry classification, distance capabilities, and anomaly decisions. `AffinityGameProfileBase` provides shared defaults, including stateful derived distance and the call to shared replay detection.
+
+`AffinityPlugin` owns all mutable work: session and distance state, the lifetime and reset of AMS2's learned participant index, bucket updates, persistence, logging and other file I/O, published properties, WPF/UI refresh, and plugin lifecycle. Profiles inspect value-context snapshots and return decisions. The AMS2 telemetry rule may update the learned index through plugin-owned runtime state passed in its context, but the plugin still owns and resets that state. Profiles do not persist data, write logs, perform I/O, or update the UI.
+
 ## Distance Tracking
 
-Affinity tracks a per-session distance baseline and then adds only positive session-distance deltas into the current bucket.
+Every shipped supported profile selects `StatefulDerived` distance. Affinity reconstructs the forward path from successive positions within the lap, adjusts real start/finish wraps by one track length, and adds only positive session-distance deltas to the current bucket. The lap counter remains available for profile decisions and RaceRoom's distance floor, but it is not stored as a cumulative total.
 
 High-level flow:
 
-1. Choose a session distance source for the session.
-2. Establish a session origin.
-3. On each update, compute `sessionMeters = absoluteSessionMeters - origin`.
-4. Add only positive deltas to the bucket.
+1. Resolve the profile and classify the sample before integration.
+2. Establish plugin-owned session, origin, track-position, and lap-counter state.
+3. Update stateful derived distance, using profile capabilities and line-wrap decisions.
+4. Ask the profile about lap anomalies at the appropriate pre- and post-distance stages.
+5. Add only an accepted positive delta to the bucket.
 
 ## Time Tracking
 
@@ -61,268 +70,61 @@ Before distance and time integration, Affinity filters telemetry samples that sh
 
 Ignored samples include:
 
-- generic replay telemetry exposed through `IsGameReplay`, `GameReplay`, or non-live `ReplayMode`
+- replay telemetry detected by the shared probes listed below
 - game-specific inactive telemetry such as garage or spectator state
 - game-specific raw-view states where the simulator keeps emitting telemetry for a watched car or replay camera while the player's race session is still open
 
 When a filtered sample arrives, Affinity finalizes and resets any pending active session before normal tracking continues. Debug logs report generic replay detection as `replay-ignored` and game-specific inactive or raw replay detection as `inactive-ignored`.
 
-## Distance Sources
+`AffinityReplayDetector`, called by the base profile, currently checks only these reflection-based signals:
 
-Affinity can use one of these sources:
+- `GameData.IsGameReplay`
+- `GameData.GameReplay`
+- `GameData.ReplayMode`
+- status `IsGameReplay`
+- status `ReplayMode`
+- raw status `IsReplayPlaying`
+- nested raw `Telemetry.IsReplayPlaying`
 
-- `Derived`
-- `SessionOdoMeters`
-- `SessionOdoKilometers`
+These probes are shared by all resolved profiles, including the unsupported fallback. They are the implemented classification signals, not a guarantee that every simulator or every replay mode exposes one of them. AMS2, RaceRoom, and LMU add only the concrete classifications documented below.
 
-### Derived
+## Shipped Profile Rules
 
-Derived distance is computed from lap count and track position:
+Shared rules for all nine supported profiles:
 
-- `CompletedLaps * TrackLength + TrackPositionWithinLap`
+- stateful derived distance
+- shared replay classification
+- forward-only delta accumulation and reset/wrap protections orchestrated by the plugin
+- raw persisted identities; profile display values are transient
 
-If `TrackPositionMeters` is already larger than one lap length, it is treated as an already-cumulative value.
+The engine still contains internal automatic and raw-`SessionOdo` source machinery for compatibility and focused tests, but no shipped supported profile selects it. Unknown games resolve to an unsupported fallback, are rejected before session distance begins, and are not automatically tracked.
 
-Even though Affinity no longer stores lap totals, it still uses the sim's lap counter internally when a game's telemetry makes that necessary for distance reconstruction or telemetry guards.
+### Ownership matrix
 
-### SessionOdoMeters
+| Profile | Telemetry and display policy | Distance capability or anomaly decision |
+| --- | --- | --- |
+| Assetto Corsa (`assettocorsa`) | Uses the plugin-loaded classic AC track map; duplicates the full track display into both circuit columns. | Shared stateful behavior; no profile-specific anomaly decision. |
+| Assetto Corsa Competizione (`assettocorsacompetizione`) | Duplicates the full track display into both circuit columns; can promote a compact track code to a longer descriptive context in the same session. | Shared stateful behavior; no profile-specific anomaly decision. |
+| Assetto Corsa EVO (`assettocorsaevo`) | Uses default circuit/layout splitting and does not use the classic AC track map. | Shared stateful behavior; no profile-specific anomaly decision. |
+| Automobilista 2 (`automobilista2`) | After shared replay checks, rejects garage, spectator, raw `mGameState=6`, and a raw `mViewedParticipantIndex` that differs from the plugin-owned learned player index. | Captures the session-start position and accepts the simulator's initial-position movement instead of treating it as a false snap. |
+| iRacing (`iracing`) | Uses shared replay checks, including the raw and nested `IsReplayPlaying` probes; splits on `-` and title-cases the circuit name while preserving `GP`. | Ignores a transient stopped-car reset to zero laps and zero position after material progress. |
+| Le Mans Ultimate (`lmu`) | Waits for reliable car/track context instead of tracking missing or `Unknown` values; duplicates the full track display into both circuit columns. `Le Mans Ultimate` is logo-only and does not broaden runtime matching beyond `LMU`. | Ignores qualifying low-speed exit-line lap increments and placeholder session starts after exit/reset telemetry. |
+| Project Motor Racing (`projectmotorracing`) | Uses shared telemetry and default display behavior. | Captures the session-start position, uses the stationary startup anchor, and accepts initial-position movement. |
+| rFactor 2 (`rfactor2`) | Splits circuit/layout display on `--`. | Ignores qualifying low-speed false line wraps and near-stationary false lap increments. |
+| RaceRoom Racing Experience (`raceroomracingexperience`, `r3e`, `rrre`) | After shared replay checks, rejects raw finished and in-garage telemetry. | Uses the lap-counter distance floor to avoid losing a legitimate line crossing when the position/counter timing differs. |
 
-Uses the raw `SessionOdo` value directly as meters.
+All alias matching removes non-alphanumeric characters and ignores case. Profile settings keys are also used for per-game debug settings and log filenames, but do not replace stored game names.
 
-### SessionOdoKilometers
+### Lap-decision timing
 
-Uses `SessionOdo * 1000`.
+LMU and rFactor 2 implement `ShouldIgnoreLapIncrement`. The plugin deliberately evaluates that decision twice with distinct snapshots:
 
-## Game-Specific Rules
+1. After stateful accumulation and session/delta calculation, but before the distance-acceptance branch updates the plugin's `_lastObservedSessionMeters` or `_lastIgnoredSessionMeters`, the first decision feeds the generic half-lap distance-jump guard for an invalid lap increment.
+2. After the distance branch has updated `_lastObservedSessionMeters` or `_lastIgnoredSessionMeters`, the plugin constructs a fresh context and asks again whether to accept the lap-counter change and how to log it.
 
-### Assetto Corsa
+The post-distance decision must not reuse the pre-distance result because the decision inputs can change during the distance branch.
 
-Games matched:
-
-- `assettocorsa`
-
-Distance source:
-
-- always `Derived`
-
-Why:
-
-- The SimHub-exposed `SessionOdo` value was not reliable as a clean session odometer.
-
-Distance model:
-
-- uses stateful forward track-position accumulation instead of `CompletedLaps * TrackLength + TrackPosition`
-
-Why:
-
-- This avoids undercounting when AC starts the session near the timing line and wraps to `0` before the lap counter catches up.
-- It also keeps the saved JSON total aligned with the live session distance instead of relying on lap-counter timing.
-
-Extra guards:
-
-- ignores obvious startup telemetry snaps when the car is effectively stationary
-
-### Assetto Corsa EVO
-
-Games matched:
-
-- `assettocorsaevo`
-
-Distance source:
-
-- always `Derived`
-
-Distance model:
-
-- uses the same stateful forward track-position accumulation model as classic Assetto Corsa
-
-Behavior is intended to mirror classic Assetto Corsa.
-
-### RaceRoom / R3E / RRRE
-
-Games matched:
-
-- `raceroomracingexperience`
-- `r3e`
-- `rrre`
-
-Distance source:
-
-- always `Derived`
-
-Why:
-
-- The SimHub `SessionOdo` field was observed to scale in a way that caused wildly inflated totals.
-
-Extra guards:
-
-- derived line-wrap guard at the start/finish line
-- ignores RaceRoom inactive telemetry when raw `FinishStatus` or `GamePlayerInGarage` is active
-
-Why:
-
-- In RaceRoom, `TrackPosition` can wrap to near zero one frame before the sim's lap counter increments.
-- Without a guard, that can look like a session reset followed by an extra full-lap jump, which double-counts distance.
-- RaceRoom can keep emitting telemetry after the player's active driving state ends, including garage or finished-session states. Affinity filters those samples before distance and time integration so post-race monitoring does not add watched-car distance or stationary time.
-
-### Automobilista 2
-
-Games matched:
-
-- `automobilista2`
-
-Distance source:
-
-- always `Derived`
-
-Why:
-
-- The generic source auto-selection could choose a bad `SessionOdo` interpretation and inflate totals into thousands of kilometers.
-
-Session origin:
-
-- not based on a fixed lap-derived starting point
-- distance is integrated from forward track-position movement across line wraps
-
-Why:
-
-- AMS2 can start partway around the circuit in a real pit stall location, and its lap counter can lag relative to line crossings.
-- Affinity therefore tracks forward path traveled from successive track-position updates instead of depending on lap-counter timing to build cumulative distance.
-
-Extra guards:
-
-- ignores AMS2 garage/spectator telemetry before distance integration
-- ignores AMS2 samples when the raw game state matches the observed post-race or saved-replay state
-- ignores AMS2 samples when the raw viewed participant index changes away from the learned player index
-
-Why:
-
-- The AMS2 path model handles legitimate pit starts and line crossings by integrating forward movement across wraps instead of using AC-style zero-origin handling.
-- When the player monitors the race or views other cars from the pits, SimHub can keep emitting telemetry for the viewed car. In recent captures, AMS2 did not expose the generic garage/spectator fields, but its raw shared-memory object did expose `mViewedParticipantIndex`. Affinity learns the player's viewed participant index during live telemetry and ignores later samples for other viewed participants.
-- When the player watches the post-race replay without returning to the game menu, or opens a saved replay, SimHub can still report generic replay fields as live telemetry. In the observed AMS2 captures, raw `mGameState=6` identified those replay samples, so Affinity ignores them even when the viewed participant is the player.
-
-### iRacing
-
-Games matched:
-
-- `iracing`
-
-Distance source:
-
-- always `Derived`
-
-Why:
-
-- iRacing's SimHub `SessionOdo` values were not trustworthy as a per-session distance source.
-- Its lap semantics can also lag the real line crossing for pit and out-lap scenarios, which makes the generic lap-count-derived formula undercount or reset incorrectly.
-
-Session origin:
-
-- not based on a fixed lap-derived starting point
-- distance is integrated from forward track-position movement across line wraps
-
-Why:
-
-- iRacing can start the car partway around the circuit at pit exit and may keep `CompletedLaps = 0` across the out lap.
-- Affinity therefore measures actual forward path traveled from successive track-position updates instead of reconstructing session distance from lap count.
-
-Extra guards:
-
-- ignores brief iRacing-only zeroed telemetry drops after progress has already been recorded
-- ignores iRacing raw telemetry when the nested SDK `Telemetry.IsReplayPlaying` flag is active, even if SimHub's generic replay fields still report live telemetry
-- implementation reads the raw iRacing sample from `StatusDataBase.GetRawDataObject()`, then checks both `IsReplayPlaying` directly on the raw object and `Telemetry.IsReplayPlaying` on the nested SDK telemetry object
-
-Why:
-
-- iRacing can briefly report `0` laps and `0` position without a real session restart.
-- Without a guard, that transient reset can double-count distance when telemetry snaps back a frame later.
-- iRacing replay playback can continue emitting moving telemetry while SimHub's generic `GameReplay`, `IsGameReplay`, and `ReplayMode` values look live.
-- The deployed fix was runtime-checked on August 8, 2026 by replaying the start of a three-lap iRacing race; replay distance/time was no longer recorded.
-
-### rFactor 2
-
-Games matched:
-
-- `rfactor2`
-
-Distance source:
-
-- always `Derived`
-
-Why:
-
-- rFactor 2's `SessionOdo` did not behave like a trustworthy session-distance source.
-- Its pit and garage exit flow can also oscillate `TrackPosition` around the timing line before the session counters settle.
-
-Session origin:
-
-- not based on a fixed lap-derived starting point
-- distance is integrated from forward track-position movement across line wraps
-
-Why:
-
-- rFactor 2 can start near the timing line and then move through pit and garage areas in a way that makes the generic lap-count-derived formula noisy.
-- Affinity therefore measures forward path traveled from successive track-position updates instead of reconstructing cumulative distance from lap count.
-
-Extra guards:
-
-- ignores low-speed track-position wraps near the timing line while leaving the pit and garage area
-- ignores near-stationary line transitions at the timing line
-
-Why:
-
-- rFactor 2 can bounce between just-before-line and just-after-line positions at low speed before the real telemetry flow stabilizes.
-- It can also report extra counter changes when the car is effectively stopped on the line at the end of a run.
-
-### Le Mans Ultimate
-
-Games matched:
-
-- `lmu`
-
-Distance source:
-
-- always `Derived`
-
-Why:
-
-- LMU is exposed by SimHub as its own game (`LMU`), but its telemetry behavior around pit exit and session shutdown is close to rFactor 2.
-- The SimHub `SessionOdo` value does not behave like a trustworthy per-session distance source for Affinity's cumulative totals.
-
-Session origin:
-
-- not based on a fixed lap-derived starting point
-- distance is integrated from forward track-position movement across line wraps
-
-Why:
-
-- LMU can start the car away from the timing line and can delay or jitter lap-related counters around line crossings.
-- Affinity therefore measures forward path traveled from successive track-position updates instead of reconstructing cumulative distance from lap count.
-
-Extra guards:
-
-- ignores low-speed timing-line lap increments that appear during session exit
-- ignores repeated copies of the same inflated post-exit derived distance
-- ignores placeholder LMU session starts when telemetry has not stabilized yet
-- skips persistence for effectively empty finalized sessions
-- ignores `Unknown` LMU car/track contexts
-
-Why:
-
-- LMU can report a fake extra lap while quitting a session after the real driven distance has already been captured.
-- It can also emit short startup or teardown placeholder sessions that would otherwise create zero-distance rows.
-- Blocking `Unknown` LMU contexts keeps incomplete telemetry handshakes from polluting the saved totals.
-
-### Other Games
-
-For other games, Affinity currently auto-selects a source at session start:
-
-- compare `Derived`
-- compare raw `SessionOdo` as meters
-- compare `SessionOdo * 1000`
-- lock the closest plausible source for the rest of the session
-
-This is a heuristic and may need game-specific overrides if a title exposes ambiguous telemetry.
+Telemetry thresholds and anomaly rules are evidence-driven. Change them only in separate work with simulator evidence and focused regression tests; the profile migration does not generalize one game's observed thresholds to another.
 
 ## Session Start Behavior
 
@@ -330,15 +132,16 @@ At session start, Affinity records:
 
 - current session id
 - active bucket key
-- chosen distance source
+- profile-selected distance mode and derived source
 - session origin
+- last track position and lap-counter state
 - current telemetry sample time
 
-For derived-source sessions that still use the simple lap-count formula, the origin may be intentionally forced to `0`.
+AMS2 and Project Motor Racing also declare that the engine should capture the starting track position and accept their observed initial-position behavior. Project Motor Racing alone enables the stationary startup anchor.
 
-AC/ACE no longer rely on that zero-origin behavior, because they now use the stateful forward track-position model instead.
+ACC may promote an active compact track context to a longer descriptive context without ending the session when its profile confirms that the new value is an upgrade of the old one.
 
-For other games, the origin is the chosen absolute session distance at the time the session begins.
+Unsupported fallback profiles never reach session setup.
 
 ## Reset And Wrap Handling
 
@@ -349,7 +152,7 @@ Affinity has a few protections for bad telemetry transitions:
 - session distance reset handling
   - if session distance drops materially, Affinity updates its local baseline instead of adding negative distance
 - derived line-wrap guard
-  - for derived-source sims, if track position wraps by about one lap before the sim's counters settle, Affinity waits for telemetry sync instead of treating that wrap as a real reset
+  - if derived session distance appears to move backward by about one lap before counters settle, Affinity waits for telemetry sync instead of treating the transition as a real reset
 - empty-session persistence guard
   - if a finalized session has less than `1 meter` of distance, Affinity does not save it, even if telemetry time accumulated
 
@@ -392,13 +195,7 @@ When enabled in the current build, targeted debug logging writes to:
 
 - `C:\Program Files (x86)\SimHub\PluginsData\Affinity\Affinity.distance.debug.<game>.log`
 
-The debug log is especially useful for:
-
-- `RaceRoom`
-- `AssettoCorsaEVO`
-- `Automobilista2`
-- `rFactor2`
-- `LMU`
+Each supported profile supplies the stable settings key used by its debug toggle and filename. Unsupported games have no per-game logging key.
 
 It records:
 
@@ -414,3 +211,9 @@ It records:
 - replay and inactive-sample decisions when detected
 - selected raw game-state fields for games with targeted guards
 - reset and wrap events
+
+## Extending Game Support
+
+Add game-specific behavior to a concrete `IAffinityGameProfile`, then register that profile in `SupportedProfiles`. A complete addition covers runtime aliases, any distinct logo aliases, settings/debug key, display name, logo filename, telemetry classification, structural distance capabilities, anomaly decisions, track/circuit display, and regression tests.
+
+Keep mutable counters, session state, persistence, logging, file access, WPF/UI, and lifecycle orchestration in `AffinityPlugin`. Do not add direct normalized game-name comparisons or `IsXGame` branches to `AffinityPlugin` or `AffinitySummaryBuilder`. Preserve raw stored identities unless separately planned migration work explicitly changes them.

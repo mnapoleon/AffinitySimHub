@@ -40,13 +40,16 @@ The current SimHub UI includes:
 The plugin currently recognizes:
 
 - Assetto Corsa
+- Assetto Corsa Competizione
 - Assetto Corsa EVO
 - Automobilista 2
 - iRacing
+- Le Mans Ultimate
+- Project Motor Racing
 - rFactor 2
 - RaceRoom Racing Experience
 
-Game recognition is normalized in [AffinityGameLogic.cs](Affinity/AffinityGameLogic.cs), including aliases such as `R3E` and `RRRE`.
+These nine entries are the concrete profiles in `AffinityGameProfileRegistry.SupportedProfiles`, which is the supported-game catalog used by runtime tracking, settings, debug logging, logos, and summary display. Matching is alphanumeric and case-insensitive. Runtime aliases include `R3E` and `RRRE` for RaceRoom; LMU runtime telemetry must resolve as `LMU`, while `Le Mans Ultimate` is retained only as a logo lookup alias.
 
 ## How It Works
 
@@ -78,7 +81,7 @@ The effective bucket key is:
 
 Each `TrackBucket` stores:
 
-- canonical game name
+- raw game name
 - car model
 - track name
 - track name with config/variation
@@ -89,19 +92,21 @@ Each `TrackBucket` stores:
 
 These models live in [AffinityDatabase.cs](Affinity/AffinityDatabase.cs).
 
+Profiles do not canonicalize persistence identities. The telemetry-provided `GameName`, `CarModel`, `TrackName`, and `TrackNameWithConfig` values, after the existing missing-value fallback and trimming, continue to define storage buckets and context keys. Profile settings keys, display names, and mapped track labels are routing or presentation metadata only.
+
 ### Distance tracking
 
-Affinity does not blindly trust one telemetry source for every game. For each session it chooses a distance source, establishes an origin, and then only adds positive forward deltas to the active bucket.
+Affinity does not blindly trust one telemetry source for every game. The resolved profile selects the distance mode for each session; the plugin establishes the origin and then adds only accepted positive forward deltas to the active bucket.
 
-Possible session distance sources:
+The distance engine retains support for these internal session sources:
 
 - `Derived`
 - `SessionOdoMeters`
 - `SessionOdoKilometers`
 
-In practice, the currently supported games all force `Derived`, because their telemetry quirks are better handled by Affinity's reconstruction logic than by relying on raw `SessionOdo`.
+Every shipped supported profile selects stateful derived distance. Affinity integrates forward track-position movement across line wraps and applies profile decisions for simulator-specific anomalies instead of relying on raw `SessionOdo`.
 
-Derived distance is based on lap progress and track position, with extra stateful logic for games where lap boundaries or resets are noisy.
+Shipped stateful derived distance is based on successive positions within the lap. The lap-derived formula remains available to the engine for RaceRoom's floor and diagnostic/source calculations.
 
 Important protections in the runtime logic include:
 
@@ -112,6 +117,14 @@ Important protections in the runtime logic include:
 - handling startup snaps and session restarts
 
 The detailed distance and time rules are documented in [Affinity-distance-counting.md](Affinity-distance-counting.md).
+
+### Game profiles
+
+Each supported simulator has an `IAffinityGameProfile`. A profile owns immutable game-specific policy: runtime and logo aliases; settings key, display name, and logo filename; track and circuit display rules; telemetry eligibility and replay exceptions; structural distance capabilities; and anomaly decisions. `AffinityGameProfileBase` supplies the shared defaults, including stateful derived distance and the call into `AffinityReplayDetector` for the replay probes that Affinity actually implements.
+
+`AffinityPlugin` remains the lifecycle and orchestration boundary. It owns mutable session and distance state, the AMS2 runtime participant state lifetime and reset, persistence, logging and file I/O, published SimHub properties, WPF/UI refresh, and session finalization/reset. Profiles receive snapshot contexts and return classifications or decisions; the AMS2 rule may learn the player index through the plugin-owned runtime state supplied in that context, but the state and its lifetime remain plugin-owned. Profiles do not perform storage, logging, file, or UI work. The Assetto Corsa track map is likewise loaded by the plugin and passed to the classic Assetto Corsa profile for display lookup.
+
+Resolution is total: null, blank, and unknown game names return an unsupported fallback profile. The fallback participates only in shared replay classification; otherwise `DataUpdate()` reports the game as unsupported and does not start distance or time tracking. It is not a generic-support path for arbitrary simulators.
 
 ### Time tracking
 
@@ -147,7 +160,7 @@ This separation is useful because:
 
 Assetto Corsa track/config identifiers are mapped to friendlier display names using [ac_track_id_map.json](Affinity/ac_track_id_map.json).
 
-That mapping is loaded at startup and applied during summary generation via [AffinityGameLogic.cs](Affinity/AffinityGameLogic.cs).
+That mapping is loaded at startup by the plugin and passed to the classic Assetto Corsa profile. Other profiles own their existing circuit/layout display rules; Assetto Corsa EVO does not use the classic Assetto Corsa map.
 
 ### Settings and debug logging
 
@@ -168,7 +181,9 @@ Key files and folders:
 - [Affinity\Affinity.csproj](Affinity/Affinity.csproj): main SimHub plugin project
 - [Affinity\AffinityPlugin.cs](Affinity/AffinityPlugin.cs): plugin runtime, persistence, telemetry handling
 - [Affinity\AffinitySummaryBuilder.cs](Affinity/AffinitySummaryBuilder.cs): summary aggregation and UI-facing snapshot creation
-- [Affinity\AffinityGameLogic.cs](Affinity/AffinityGameLogic.cs): supported-game rules, normalization, telemetry helpers
+- [Affinity\AffinityGameProfiles.cs](Affinity/AffinityGameProfiles.cs): profile contract, shared defaults, normalization, and registry
+- [Affinity\AffinityGameProfileImplementations.cs](Affinity/AffinityGameProfileImplementations.cs): the nine supported simulator profiles
+- [Affinity\AffinityReplayDetector.cs](Affinity/AffinityReplayDetector.cs): shared reflection-based replay probes
 - [Affinity\AffinityDatabase.cs](Affinity/AffinityDatabase.cs): persisted storage and summary models
 - [Affinity\AffinitySimHub.xaml](Affinity/AffinitySimHub.xaml): SimHub settings/data UI
 - [Affinity\AffinitySimHub.xaml.cs](Affinity/AffinitySimHub.xaml.cs): save/reset/refresh handlers
@@ -205,28 +220,39 @@ dotnet test .\Affinity.Tests\Affinity.Tests.csproj /p:SimHubInstallPath=C:\does-
 
 ### Live deploy into SimHub
 
-The plugin project includes a post-build target that copies:
+`Affinity.csproj` has a `CopyPluginToSimHub` post-build target that copies every file under `$(TargetDir)` when `SimHubInstallPath` exists. Because the build output includes `ac_track_id_map.json`, a normal build against the default live path also overwrites the installed map. Reserve that broad build/copy path for an explicit request to refresh the map.
 
-- `Affinity.dll`
-- `Affinity.pdb`
-- `ac_track_id_map.json`
-- `System.Data.SQLite.dll`
-- `x64\SQLite.Interop.dll`
-- `x86\SQLite.Interop.dll`
-
-into the configured SimHub install path when that path exists.
-
-The default path is:
-
-- `C:\Program Files (x86)\SimHub\`
-
-So a normal build against the default install can deploy directly into SimHub:
+For routine deployment, first run the no-deploy build above. Then, from an elevated PowerShell prompt, copy the same six-file runtime manifest validated by the release and beta workflows:
 
 ```powershell
-dotnet build .\Affinity\Affinity.csproj
+$affinityBuildOutput = (Resolve-Path '.\Affinity\bin\Debug\net48').Path
+$affinitySimHubInstall = 'C:\Program Files (x86)\SimHub'
+$affinityRuntimeFiles = @(
+    'Affinity.dll'
+    'System.Data.SQLite.dll'
+    'x64\SQLite.Interop.dll'
+    'x86\SQLite.Interop.dll'
+    'PluginsData\Affinity\sqlite-native\x64\SQLite.Interop.dll'
+    'PluginsData\Affinity\sqlite-native\x86\SQLite.Interop.dll'
+)
+
+foreach ($affinityRuntimeFile in $affinityRuntimeFiles) {
+    $affinitySourcePath = Join-Path $affinityBuildOutput $affinityRuntimeFile
+    $affinityDestinationPath = Join-Path $affinitySimHubInstall $affinityRuntimeFile
+    $affinityDestinationDirectory = Split-Path -Path $affinityDestinationPath -Parent
+
+    if (-not (Test-Path -LiteralPath $affinitySourcePath)) {
+        throw "Validated build output is missing: $affinitySourcePath"
+    }
+
+    New-Item -ItemType Directory -Path $affinityDestinationDirectory -Force | Out-Null
+    Copy-Item -LiteralPath $affinitySourcePath -Destination $affinityDestinationPath -Force
+}
 ```
 
-If SimHub is open and the DLL is locked, close or restart SimHub and rebuild.
+This manifest updates the plugin and SQLite binaries while deliberately excluding `ac_track_id_map.json`; the installed map remains intact. It also excludes `Affinity.pdb`, which is not part of the release workflow's required runtime payload.
+
+If SimHub is open and a DLL is locked, do not force the copy. Close or restart SimHub, then rerun the explicit copy. Use a normal build with the live `SimHubInstallPath` only when the user explicitly asks to refresh `ac_track_id_map.json` along with the full output.
 
 ### Release ZIP
 
@@ -255,7 +281,7 @@ The project builds against committed SimHub reference assemblies under [lib/SimH
 During normal SimHub use, the important files are typically:
 
 - settings JSON
-- cumulative data JSON
+- cumulative SQLite distance database and rotating backups
 - optional debug logs
 
 Common locations:
@@ -296,19 +322,24 @@ The current tests focus on stable logic that benefits from deterministic coverag
 
 - summary aggregation
 - unit conversion for display
-- supported-game normalization
+- profile aliases, metadata, display rules, telemetry classifications, and distance decisions
+- profile routing and source-boundary enforcement
+- plugin session, persistence, replay, and distance orchestration
 - settings reset behavior
 
-Current test files:
+Representative test files:
 
 - [AffinitySummaryBuilderTests.cs](Affinity.Tests/AffinitySummaryBuilderTests.cs)
-- [AffinityGameLogicTests.cs](Affinity.Tests/AffinityGameLogicTests.cs)
+- [AffinityGameProfileTests.cs](Affinity.Tests/AffinityGameProfileTests.cs)
+- [AffinityGameProfileBoundaryTests.cs](Affinity.Tests/AffinityGameProfileBoundaryTests.cs)
+- [AffinityPluginDistanceSourceTests.cs](Affinity.Tests/AffinityPluginDistanceSourceTests.cs)
+- [AffinityPluginReplayTests.cs](Affinity.Tests/AffinityPluginReplayTests.cs)
 - [AffinitySettingsTests.cs](Affinity.Tests/AffinitySettingsTests.cs)
 
 For runtime telemetry debugging, unit tests are complemented by:
 
 - SimHub runtime logs
-- persisted JSON inspection
+- persisted SQLite session and summary inspection
 - optional Affinity telemetry debug logs
 
 ## Documentation Map
@@ -338,6 +369,9 @@ A few repo conventions matter when working here:
 - keep `DataUpdate()` lightweight
 - avoid unnecessary file I/O in telemetry hot paths
 - update tests when summary logic or persisted shapes change
+- extend a concrete `IAffinityGameProfile` for game-specific aliases, metadata, display, telemetry, distance rules, logging identity, and logo behavior; do not add normalized game-name branches to `AffinityPlugin` or `AffinitySummaryBuilder`
+
+When adding a simulator, add one concrete profile to `SupportedProfiles` and cover the complete surface: distinct runtime and logo aliases where needed, settings/debug key, display name, logo filename, telemetry classification, structural distance capabilities, anomaly decisions, track/circuit presentation, and regression tests. Keep thresholds evidence-driven and change them in separate regression-tested work. Preserve raw storage identities unless a separately designed data migration explicitly says otherwise.
 
 The repo-specific working agreement is in [AGENTS.md](AGENTS.md).
 
@@ -350,4 +384,4 @@ If you only need the shortest path to productive work:
 3. Run `dotnet build .\Affinity\Affinity.csproj /p:SimHubInstallPath=C:\does-not-exist`.
 4. Make your change.
 5. Re-run tests and build.
-6. Build against the real SimHub install when you want to deploy the plugin locally.
+6. Use the explicit map-safe copy workflow above when you want to deploy the plugin locally.

@@ -50,35 +50,12 @@ namespace Affinity
         public const string RecentHighlightsRangeWeek = "Week";
         public const string RecentHighlightsRangeMonth = "Month";
         private static readonly string Version = ResolvePluginVersion();
-        private static readonly IReadOnlyDictionary<string, string> GameLogoFileNames =
-            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-            {
-                ["assettocorsa"] = "244210.jpg",
-                ["assettocorsacompetizione"] = "805550.jpg",
-                ["assettocorsaevo"] = "3058630.jpg",
-                ["automobilista2"] = "1066890.jpg",
-                ["iracing"] = "iRacing.jpg",
-                ["lmu"] = "2399420.jpg",
-                ["projectmotorracing"] = "299970.jpg",
-                ["raceroomracingexperience"] = "211500.jpg",
-                ["rfactor2"] = "365960.jpg"
-            };
+        private static readonly AffinityGameProfileRegistry DefaultGameProfiles =
+            AffinityGameProfileRegistry.CreateDefault();
         private static readonly IReadOnlyList<GameTabFilterOption> RecentHighlightsRangeOptionsValue = new List<GameTabFilterOption>
         {
             new GameTabFilterOption(RecentHighlightsRangeWeek, "Week"),
             new GameTabFilterOption(RecentHighlightsRangeMonth, "Month")
-        };
-        private static readonly KeyValuePair<string, string>[] DefaultGameDebugLoggingEntries =
-        {
-            new KeyValuePair<string, string>("assettocorsa", "Assetto Corsa"),
-            new KeyValuePair<string, string>("assettocorsacompetizione", "Assetto Corsa Competizione"),
-            new KeyValuePair<string, string>("assettocorsaevo", "Assetto Corsa EVO"),
-            new KeyValuePair<string, string>("automobilista2", "Automobilista 2"),
-            new KeyValuePair<string, string>("iracing", "iRacing"),
-            new KeyValuePair<string, string>("lmu", "Le Mans Ultimate"),
-            new KeyValuePair<string, string>("projectmotorracing", "Project Motor Racing"),
-            new KeyValuePair<string, string>("rfactor2", "rFactor 2"),
-            new KeyValuePair<string, string>("raceroomracingexperience", "RaceRoom Racing Experience")
         };
         private static readonly string[] GameDataDebugMemberNames =
         {
@@ -140,6 +117,7 @@ namespace Affinity
         };
 
         private bool _hasLoggedDataError;
+        private readonly AffinityGameProfileRegistry _gameProfiles = DefaultGameProfiles;
         private ImageSource _pictureIcon;
         private string _settingsPath = string.Empty;
         private string _databasePath = string.Empty;
@@ -149,6 +127,7 @@ namespace Affinity
         private AffinityDatabase _database = new AffinityDatabase();
         private AffinitySqliteRepository _sqliteRepository;
         private Dictionary<string, string> _assettoCorsaTrackMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        private AffinityTrackDisplayContext _trackDisplayContext = new AffinityTrackDisplayContext(null);
         private string _currentGameName = "No active game";
         private string _currentCarModel = "Unknown car";
         private string _currentTrackName = "Unknown track";
@@ -669,6 +648,7 @@ namespace Affinity
             Settings = LoadSettings();
             EnsureDefaultGameDebugLoggingSettings();
             _assettoCorsaTrackMap = LoadAssettoCorsaTrackMap();
+            _trackDisplayContext = new AffinityTrackDisplayContext(_assettoCorsaTrackMap);
             EnsureSqliteNativeLibraryReady();
             InitializeDatabase();
             _database = LoadRuntimeDatabase();
@@ -1332,7 +1312,8 @@ namespace Affinity
                 displayInMiles: Settings.DisplayInMiles,
                 assettoCorsaTrackMap: _assettoCorsaTrackMap,
                 tryResolveGameLogoPath: TryResolveGameLogoPath,
-                tryResolveGameLogo: TryLoadGameLogo);
+                tryResolveGameLogo: TryLoadGameLogo,
+                gameProfiles: _gameProfiles);
             DateTime nowLocal = DateTime.Now;
             AffinitySummarySnapshot thisMonthSnapshot = BuildMonthlySummarySnapshot(nowLocal);
             AffinitySummarySnapshot lastMonthSnapshot = BuildMonthlySummarySnapshot(nowLocal.AddMonths(-1));
@@ -1390,7 +1371,13 @@ namespace Affinity
                 .Where(summary => string.Equals(summary.GameName, selectedTab.GameName, StringComparison.OrdinalIgnoreCase))
                 .ToList();
             GameDistanceTab periodTab = AffinitySummaryBuilder
-                .BuildSnapshot(periodRows, Settings.DisplayInMiles, _assettoCorsaTrackMap, TryResolveGameLogoPath, TryLoadGameLogo)
+                .BuildSnapshot(
+                    periodRows,
+                    Settings.DisplayInMiles,
+                    _assettoCorsaTrackMap,
+                    TryResolveGameLogoPath,
+                    TryLoadGameLogo,
+                    _gameProfiles)
                 .GameTabs
                 .FirstOrDefault(tab => string.Equals(tab.GameName, selectedTab.GameName, StringComparison.OrdinalIgnoreCase));
 
@@ -2113,7 +2100,7 @@ namespace Affinity
 
         private bool IsSupportedGame(string gameName)
         {
-            return AffinityGameLogic.IsSupportedGame(gameName);
+            return _gameProfiles.Resolve(gameName).IsSupported;
         }
 
         private bool HasReliableTelemetryContext(string gameName, string carModel, string trackNameWithConfig)
@@ -2599,11 +2586,11 @@ namespace Affinity
 
             RemoveUnsupportedGameDebugLoggingSettings();
 
-            foreach (KeyValuePair<string, string> entry in DefaultGameDebugLoggingEntries)
+            foreach (IAffinityGameProfile profile in _gameProfiles.SupportedProfiles)
             {
-                if (!Settings.GameDebugLogging.ContainsKey(entry.Key))
+                if (!Settings.GameDebugLogging.ContainsKey(profile.SettingsKey))
                 {
-                    Settings.GameDebugLogging[entry.Key] = false;
+                    Settings.GameDebugLogging[profile.SettingsKey] = false;
                 }
             }
         }
@@ -2632,33 +2619,15 @@ namespace Affinity
 
         private void RefreshGameDebugLoggingOptions()
         {
-            List<KeyValuePair<string, string>> entries = new List<KeyValuePair<string, string>>();
-
-            foreach (KeyValuePair<string, string> entry in DefaultGameDebugLoggingEntries)
-            {
-                entries.Add(entry);
-            }
-
-            foreach (string settingsKey in Settings.GameDebugLogging.Keys.OrderBy(key => GetDebugLoggingDisplayName(key)))
-            {
-                if (entries.Any(entry => string.Equals(entry.Key, settingsKey, StringComparison.Ordinal)))
-                {
-                    continue;
-                }
-
-                if (!IsSupportedDebugLoggingSettingsKey(settingsKey))
-                {
-                    continue;
-                }
-
-                entries.Add(new KeyValuePair<string, string>(settingsKey, GetDebugLoggingDisplayName(settingsKey)));
-            }
-
             GameDebugLoggingOptions.Clear();
-            foreach (KeyValuePair<string, string> entry in entries.OrderBy(item => item.Value))
+            foreach (IAffinityGameProfile profile in _gameProfiles.SupportedProfiles.OrderBy(item => item.DisplayName))
             {
-                bool isEnabled = Settings.GameDebugLogging.TryGetValue(entry.Key, out bool configuredEnabled) && configuredEnabled;
-                GameDebugLoggingOptions.Add(new GameDebugLoggingOption(entry.Key, entry.Value, isEnabled, UpdateGameDebugLoggingSetting));
+                bool enabled = Settings.GameDebugLogging.TryGetValue(profile.SettingsKey, out bool configured) && configured;
+                GameDebugLoggingOptions.Add(new GameDebugLoggingOption(
+                    profile.SettingsKey,
+                    profile.DisplayName,
+                    enabled,
+                    UpdateGameDebugLoggingSetting));
             }
         }
 
@@ -2716,44 +2685,12 @@ namespace Affinity
 
         private string GetDebugLoggingSettingsKey(string gameName)
         {
-            return AffinityGameLogic.GetDebugLoggingSettingsKey(gameName);
-        }
-
-        private string GetDebugLoggingDisplayName(string settingsKey)
-        {
-            switch (settingsKey)
-            {
-                case "assettocorsa":
-                    return "Assetto Corsa";
-                case "assettocorsacompetizione":
-                    return "Assetto Corsa Competizione";
-                case "assettocorsaevo":
-                    return "Assetto Corsa EVO";
-                case "automobilista2":
-                    return "Automobilista 2";
-                case "iracing":
-                    return "iRacing";
-                case "lmu":
-                    return "Le Mans Ultimate";
-                case "projectmotorracing":
-                    return "Project Motor Racing";
-                case "rfactor2":
-                    return "rFactor 2";
-                case "raceroomracingexperience":
-                    return "RaceRoom Racing Experience";
-                default:
-                    return settingsKey;
-            }
+            return _gameProfiles.Resolve(gameName).SettingsKey;
         }
 
         private bool IsSupportedDebugLoggingSettingsKey(string settingsKey)
         {
             return IsSupportedGame(settingsKey);
-        }
-
-        private static string NormalizeGameName(string gameName)
-        {
-            return AffinityGameLogic.NormalizeGameName(gameName);
         }
 
         private static string NormalizeContextValue(string value, string fallback)
@@ -2763,7 +2700,8 @@ namespace Affinity
 
         private string GetDisplayTrackNameWithConfig(string gameName, string rawTrackNameWithConfig)
         {
-            return AffinityGameLogic.GetDisplayTrackNameWithConfig(gameName, rawTrackNameWithConfig, _assettoCorsaTrackMap);
+            IAffinityGameProfile profile = _gameProfiles.Resolve(gameName);
+            return profile.GetTrackDisplayName(rawTrackNameWithConfig, _trackDisplayContext);
         }
 
         private void OnPropertyChanged([CallerMemberName] string propertyName = null)
@@ -2887,7 +2825,8 @@ namespace Affinity
                 Settings.DisplayInMiles,
                 _assettoCorsaTrackMap,
                 TryResolveGameLogoPath,
-                TryLoadGameLogo);
+                TryLoadGameLogo,
+                _gameProfiles);
         }
 
         private void BuildRecentHighlightsSummarySnapshots(
@@ -2932,7 +2871,11 @@ namespace Affinity
                     .Where(summary => summary.LastUpdatedUtc >= startUtc && summary.LastUpdatedUtc < endUtc)
                     .ToList();
 
-            return AffinitySummaryBuilder.BuildSnapshot(rows, Settings.DisplayInMiles, _assettoCorsaTrackMap);
+            return AffinitySummaryBuilder.BuildSnapshot(
+                rows,
+                Settings.DisplayInMiles,
+                _assettoCorsaTrackMap,
+                gameProfiles: _gameProfiles);
         }
 
         private void ApplySummarySnapshot(
@@ -3077,10 +3020,10 @@ namespace Affinity
 
         internal static string TryGetGameLogoFileName(string gameName)
         {
-            string normalizedGameName = NormalizeGameLogoLookupName(gameName);
-            return GameLogoFileNames.TryGetValue(normalizedGameName, out string fileName)
-                ? fileName
-                : null;
+            IAffinityGameProfile profile = DefaultGameProfiles.ResolveLogo(gameName);
+            return string.IsNullOrWhiteSpace(profile.LogoFileName)
+                ? null
+                : profile.LogoFileName;
         }
 
         internal static string TryGetGameLogoPath(string logosDirectory, string gameName)
@@ -3095,23 +3038,6 @@ namespace Affinity
             return File.Exists(fullPath)
                 ? fullPath
                 : null;
-        }
-
-        private static string NormalizeGameLogoLookupName(string gameName)
-        {
-            string normalized = AffinityGameLogic.NormalizeGameName(gameName);
-            switch (normalized)
-            {
-                case "r3e":
-                case "rrre":
-                    return "raceroomracingexperience";
-                case "rfactor2":
-                    return "rfactor2";
-                case "lemansultimate":
-                    return "lmu";
-                default:
-                    return normalized;
-            }
         }
 
         internal string ResolveSimHubLogosDirectory()
@@ -3129,7 +3055,10 @@ namespace Affinity
 
         private ImageSource TryLoadGameLogo(string gameName)
         {
-            string cacheKey = NormalizeGameLogoLookupName(gameName);
+            IAffinityGameProfile profile = _gameProfiles.ResolveLogo(gameName);
+            string cacheKey = string.IsNullOrWhiteSpace(profile.SettingsKey)
+                ? AffinityGameName.Normalize(gameName)
+                : profile.SettingsKey;
             if (_gameLogoCache.TryGetValue(cacheKey, out ImageSource cachedLogo))
             {
                 return cachedLogo;

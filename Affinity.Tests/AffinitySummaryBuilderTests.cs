@@ -264,6 +264,60 @@ namespace Affinity.Tests
         }
 
         [TestMethod]
+        public void BuildSnapshot_UsesProfilesForDisplayWithoutChangingRawTrackIdentity()
+        {
+            DistanceSummary row = new DistanceSummary
+            {
+                GameName = "AssettoCorsa",
+                CarModel = "Mazda MX-5 Cup",
+                TrackName = "ks_brands_hatch",
+                TrackNameWithConfig = "ks_brands_hatch-indy",
+                TotalDistanceKm = 10.0
+            };
+            Dictionary<string, string> map = new Dictionary<string, string>
+            {
+                ["ks_brands_hatch-indy"] = "Brands Hatch - Indy"
+            };
+
+            AffinitySummarySnapshot snapshot = AffinitySummaryBuilder.BuildSnapshot(new[] { row }, false, map);
+            TrackDistanceSummary track = snapshot.GameTabs.Single().TrackSummaries.Single();
+
+            Assert.AreEqual("ks_brands_hatch-indy", track.TrackName);
+            Assert.AreEqual("Brands Hatch - Indy", track.TrackDisplayName);
+            Assert.AreEqual("Brands Hatch - Indy", track.CircuitNameDisplay);
+            Assert.AreEqual("Brands Hatch - Indy", track.CircuitLayoutDisplay);
+        }
+
+        [TestMethod]
+        public void BuildSnapshot_UsesProvidedProfileRegistryForTrackDisplayPolicy()
+        {
+            DistanceSummary row = new DistanceSummary
+            {
+                GameName = "CustomGame",
+                CarModel = "Test Car",
+                TrackName = "raw-track",
+                TrackNameWithConfig = "raw-track-layout",
+                TotalDistanceKm = 1.0
+            };
+            AffinityGameProfileRegistry registry = new AffinityGameProfileRegistry(new[]
+            {
+                new TestDisplayProfile()
+            });
+
+            AffinitySummarySnapshot snapshot = AffinitySummaryBuilder.BuildSnapshot(
+                new[] { row },
+                displayInMiles: false,
+                assettoCorsaTrackMap: null,
+                gameProfiles: registry);
+            TrackDistanceSummary track = snapshot.FeaturedTrackSummary;
+
+            Assert.AreEqual("raw-track-layout", track.TrackName);
+            Assert.AreEqual("Profile Track", track.TrackDisplayName);
+            Assert.AreEqual("Profile Circuit", track.CircuitNameDisplay);
+            Assert.AreEqual("Profile Layout", track.CircuitLayoutDisplay);
+        }
+
+        [TestMethod]
         public void BuildSnapshot_PopulatesResolvedGameLogoState()
         {
             Dictionary<string, string> logoPaths = new Dictionary<string, string>
@@ -327,6 +381,30 @@ namespace Affinity.Tests
             Assert.AreEqual(@"C:\SimHub\Logos\244210.jpg", assettoTab.GameLogoPath);
             Assert.AreEqual(@"C:\SimHub\Logos\iRacing.jpg", iracingTab.GameLogoPath);
             Assert.AreEqual(assettoTab.GameLogoPath, snapshot.FeaturedGameTab.GameLogoPath);
+        }
+
+        private sealed class TestDisplayProfile : AffinityGameProfileBase
+        {
+            public TestDisplayProfile()
+                : base("customgame", "Custom Game", "custom.jpg", "CustomGame")
+            {
+            }
+
+            public override string GetTrackDisplayName(
+                string rawTrackNameWithConfig,
+                AffinityTrackDisplayContext context)
+            {
+                return "Profile Track";
+            }
+
+            public override CircuitDisplayParts GetCircuitDisplayParts(string trackDisplayName)
+            {
+                return new CircuitDisplayParts
+                {
+                    CircuitNameDisplay = "Profile Circuit",
+                    CircuitLayoutDisplay = "Profile Layout"
+                };
+            }
         }
     }
 }

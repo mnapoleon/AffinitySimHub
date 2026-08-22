@@ -24,13 +24,16 @@ namespace Affinity
     {
         private const double MetersPerKilometer = 1000.0;
         private const double MetersPerMile = 1609.344;
+        private static readonly AffinityGameProfileRegistry DefaultGameProfiles =
+            AffinityGameProfileRegistry.CreateDefault();
 
         public static AffinitySummarySnapshot BuildSnapshot(
             AffinityDatabase database,
             bool displayInMiles,
-            IReadOnlyDictionary<string, string> assettoCorsaTrackMap)
+            IReadOnlyDictionary<string, string> assettoCorsaTrackMap,
+            AffinityGameProfileRegistry gameProfiles = null)
         {
-            return BuildSnapshot(database, displayInMiles, assettoCorsaTrackMap, null, null);
+            return BuildSnapshot(database, displayInMiles, assettoCorsaTrackMap, null, null, gameProfiles);
         }
 
         public static AffinitySummarySnapshot BuildSnapshot(
@@ -38,14 +41,16 @@ namespace Affinity
             bool displayInMiles,
             IReadOnlyDictionary<string, string> assettoCorsaTrackMap,
             Func<string, string> tryResolveGameLogoPath,
-            Func<string, ImageSource> tryResolveGameLogo)
+            Func<string, ImageSource> tryResolveGameLogo,
+            AffinityGameProfileRegistry gameProfiles = null)
         {
             return BuildSnapshot(
                 BuildDistanceSummaries(database),
                 displayInMiles,
                 assettoCorsaTrackMap,
                 tryResolveGameLogoPath,
-                tryResolveGameLogo);
+                tryResolveGameLogo,
+                gameProfiles);
         }
 
         public static AffinitySummarySnapshot BuildSnapshot(
@@ -53,23 +58,30 @@ namespace Affinity
             bool displayInMiles,
             IReadOnlyDictionary<string, string> assettoCorsaTrackMap,
             Func<string, string> tryResolveGameLogoPath = null,
-            Func<string, ImageSource> tryResolveGameLogo = null)
+            Func<string, ImageSource> tryResolveGameLogo = null,
+            AffinityGameProfileRegistry gameProfiles = null)
         {
+            gameProfiles = gameProfiles ?? DefaultGameProfiles;
+            AffinityTrackDisplayContext trackDisplayContext = new AffinityTrackDisplayContext(assettoCorsaTrackMap);
             List<DistanceSummary> summaries = (distanceSummaries ?? Enumerable.Empty<DistanceSummary>())
-                .Select(summary => new DistanceSummary
+                .Select(summary =>
                 {
-                    GameName = summary.GameName,
-                    CarModel = summary.CarModel,
-                    TrackName = summary.TrackName,
-                    TrackNameWithConfig = summary.TrackNameWithConfig,
-                    TrackDisplayName = AffinityGameLogic.GetDisplayTrackNameWithConfig(
-                        summary.GameName,
-                        string.IsNullOrWhiteSpace(summary.TrackDisplayName) ? summary.TrackNameWithConfig : summary.TrackDisplayName,
-                        assettoCorsaTrackMap),
-                    TotalDistanceKm = summary.TotalDistanceKm,
-                    TotalDistanceMiles = summary.TotalDistanceMiles,
-                    UsedTime = summary.UsedTime,
-                    LastUpdatedUtc = summary.LastUpdatedUtc
+                    IAffinityGameProfile profile = gameProfiles.Resolve(summary.GameName);
+                    string rawDisplay = string.IsNullOrWhiteSpace(summary.TrackDisplayName)
+                        ? summary.TrackNameWithConfig
+                        : summary.TrackDisplayName;
+                    return new DistanceSummary
+                    {
+                        GameName = summary.GameName,
+                        CarModel = summary.CarModel,
+                        TrackName = summary.TrackName,
+                        TrackNameWithConfig = summary.TrackNameWithConfig,
+                        TrackDisplayName = profile.GetTrackDisplayName(rawDisplay, trackDisplayContext),
+                        TotalDistanceKm = summary.TotalDistanceKm,
+                        TotalDistanceMiles = summary.TotalDistanceMiles,
+                        UsedTime = summary.UsedTime,
+                        LastUpdatedUtc = summary.LastUpdatedUtc
+                    };
                 })
                 .OrderBy(summary => summary.GameName)
                 .ThenBy(summary => summary.CarModel)
@@ -81,7 +93,7 @@ namespace Affinity
                 .Select(group =>
                 {
                     List<DistanceSummary> gameRows = group.ToList();
-                    List<TrackDistanceSummary> trackSummaries = BuildTrackSummaries(gameRows, displayInMiles);
+                    List<TrackDistanceSummary> trackSummaries = BuildTrackSummaries(gameRows, displayInMiles, gameProfiles);
                     List<CarDistanceSummary> carSummaries = BuildCarSummaries(gameRows, displayInMiles);
 
                     GameDistanceTab tab = new GameDistanceTab
@@ -126,7 +138,8 @@ namespace Affinity
                     trackGroup.Sum(summary => summary.TotalDistanceMiles),
                     trackGroup.Sum(summary => summary.UsedTime),
                     trackGroup.Max(summary => summary.LastUpdatedUtc),
-                    displayInMiles))
+                    displayInMiles,
+                    gameProfiles.Resolve(trackGroup.Key.GameName)))
                 .OrderByDescending(summary => summary.DistanceKm)
                 .ThenByDescending(summary => summary.UsedTime)
                 .ThenBy(summary => summary.GameName)
@@ -213,8 +226,10 @@ namespace Affinity
 
         internal static List<TrackDistanceSummary> BuildTrackSummaries(
             IEnumerable<DistanceSummary> summaries,
-            bool displayInMiles)
+            bool displayInMiles,
+            AffinityGameProfileRegistry gameProfiles = null)
         {
+            gameProfiles = gameProfiles ?? DefaultGameProfiles;
             return (summaries ?? Enumerable.Empty<DistanceSummary>())
                 .GroupBy(summary => summary.TrackNameWithConfig)
                 .Select(trackGroup => BuildTrackDistanceSummary(
@@ -225,7 +240,8 @@ namespace Affinity
                     trackGroup.Sum(summary => summary.TotalDistanceMiles),
                     trackGroup.Sum(summary => summary.UsedTime),
                     trackGroup.Max(summary => summary.LastUpdatedUtc),
-                    displayInMiles))
+                    displayInMiles,
+                    gameProfiles.Resolve(trackGroup.First().GameName)))
                 .OrderByDescending(summary => summary.DistanceDisplay)
                 .ThenBy(summary => summary.TrackDisplayName)
                 .ToList();
@@ -263,31 +279,18 @@ namespace Affinity
             double distanceMiles,
             double usedTime,
             DateTime lastUpdatedUtc,
-            bool displayInMiles)
+            bool displayInMiles,
+            IAffinityGameProfile profile)
         {
-            string circuitName;
-            string circuitLayout;
-            if (UsesSameCircuitNameAndLayoutDisplay(gameName))
-            {
-                circuitName = trackDisplayName ?? string.Empty;
-                circuitLayout = trackDisplayName ?? string.Empty;
-            }
-            else
-            {
-                (circuitName, circuitLayout) = SplitCircuitDisplay(gameName, trackDisplayName);
-                if (AffinityGameLogic.IsIRacingGame(gameName))
-                {
-                    circuitName = ToCircuitTitleCase(circuitName);
-                }
-            }
+            CircuitDisplayParts circuitDisplay = profile.GetCircuitDisplayParts(trackDisplayName);
 
             return new TrackDistanceSummary
             {
                 GameName = gameName,
                 TrackName = trackName,
                 TrackDisplayName = trackDisplayName,
-                CircuitNameDisplay = circuitName,
-                CircuitLayoutDisplay = circuitLayout,
+                CircuitNameDisplay = circuitDisplay.CircuitNameDisplay,
+                CircuitLayoutDisplay = circuitDisplay.CircuitLayoutDisplay,
                 DistanceKm = distanceKm,
                 DistanceMiles = distanceMiles,
                 DistanceDisplay = displayInMiles ? distanceMiles : distanceKm,
@@ -295,61 +298,6 @@ namespace Affinity
                 UsedTimeDisplay = FormatUsedTime(usedTime),
                 LastUpdatedUtc = lastUpdatedUtc
             };
-        }
-
-        private static bool UsesSameCircuitNameAndLayoutDisplay(string gameName)
-        {
-            return AffinityGameLogic.IsAssettoCorsaClassicGame(gameName) ||
-                AffinityGameLogic.IsAssettoCorsaCompetizioneGame(gameName) ||
-                AffinityGameLogic.IsLmuGame(gameName);
-        }
-
-        private static (string circuitName, string circuitLayout) SplitCircuitDisplay(string gameName, string trackDisplayName)
-        {
-            string normalizedTrackDisplayName = NormalizeCircuitDisplayPart(trackDisplayName);
-            if (string.IsNullOrWhiteSpace(trackDisplayName))
-            {
-                return (normalizedTrackDisplayName, string.Empty);
-            }
-
-            string separator = AffinityGameLogic.IsRFactor2Game(gameName) ? "--" : "-";
-            int separatorIndex = trackDisplayName.IndexOf(separator, StringComparison.Ordinal);
-            if (separatorIndex < 0)
-            {
-                return (normalizedTrackDisplayName, string.Empty);
-            }
-
-            string circuitName = NormalizeCircuitDisplayPart(trackDisplayName.Substring(0, separatorIndex));
-            string circuitLayout = NormalizeCircuitDisplayPart(trackDisplayName.Substring(separatorIndex + separator.Length));
-            return (circuitName, circuitLayout);
-        }
-
-        private static string NormalizeCircuitDisplayPart(string value)
-        {
-            return (value ?? string.Empty).Trim().Replace('_', ' ');
-        }
-
-        private static string ToCircuitTitleCase(string value)
-        {
-            if (string.IsNullOrWhiteSpace(value))
-            {
-                return value ?? string.Empty;
-            }
-
-            string[] words = value.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
-            for (int index = 0; index < words.Length; index++)
-            {
-                string word = words[index];
-                if (string.Equals(word, "gp", StringComparison.OrdinalIgnoreCase))
-                {
-                    words[index] = "GP";
-                    continue;
-                }
-
-                words[index] = char.ToUpperInvariant(word[0]) + word.Substring(1).ToLowerInvariant();
-            }
-
-            return string.Join(" ", words);
         }
 
         private static string FormatUsedTime(double usedTimeSeconds)

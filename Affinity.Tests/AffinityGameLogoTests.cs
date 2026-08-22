@@ -38,6 +38,15 @@ namespace Affinity.Tests
         }
 
         [TestMethod]
+        public void TryGetGameLogoFileName_MatchesSupportedProfileCatalog()
+        {
+            foreach (IAffinityGameProfile profile in AffinityGameProfileRegistry.CreateDefault().SupportedProfiles)
+            {
+                Assert.AreEqual(profile.LogoFileName, AffinityPlugin.TryGetGameLogoFileName(profile.SettingsKey));
+            }
+        }
+
+        [TestMethod]
         public void TryGetGameLogoFileName_ReturnsNullForUnknownGame()
         {
             Assert.IsNull(AffinityPlugin.TryGetGameLogoFileName("Unknown Sim"));

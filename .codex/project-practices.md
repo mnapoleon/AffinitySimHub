@@ -21,6 +21,8 @@ Use these practices for each AffinitySimHub change unless the user explicitly as
 
 ## Game And Telemetry Changes
 
+- Put game-specific metadata, aliases, display rules, telemetry classification, and distance decisions behind `IAffinityGameProfile`. Prefer extending a concrete profile over adding direct normalized game-name comparisons or `IsXGame` branches to `AffinityPlugin` or `AffinitySummaryBuilder`.
+
 1. For game-support changes, cover the full surface:
    - supported game detection
    - display and storage name

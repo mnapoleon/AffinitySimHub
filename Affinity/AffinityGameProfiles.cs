@@ -167,7 +167,7 @@ namespace Affinity
 
     internal abstract class AffinityGameProfileBase : IAffinityGameProfile
     {
-        private readonly HashSet<string> _runtimeAliases;
+        private readonly HashSet<string> _normalizedRuntimeAliases;
 
         protected AffinityGameProfileBase(
             string settingsKey,
@@ -178,7 +178,7 @@ namespace Affinity
             SettingsKey = settingsKey ?? string.Empty;
             DisplayName = displayName ?? string.Empty;
             LogoFileName = logoFileName ?? string.Empty;
-            _runtimeAliases = new HashSet<string>(
+            _normalizedRuntimeAliases = new HashSet<string>(
                 (runtimeAliases ?? Array.Empty<string>())
                     .Select(AffinityGameName.Normalize)
                     .Where(alias => !string.IsNullOrWhiteSpace(alias)),
@@ -205,13 +205,23 @@ namespace Affinity
 
         public bool Matches(string gameName)
         {
-            string normalized = AffinityGameName.Normalize(gameName);
-            return !string.IsNullOrWhiteSpace(normalized) && _runtimeAliases.Contains(normalized);
+            return MatchesNormalized(AffinityGameName.Normalize(gameName));
         }
 
-        public virtual bool MatchesLogoName(string gameName)
+        public bool MatchesLogoName(string gameName)
         {
-            return Matches(gameName);
+            return MatchesNormalizedLogoName(AffinityGameName.Normalize(gameName));
+        }
+
+        internal bool MatchesNormalized(string normalizedGameName)
+        {
+            return !string.IsNullOrWhiteSpace(normalizedGameName) &&
+                _normalizedRuntimeAliases.Contains(normalizedGameName);
+        }
+
+        internal virtual bool MatchesNormalizedLogoName(string normalizedGameName)
+        {
+            return MatchesNormalized(normalizedGameName);
         }
 
         public virtual TelemetryDisposition EvaluateTelemetry(AffinityTelemetryContext context)
@@ -346,10 +356,14 @@ namespace Affinity
 
         public IAffinityGameProfile Resolve(string gameName)
         {
+            string normalizedGameName = AffinityGameName.Normalize(gameName);
             for (int index = 0; index < SupportedProfiles.Count; index++)
             {
                 IAffinityGameProfile profile = SupportedProfiles[index];
-                if (profile.Matches(gameName))
+                bool matches = profile is AffinityGameProfileBase profileBase
+                    ? profileBase.MatchesNormalized(normalizedGameName)
+                    : profile.Matches(gameName);
+                if (matches)
                 {
                     return profile;
                 }
@@ -360,10 +374,14 @@ namespace Affinity
 
         public IAffinityGameProfile ResolveLogo(string gameName)
         {
+            string normalizedGameName = AffinityGameName.Normalize(gameName);
             for (int index = 0; index < SupportedProfiles.Count; index++)
             {
                 IAffinityGameProfile profile = SupportedProfiles[index];
-                if (profile.MatchesLogoName(gameName))
+                bool matches = profile is AffinityGameProfileBase profileBase
+                    ? profileBase.MatchesNormalizedLogoName(normalizedGameName)
+                    : profile.MatchesLogoName(gameName);
+                if (matches)
                 {
                     return profile;
                 }

@@ -35,8 +35,19 @@ namespace Affinity.Tests
             Assert.IsFalse(registry.Resolve(string.Empty).IsSupported);
             Assert.IsFalse(registry.Resolve("Unknown Game").IsSupported);
             Assert.AreEqual(string.Empty, registry.Resolve("Unknown Game").SettingsKey);
-            Assert.IsFalse(registry.Resolve("Le Mans Ultimate").IsSupported);
-            Assert.AreEqual("lmu", registry.ResolveLogo("Le Mans Ultimate").SettingsKey);
+            Assert.IsFalse(registry.Resolve(" Le-Mans Ultimate! ").IsSupported);
+            Assert.AreEqual("lmu", registry.ResolveLogo(" Le-Mans Ultimate! ").SettingsKey);
+        }
+
+        [TestMethod]
+        public void Resolve_PreservesFirstProfilePrecedenceForEquivalentNormalizedAliases()
+        {
+            IAffinityGameProfile first = new TestProfile("first", "Shared-Game");
+            IAffinityGameProfile second = new TestProfile("second", "Shared Game");
+            AffinityGameProfileRegistry registry = new AffinityGameProfileRegistry(new[] { first, second });
+
+            Assert.AreSame(first, registry.Resolve(" shared.game "));
+            Assert.AreSame(first, registry.ResolveLogo("SHARED_GAME"));
         }
 
         [TestMethod]
@@ -116,6 +127,14 @@ namespace Affinity.Tests
 
             Assert.AreEqual(expectedCircuitName, parts.CircuitNameDisplay);
             Assert.AreEqual(expectedCircuitLayout, parts.CircuitLayoutDisplay);
+        }
+
+        private sealed class TestProfile : AffinityGameProfileBase
+        {
+            public TestProfile(string settingsKey, string runtimeAlias)
+                : base(settingsKey, settingsKey, settingsKey + ".jpg", runtimeAlias)
+            {
+            }
         }
     }
 }

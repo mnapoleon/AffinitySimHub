@@ -172,10 +172,10 @@ namespace Affinity
         {
         }
 
-        public override bool MatchesLogoName(string gameName)
+        internal override bool MatchesNormalizedLogoName(string normalizedGameName)
         {
-            return base.MatchesLogoName(gameName) ||
-                string.Equals(AffinityGameName.Normalize(gameName), "lemansultimate", StringComparison.Ordinal);
+            return base.MatchesNormalizedLogoName(normalizedGameName) ||
+                string.Equals(normalizedGameName, "lemansultimate", StringComparison.Ordinal);
         }
 
         public override CircuitDisplayParts GetCircuitDisplayParts(string trackDisplayName)

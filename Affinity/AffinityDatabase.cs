@@ -176,6 +176,8 @@ namespace Affinity
         private bool _isUpdatingFilterState;
         private ImageSource _gameLogo;
         private string _gameLogoPath = string.Empty;
+        private double _totalDistanceDisplay;
+        private string _totalUsedTimeDisplay = string.Empty;
 
         public event PropertyChangedEventHandler PropertyChanged;
 
@@ -187,11 +189,37 @@ namespace Affinity
 
         public double TotalDistanceMiles { get; set; }
 
-        public double TotalDistanceDisplay { get; set; }
+        public double TotalDistanceDisplay
+        {
+            get => _totalDistanceDisplay;
+            set
+            {
+                if (_totalDistanceDisplay.Equals(value))
+                {
+                    return;
+                }
+
+                _totalDistanceDisplay = value;
+                OnPropertyChanged();
+            }
+        }
 
         public double TotalUsedTime { get; set; }
 
-        public string TotalUsedTimeDisplay { get; set; } = string.Empty;
+        public string TotalUsedTimeDisplay
+        {
+            get => _totalUsedTimeDisplay;
+            set
+            {
+                if (string.Equals(_totalUsedTimeDisplay, value, StringComparison.Ordinal))
+                {
+                    return;
+                }
+
+                _totalUsedTimeDisplay = value;
+                OnPropertyChanged();
+            }
+        }
 
         public bool DisplayInMiles { get; set; }
 

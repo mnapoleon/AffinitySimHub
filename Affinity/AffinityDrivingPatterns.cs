@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Affinity
 {
@@ -109,6 +110,12 @@ namespace Affinity
         public bool HasComparison { get; set; }
 
         public List<AffinityPatternTrendBucket> TrendBuckets { get; set; } = new List<AffinityPatternTrendBucket>();
+
+        public IReadOnlyList<double> DistanceTrendValues => TrendBuckets.Select(bucket => bucket.DistanceMeters).ToArray();
+
+        public IReadOnlyList<double> SessionCountTrendValues => TrendBuckets.Select(bucket => (double)bucket.SessionCount).ToArray();
+
+        public IReadOnlyList<double> MedianDurationTrendValues => TrendBuckets.Select(bucket => bucket.MedianDurationSeconds).ToArray();
     }
 
     public sealed class AffinityPatternTrendBucket

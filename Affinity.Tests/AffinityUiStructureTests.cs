@@ -29,8 +29,33 @@ namespace Affinity.Tests
         public void Overview_BindsPatternCardsChartsAndComparisonToSnapshot()
         {
             string xaml = ReadSource("AffinitySimHub.xaml");
-            foreach (string path in new[] { "DrivingPatternSnapshot", "HasSufficientData", "EmptyStateText", "Observations", "WeekdayBuckets", "TrackShares", "RelativeHeight", "RelativeWidth", "Comparison.CurrentDistanceDisplay", "Comparison.DistanceChangeDisplay", "Comparison.CurrentSessionCountDisplay", "Comparison.SessionCountChangeDisplay", "Comparison.CurrentMedianDurationDisplay", "Comparison.MedianDurationChangeDisplay" })
+            foreach (string path in new[] { "DrivingPatternSnapshot", "HasSufficientData", "EmptyStateText", "Observations", "WeekdayBuckets", "TrackShares", "RelativeHeight", "Comparison.CurrentDistanceDisplay", "Comparison.DistanceChangeDisplay", "Comparison.CurrentSessionCountDisplay", "Comparison.SessionCountChangeDisplay", "Comparison.CurrentMedianDurationDisplay", "Comparison.MedianDurationChangeDisplay" })
                 Assert.IsTrue(xaml.Contains(path), path);
+        }
+
+        [TestMethod]
+        public void Overview_UsesNativeDonutLegendAndThreeSparklines()
+        {
+            XNamespace wpf = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+            XNamespace local = "clr-namespace:Affinity";
+            XDocument document = XDocument.Parse(ReadSource("AffinitySimHub.xaml"));
+            XElement distanceSection = document.Descendants(wpf + "TextBlock")
+                .Single(element => (string)element.Attribute("Text") == "Where your distance went")
+                .Parent;
+
+            Assert.AreEqual("{Binding TrackShares}", (string)distanceSection.Descendants(local + "AffinityDonutChart").Single().Attribute("ItemsSource"));
+            Assert.AreEqual(1, distanceSection.Descendants(wpf + "ItemsControl").Count(element => (string)element.Attribute("ItemsSource") == "{Binding TrackShares}"), "The track legend should remain visible.");
+            Assert.AreEqual(0, distanceSection.Descendants(wpf + "ProgressBar").Count(), "The distance section should use the donut, not progress bars.");
+
+            string[] expectedBindings =
+            {
+                "{Binding Comparison.DistanceTrendValues}",
+                "{Binding Comparison.SessionCountTrendValues}",
+                "{Binding Comparison.MedianDurationTrendValues}"
+            };
+            CollectionAssert.AreEquivalent(
+                expectedBindings,
+                document.Descendants(local + "AffinitySparkline").Select(element => (string)element.Attribute("Values")).ToArray());
         }
 
         [TestMethod]

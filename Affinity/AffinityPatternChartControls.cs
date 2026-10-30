@@ -34,6 +34,19 @@ namespace Affinity
         public double SweepAngleDegrees { get; }
     }
 
+    public sealed class AffinityDonutLayout
+    {
+        public AffinityDonutLayout(double radius, double strokeThickness)
+        {
+            Radius = radius;
+            StrokeThickness = strokeThickness;
+        }
+
+        public double Radius { get; }
+
+        public double StrokeThickness { get; }
+    }
+
     public static class AffinityPatternChartGeometry
     {
         public static IReadOnlyList<AffinityChartPoint> NormalizeSparkline(IReadOnlyList<double> values)
@@ -89,6 +102,13 @@ namespace Affinity
             return segments;
         }
 
+        public static AffinityDonutLayout CalculateDonutLayout(double diameter)
+        {
+            double outerRadius = Math.Max(0, diameter / 2 - 4);
+            double thickness = Math.Min(outerRadius, Math.Max(8, outerRadius * 0.2));
+            return new AffinityDonutLayout(Math.Max(0, outerRadius - thickness / 2), thickness);
+        }
+
         private static bool IsFinite(double value)
         {
             return !double.IsNaN(value) && !double.IsInfinity(value);
@@ -128,20 +148,19 @@ namespace Affinity
                 return;
 
             Point center = new Point(ActualWidth / 2, ActualHeight / 2);
-            double radius = Math.Max(0, diameter / 2 - 8);
-            double thickness = Math.Max(8, radius * 0.24);
-            drawingContext.DrawEllipse(null, new Pen(CreateBrush("#3A3A3A"), thickness), center, radius, radius);
+            AffinityDonutLayout layout = AffinityPatternChartGeometry.CalculateDonutLayout(diameter);
+            drawingContext.DrawEllipse(null, new Pen(CreateBrush("#3A3A3A"), layout.StrokeThickness), center, layout.Radius, layout.Radius);
 
             AffinityTrackShare[] shares = ItemsSource?.Where(item => item != null).ToArray() ?? Array.Empty<AffinityTrackShare>();
             IReadOnlyList<AffinityDonutSegment> segments = AffinityPatternChartGeometry.BuildDonutSegments(shares.Select(item => item.SharePercent).ToArray());
             for (int index = 0; index < segments.Count; index++)
-                DrawSegment(drawingContext, center, radius, thickness, segments[index], SegmentBrushes[index % SegmentBrushes.Length]);
+                DrawSegment(drawingContext, center, layout.Radius, layout.StrokeThickness, segments[index], SegmentBrushes[index % SegmentBrushes.Length]);
 
             AffinityTrackShare leader = shares.OrderByDescending(item => item.SharePercent).FirstOrDefault();
             if (leader != null)
             {
-                DrawCenteredText(drawingContext, center, $"{leader.SharePercent:F0}%", 21, Brushes.White, -7);
-                DrawCenteredText(drawingContext, center, leader.Label ?? string.Empty, 10, CreateBrush("#B8B8B8"), 13);
+                DrawCenteredText(drawingContext, center, $"{leader.SharePercent:F0}%", 21, Brushes.White, -7, layout.Radius * 1.25);
+                DrawCenteredText(drawingContext, center, leader.TrackDisplayName ?? leader.Label ?? string.Empty, 10, CreateBrush("#B8B8B8"), 13, layout.Radius * 1.25);
             }
         }
 
@@ -184,10 +203,12 @@ namespace Affinity
             context.DrawGeometry(null, pen, geometry);
         }
 
-        private void DrawCenteredText(DrawingContext context, Point center, string text, double size, Brush brush, double yOffset)
+        private void DrawCenteredText(DrawingContext context, Point center, string text, double size, Brush brush, double yOffset, double maximumWidth)
         {
             var formatted = new FormattedText(text, CultureInfo.CurrentCulture, FlowDirection.LeftToRight, new Typeface("Segoe UI"), size, brush, VisualTreeHelper.GetDpi(this).PixelsPerDip);
-            formatted.MaxTextWidth = Math.Max(20, center.X * 1.35);
+            formatted.MaxTextWidth = Math.Max(20, maximumWidth);
+            formatted.MaxLineCount = 1;
+            formatted.Trimming = TextTrimming.CharacterEllipsis;
             formatted.TextAlignment = TextAlignment.Center;
             context.DrawText(formatted, new Point(center.X - formatted.MaxTextWidth / 2, center.Y - formatted.Height / 2 + yOffset));
         }

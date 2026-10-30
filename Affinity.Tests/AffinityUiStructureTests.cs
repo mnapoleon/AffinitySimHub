@@ -59,6 +59,19 @@ namespace Affinity.Tests
         }
 
         [TestMethod]
+        public void Overview_DonutLegendMatchesSegmentsAndSupportsNarrowLayouts()
+        {
+            string xaml = ReadSource("AffinitySimHub.xaml");
+            string controls = ReadSource("AffinityPatternChartControls.cs");
+
+            Assert.IsTrue(xaml.Contains("AlternationCount=\"5\""), "Legend entries should cycle through the donut palette.");
+            Assert.IsTrue(xaml.Contains("ItemsControl.AlternationIndex"));
+            Assert.IsFalse(xaml.Contains("Width=\"360\""), "The legend should not force a width wider than a narrow settings panel.");
+            Assert.IsTrue(controls.Contains("leader.TrackDisplayName"), "The donut center should use the shorter track name.");
+            Assert.IsTrue(controls.Contains("TextTrimming.CharacterEllipsis"), "Long center labels should stay on one line.");
+        }
+
+        [TestMethod]
         public void GameTab_ShowsAllTimeTotalsBeforeTopTrackAndCar()
         {
             XNamespace wpf = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";

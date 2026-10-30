@@ -64,5 +64,15 @@ namespace Affinity.Tests
             Assert.AreEqual(0, AffinityPatternChartGeometry.NormalizeSparkline(new double[0]).Count);
             Assert.AreEqual(0, AffinityPatternChartGeometry.NormalizeSparkline(new[] { double.NaN, double.PositiveInfinity }).Count);
         }
+
+        [TestMethod]
+        public void CalculateDonutLayout_KeepsTheEntireStrokeInsideTheControl()
+        {
+            AffinityDonutLayout layout = AffinityPatternChartGeometry.CalculateDonutLayout(210);
+
+            Assert.IsTrue(layout.Radius > 0);
+            Assert.IsTrue(layout.StrokeThickness >= 8);
+            Assert.IsTrue(layout.Radius + layout.StrokeThickness / 2 <= 105);
+        }
     }
 }

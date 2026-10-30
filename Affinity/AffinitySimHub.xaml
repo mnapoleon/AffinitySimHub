@@ -294,7 +294,26 @@
                                                     <WrapPanel>
                                                         <local:AffinityDonutChart Width="210" Height="210" Margin="0,0,24,12"
                                                                                   ItemsSource="{Binding TrackShares}" />
-                                                        <ItemsControl Width="360" Margin="0,4,0,0" ItemsSource="{Binding TrackShares}">
+                                                        <ItemsControl Width="210" Margin="0,4,0,0" AlternationCount="5" ItemsSource="{Binding TrackShares}">
+                                                            <ItemsControl.ItemContainerStyle>
+                                                                <Style TargetType="ContentPresenter">
+                                                                    <Setter Property="Tag" Value="#2CB7F0" />
+                                                                    <Style.Triggers>
+                                                                        <Trigger Property="ItemsControl.AlternationIndex" Value="1">
+                                                                            <Setter Property="Tag" Value="#55C9F7" />
+                                                                        </Trigger>
+                                                                        <Trigger Property="ItemsControl.AlternationIndex" Value="2">
+                                                                            <Setter Property="Tag" Value="#79D8FA" />
+                                                                        </Trigger>
+                                                                        <Trigger Property="ItemsControl.AlternationIndex" Value="3">
+                                                                            <Setter Property="Tag" Value="#9BE5FC" />
+                                                                        </Trigger>
+                                                                        <Trigger Property="ItemsControl.AlternationIndex" Value="4">
+                                                                            <Setter Property="Tag" Value="#5AA6C7" />
+                                                                        </Trigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </ItemsControl.ItemContainerStyle>
                                                             <ItemsControl.ItemTemplate>
                                                                 <DataTemplate>
                                                                     <Grid Margin="0,0,0,12">
@@ -303,7 +322,8 @@
                                                                             <ColumnDefinition Width="*" />
                                                                             <ColumnDefinition Width="Auto" />
                                                                         </Grid.ColumnDefinitions>
-                                                                        <Ellipse Width="9" Height="9" HorizontalAlignment="Left" VerticalAlignment="Center" Fill="#2CB7F0" />
+                                                                        <Ellipse Width="9" Height="9" HorizontalAlignment="Left" VerticalAlignment="Center"
+                                                                                 Fill="{Binding Tag, RelativeSource={RelativeSource AncestorType=ContentPresenter}}" />
                                                                         <StackPanel Grid.Column="1" Margin="0,0,12,0">
                                                                             <TextBlock Foreground="#D8D8D8" Text="{Binding Label}" TextWrapping="Wrap" />
                                                                             <TextBlock Margin="0,2,0,0" Foreground="#B8B8B8" FontSize="10" Text="{Binding DistanceDisplayText}" />

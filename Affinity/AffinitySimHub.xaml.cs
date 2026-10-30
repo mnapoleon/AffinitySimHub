@@ -45,7 +45,7 @@ namespace Affinity
 
         private void RecentHighlightsRangeSelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            _plugin.ApplySelectedRecentHighlightsRange();
+            _plugin.ApplySelectedPatternRange();
         }
     }
 }

@@ -1,4 +1,6 @@
 using System.Collections.ObjectModel;
+using System.Collections.Generic;
+using System.Reflection;
 using Affinity;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
@@ -7,6 +9,63 @@ namespace Affinity.Tests
     [TestClass]
     public class AffinityPluginTabRefreshTests
     {
+        [DataTestMethod]
+        [DataRow(false)]
+        [DataRow(true)]
+        public void ApplySummarySnapshot_PreservesSelectedGameAndFiltersWhenTabsRefresh(bool structureChanges)
+        {
+            var plugin = new AffinityPlugin();
+            var previous = new GameDistanceTab
+            {
+                GameName = "iRacing",
+                SelectedTimePeriodFilterKey = GameDistanceTab.TimePeriodLast30Days,
+                SelectedSortModeKey = GameDistanceTab.SortByTimeDriven,
+                SelectedResultLimitKey = GameDistanceTab.ResultLimitTop5
+            };
+            plugin.GameTabs.Add(previous);
+            plugin.TopLevelTabs.Insert(1, previous);
+            plugin.SelectedTopLevelTab = previous;
+            var refreshed = new GameDistanceTab { GameName = "iRacing" };
+            var summary = new AffinitySummarySnapshot { GameTabs = new List<GameDistanceTab> { refreshed } };
+            if (structureChanges) summary.GameTabs.Insert(0, new GameDistanceTab { GameName = "Assetto Corsa" });
+            var pattern = new AffinityPatternSnapshot { HasSufficientData = true };
+
+            AffinityOverviewSummaryTests.InvokeApplySummarySnapshot(plugin, summary, pattern);
+
+            Assert.AreSame(refreshed, plugin.SelectedTopLevelTab);
+            Assert.AreSame(refreshed, plugin.SelectedGameTab);
+            Assert.AreEqual(GameDistanceTab.TimePeriodLast30Days, refreshed.SelectedTimePeriodFilterKey);
+            Assert.AreEqual(GameDistanceTab.SortByTimeDriven, refreshed.SelectedSortModeKey);
+            Assert.AreEqual(GameDistanceTab.ResultLimitTop5, refreshed.SelectedResultLimitKey);
+            Assert.AreSame(pattern, AffinityOverviewSummaryTests.GetProperty<AffinityPatternSnapshot>(plugin, "DrivingPatternSnapshot"));
+        }
+
+        [TestMethod]
+        public void ApplySelectedPatternRange_LeavesGameTabInstancesAndFiltersIntact()
+        {
+            var plugin = new AffinityPlugin();
+            var selected = new GameDistanceTab
+            {
+                GameName = "iRacing",
+                SelectedTimePeriodFilterKey = GameDistanceTab.TimePeriodLast30Days,
+                SelectedSortModeKey = GameDistanceTab.SortByTimeDriven,
+                SelectedResultLimitKey = GameDistanceTab.ResultLimitTop5
+            };
+            plugin.GameTabs.Add(selected);
+            plugin.TopLevelTabs.Insert(1, selected);
+            plugin.SelectedTopLevelTab = selected;
+            MethodInfo method = typeof(AffinityPlugin).GetMethod("ApplySelectedPatternRange", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.IsNotNull(method);
+
+            method.Invoke(plugin, null);
+
+            Assert.AreSame(selected, plugin.GameTabs[0]);
+            Assert.AreSame(selected, plugin.SelectedTopLevelTab);
+            Assert.AreEqual(GameDistanceTab.TimePeriodLast30Days, selected.SelectedTimePeriodFilterKey);
+            Assert.AreEqual(GameDistanceTab.SortByTimeDriven, selected.SelectedSortModeKey);
+            Assert.AreEqual(GameDistanceTab.ResultLimitTop5, selected.SelectedResultLimitKey);
+        }
+
         [TestMethod]
         public void CanReuseTopLevelTabStructure_ReturnsTrueWhenGameTabsMatchByName()
         {

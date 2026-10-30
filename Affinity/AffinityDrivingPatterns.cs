@@ -107,5 +107,20 @@ namespace Affinity
         public string MedianDurationChangeDisplay { get; set; } = "Unavailable";
 
         public bool HasComparison { get; set; }
+
+        public List<AffinityPatternTrendBucket> TrendBuckets { get; set; } = new List<AffinityPatternTrendBucket>();
+    }
+
+    public sealed class AffinityPatternTrendBucket
+    {
+        public DateTime StartUtc { get; set; }
+
+        public DateTime EndUtc { get; set; }
+
+        public double DistanceMeters { get; set; }
+
+        public int SessionCount { get; set; }
+
+        public double MedianDurationSeconds { get; set; }
     }
 }

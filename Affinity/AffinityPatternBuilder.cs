@@ -18,6 +18,7 @@ namespace Affinity
         internal const int MinimumVarietyCount = 2;
         private const int MaximumObservations = 3;
         private const int MaximumNamedTracks = 3;
+        private const int TrendBucketCount = 8;
         private const double MetersPerKilometer = 1000.0;
         private const double MetersPerMile = 1609.344;
         private static readonly string[] TimeBandNames = { "Overnight", "Morning", "Afternoon", "Evening" };
@@ -27,7 +28,9 @@ namespace Affinity
             IReadOnlyCollection<AffinitySessionRecord> previousSessions,
             bool displayInMiles,
             TimeZoneInfo localTimeZone,
-            CultureInfo culture)
+            CultureInfo culture,
+            DateTime currentStartUtc,
+            DateTime currentEndUtc)
         {
             currentSessions = currentSessions ?? Array.Empty<AffinitySessionRecord>();
             previousSessions = previousSessions ?? Array.Empty<AffinitySessionRecord>();
@@ -39,6 +42,7 @@ namespace Affinity
                 HasSufficientData = currentSessions.Count >= MinimumCurrentSessions,
                 Comparison = BuildComparison(currentSessions, previousSessions, displayInMiles, culture)
             };
+            snapshot.Comparison.TrendBuckets = BuildTrendBuckets(currentSessions, currentStartUtc, currentEndUtc);
             if (!snapshot.HasSufficientData) return snapshot;
 
             snapshot.EmptyStateText = string.Empty;
@@ -59,6 +63,43 @@ namespace Affinity
                     snapshot.Comparison.HasComparison, culture));
             }
             return snapshot;
+        }
+
+        private static List<AffinityPatternTrendBucket> BuildTrendBuckets(
+            IReadOnlyCollection<AffinitySessionRecord> sessions,
+            DateTime currentStartUtc,
+            DateTime currentEndUtc)
+        {
+            long startTicks = currentStartUtc.Ticks;
+            long rangeTicks = currentEndUtc.Ticks - startTicks;
+            var buckets = new List<AffinityPatternTrendBucket>(TrendBucketCount);
+            for (int index = 0; index < TrendBucketCount; index++)
+            {
+                buckets.Add(new AffinityPatternTrendBucket
+                {
+                    StartUtc = new DateTime(startTicks + (rangeTicks > 0 ? rangeTicks * index / TrendBucketCount : 0), DateTimeKind.Utc),
+                    EndUtc = new DateTime(startTicks + (rangeTicks > 0 ? rangeTicks * (index + 1) / TrendBucketCount : 0), DateTimeKind.Utc)
+                });
+            }
+
+            if (rangeTicks <= 0)
+            {
+                return buckets;
+            }
+
+            foreach (IGrouping<int, AffinitySessionRecord> group in sessions
+                .Where(session => session.StartedUtc >= currentStartUtc && session.StartedUtc < currentEndUtc)
+                .GroupBy(session => (int)Math.Min(
+                    TrendBucketCount - 1,
+                    (session.StartedUtc.Ticks - startTicks) * TrendBucketCount / rangeTicks)))
+            {
+                AffinityPatternTrendBucket bucket = buckets[group.Key];
+                bucket.DistanceMeters = group.Sum(session => session.DistanceMeters);
+                bucket.SessionCount = group.Count();
+                bucket.MedianDurationSeconds = MedianDuration(group);
+            }
+
+            return buckets;
         }
 
         private static AffinityPatternComparison BuildComparison(

@@ -444,12 +444,100 @@ namespace Affinity.Tests
                 snapshot.Observations.Select(card => card.Category).ToArray());
         }
 
+        [TestMethod]
+        public void Build_CreatesEightEqualTrendBucketsIncludingEmptyBuckets()
+        {
+            DateTime startUtc = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+            DateTime endUtc = new DateTime(2026, 1, 9, 0, 0, 0, DateTimeKind.Utc);
+            AffinitySessionRecord[] sessions =
+            {
+                SessionAt(startUtc.AddHours(1), 100, 600),
+                SessionAt(startUtc.AddHours(2), 300, 1800),
+                SessionAt(startUtc.AddDays(3), 500, 900),
+                SessionAt(startUtc.AddDays(7).AddHours(1), 700, 1200),
+                SessionAt(startUtc.AddDays(7).AddHours(23), 900, 2400)
+            };
+
+            IReadOnlyList<AffinityPatternTrendBucket> buckets = Build(
+                sessions, rangeStartUtc: startUtc, rangeEndUtc: endUtc).Comparison.TrendBuckets;
+
+            Assert.AreEqual(8, buckets.Count);
+            Assert.AreEqual(startUtc, buckets[0].StartUtc);
+            Assert.AreEqual(startUtc.AddDays(1), buckets[0].EndUtc);
+            Assert.AreEqual(400.0, buckets[0].DistanceMeters, 0.001);
+            Assert.AreEqual(2, buckets[0].SessionCount);
+            Assert.AreEqual(1200.0, buckets[0].MedianDurationSeconds, 0.001);
+            Assert.AreEqual(0, buckets[1].SessionCount);
+            Assert.AreEqual(0.0, buckets[1].DistanceMeters, 0.001);
+            Assert.AreEqual(0.0, buckets[1].MedianDurationSeconds, 0.001);
+            Assert.AreEqual(500.0, buckets[3].DistanceMeters, 0.001);
+            Assert.AreEqual(1600.0, buckets[7].DistanceMeters, 0.001);
+            Assert.AreEqual(2, buckets[7].SessionCount);
+            Assert.AreEqual(1800.0, buckets[7].MedianDurationSeconds, 0.001);
+            Assert.AreEqual(endUtc, buckets[7].EndUtc);
+        }
+
+        [TestMethod]
+        public void Build_AssignsInternalBoundariesToTheFollowingBucket()
+        {
+            DateTime startUtc = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+            DateTime endUtc = startUtc.AddDays(8);
+
+            IReadOnlyList<AffinityPatternTrendBucket> buckets = Build(
+                new[] { SessionAt(startUtc.AddDays(1), 250, 300) },
+                rangeStartUtc: startUtc,
+                rangeEndUtc: endUtc).Comparison.TrendBuckets;
+
+            Assert.AreEqual(0, buckets[0].SessionCount);
+            Assert.AreEqual(1, buckets[1].SessionCount);
+            Assert.AreEqual(250.0, buckets[1].DistanceMeters, 0.001);
+        }
+
+        [TestMethod]
+        public void Build_ExcludesTheFinalEndpoint()
+        {
+            DateTime startUtc = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+            DateTime endUtc = startUtc.AddDays(8);
+
+            IReadOnlyList<AffinityPatternTrendBucket> buckets = Build(
+                new[]
+                {
+                    SessionAt(endUtc.AddTicks(-1), 400, 600),
+                    SessionAt(endUtc, 900, 1200)
+                },
+                rangeStartUtc: startUtc,
+                rangeEndUtc: endUtc).Comparison.TrendBuckets;
+
+            Assert.AreEqual(1, buckets.Sum(bucket => bucket.SessionCount));
+            Assert.AreEqual(400.0, buckets.Sum(bucket => bucket.DistanceMeters), 0.001);
+            Assert.AreEqual(1, buckets[7].SessionCount);
+        }
+
         private static AffinityPatternSnapshot Build(IReadOnlyCollection<AffinitySessionRecord> current,
             IReadOnlyCollection<AffinitySessionRecord> previous = null, bool miles = false,
-            TimeZoneInfo zone = null, CultureInfo culture = null)
+            TimeZoneInfo zone = null, CultureInfo culture = null,
+            DateTime? rangeStartUtc = null, DateTime? rangeEndUtc = null)
         {
             return AffinityPatternBuilder.Build(current, previous ?? Array.Empty<AffinitySessionRecord>(),
-                miles, zone ?? TimeZoneInfo.Utc, culture ?? English);
+                miles, zone ?? TimeZoneInfo.Utc, culture ?? English,
+                rangeStartUtc ?? new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+                rangeEndUtc ?? new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc));
+        }
+
+        private static AffinitySessionRecord SessionAt(DateTime startedUtc, double distanceMeters, double drivenSeconds)
+        {
+            return new AffinitySessionRecord
+            {
+                SessionUid = Guid.NewGuid().ToString("N"),
+                GameName = "Game",
+                CarModel = "Car",
+                TrackName = "track",
+                TrackDisplayName = "Track",
+                StartedUtc = startedUtc,
+                EndedUtc = startedUtc.AddSeconds(drivenSeconds),
+                DistanceMeters = distanceMeters,
+                TimeDrivenSeconds = drivenSeconds
+            };
         }
 
         private static AffinitySessionRecord[] SpreadSessions(int count)

@@ -2445,7 +2445,7 @@ namespace Affinity
 
         private AffinityPatternSnapshot BuildPatternSnapshot(DateTime referenceLocal)
         {
-            if (_sqliteRepository == null || !TryGetPatternRangeUtcRanges(
+            if (!TryGetPatternRangeUtcRanges(
                 SelectedPatternRangeKey,
                 referenceLocal,
                 out DateTime currentStartUtc,
@@ -2453,9 +2453,19 @@ namespace Affinity
                 out DateTime previousStartUtc,
                 out DateTime previousEndUtc))
             {
+                DateTime referenceUtc = referenceLocal.ToUniversalTime();
                 return AffinityPatternBuilder.Build(
                     Array.Empty<AffinitySessionRecord>(), Array.Empty<AffinitySessionRecord>(),
-                    Settings.DisplayInMiles, TimeZoneInfo.Local, CultureInfo.CurrentCulture);
+                    Settings.DisplayInMiles, TimeZoneInfo.Local, CultureInfo.CurrentCulture,
+                    referenceUtc, referenceUtc);
+            }
+
+            if (_sqliteRepository == null)
+            {
+                return AffinityPatternBuilder.Build(
+                    Array.Empty<AffinitySessionRecord>(), Array.Empty<AffinitySessionRecord>(),
+                    Settings.DisplayInMiles, TimeZoneInfo.Local, CultureInfo.CurrentCulture,
+                    currentStartUtc, currentEndUtc);
             }
 
             // This year's comparison ends before the current window starts; exclude that gap when partitioning.
@@ -2465,7 +2475,7 @@ namespace Affinity
             List<AffinitySessionRecord> previousSessions = sessions
                 .Where(session => session.StartedUtc >= previousStartUtc && session.StartedUtc < previousEndUtc).ToList();
             return AffinityPatternBuilder.Build(currentSessions, previousSessions, Settings.DisplayInMiles,
-                TimeZoneInfo.Local, CultureInfo.CurrentCulture);
+                TimeZoneInfo.Local, CultureInfo.CurrentCulture, currentStartUtc, currentEndUtc);
         }
 
         private void ApplySummarySnapshot(AffinitySummarySnapshot snapshot, AffinityPatternSnapshot patternSnapshot)

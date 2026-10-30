@@ -1308,6 +1308,11 @@ namespace Affinity
 
         internal void RefreshDistanceSummaries()
         {
+            RefreshDistanceSummaries(refreshPatterns: true);
+        }
+
+        private void RefreshDistanceSummaries(bool refreshPatterns)
+        {
             AffinitySummarySnapshot snapshot = AffinitySummaryBuilder.BuildSnapshot(
                 database: _database,
                 displayInMiles: Settings.DisplayInMiles,
@@ -1315,8 +1320,9 @@ namespace Affinity
                 tryResolveGameLogoPath: TryResolveGameLogoPath,
                 tryResolveGameLogo: TryLoadGameLogo,
                 gameProfiles: _gameProfiles);
-            AffinityPatternSnapshot patternSnapshot = BuildPatternSnapshot(DateTime.Now);
-            ExecuteOnUiThread(() => ApplySummarySnapshot(snapshot, patternSnapshot));
+            AffinityPatternSnapshot patternSnapshot = refreshPatterns ? BuildPatternSnapshot(DateTime.Now) : null;
+            ExecuteOnUiThread(() => ApplySummarySnapshot(snapshot,
+                refreshPatterns ? patternSnapshot : DrivingPatternSnapshot));
         }
 
         internal void ClearSelectedGameTabFilter()
@@ -2375,7 +2381,8 @@ namespace Affinity
                 return;
             }
 
-            RefreshDistanceSummaries();
+            // Telemetry refreshes live totals only; history analysis belongs to explicit overview refreshes.
+            RefreshDistanceSummaries(refreshPatterns: false);
             _pendingMetersSinceSave = 0.0;
             _pendingUsedTimeSecondsSinceSave = 0.0;
         }

@@ -1,5 +1,7 @@
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.IO;
 using System.Reflection;
 using Affinity;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -9,6 +11,79 @@ namespace Affinity.Tests
     [TestClass]
     public class AffinityPluginLiveStatusTests
     {
+        [DataTestMethod]
+        [DataRow(50.0, 0.0, false, false)]
+        [DataRow(0.0, 30.0, false, false)]
+        [DataRow(0.0, 0.0, true, false)]
+        [DataRow(50.0, 0.0, false, true)]
+        [DataRow(0.0, 30.0, false, true)]
+        [DataRow(0.0, 0.0, true, true)]
+        public void RefreshLiveSummariesIfNeeded_PreservesPatternsWithoutQueryingSessionHistory(
+            double pendingMeters, double pendingSeconds, bool force, bool attachClosedRepository)
+        {
+            string directory = Path.Combine(Path.GetTempPath(), "AffinityTests", Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(directory);
+            try
+            {
+                var plugin = new AffinityPlugin();
+                var pattern = new AffinityPatternSnapshot { HasSufficientData = true };
+                SetProperty(plugin, "DrivingPatternSnapshot", pattern);
+                SetField(plugin, "_pendingMetersSinceSave", pendingMeters);
+                SetField(plugin, "_pendingUsedTimeSecondsSinceSave", pendingSeconds);
+                if (attachClosedRepository)
+                {
+                    // A real closed repository fails immediately if the telemetry path attempts a history query.
+                    var repository = new AffinitySqliteRepository(Path.Combine(directory, "closed.db"));
+                    repository.Initialize();
+                    repository.Dispose();
+                    SetField(plugin, "_sqliteRepository", repository);
+                }
+                List<string> changedProperties = CaptureChangedProperties(plugin);
+                MethodInfo refresh = typeof(AffinityPlugin).GetMethod("RefreshLiveSummariesIfNeeded", BindingFlags.Instance | BindingFlags.NonPublic);
+                Assert.IsNotNull(refresh);
+
+                refresh.Invoke(plugin, new object[] { force });
+
+                Assert.AreSame(pattern, plugin.DrivingPatternSnapshot, "Telemetry refresh must not rebuild driving patterns.");
+                CollectionAssert.DoesNotContain(changedProperties, "DrivingPatternSnapshot");
+                CollectionAssert.Contains(changedProperties, "OverallTopSummarySection", "The threshold must still refresh live summaries.");
+                Assert.AreEqual(0.0, GetField<double>(plugin, "_pendingMetersSinceSave"));
+                Assert.AreEqual(0.0, GetField<double>(plugin, "_pendingUsedTimeSecondsSinceSave"));
+            }
+            finally
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+        }
+
+        [TestMethod]
+        public void RefreshDistanceSummaries_ExplicitRefreshStillRebuildsPatterns()
+        {
+            var plugin = new AffinityPlugin();
+            var previous = new AffinityPatternSnapshot { HasSufficientData = true };
+            SetProperty(plugin, "DrivingPatternSnapshot", previous);
+
+            plugin.RefreshDistanceSummaries();
+
+            Assert.AreNotSame(previous, plugin.DrivingPatternSnapshot);
+            Assert.IsFalse(plugin.DrivingPatternSnapshot.HasSufficientData);
+            Assert.AreEqual(0, plugin.DrivingPatternSnapshot.Comparison.CurrentSessionCount);
+        }
+
+        private static void SetField(AffinityPlugin plugin, string name, object value)
+        {
+            FieldInfo field = typeof(AffinityPlugin).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.IsNotNull(field);
+            field.SetValue(plugin, value);
+        }
+
+        private static T GetField<T>(AffinityPlugin plugin, string name)
+        {
+            FieldInfo field = typeof(AffinityPlugin).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.IsNotNull(field);
+            return (T)field.GetValue(plugin);
+        }
+
         [TestMethod]
         public void NewPlugin_ExposesDefaultLiveStatusStripDisplays()
         {

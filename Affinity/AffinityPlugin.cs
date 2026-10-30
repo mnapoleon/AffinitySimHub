@@ -1308,10 +1308,10 @@ namespace Affinity
 
         internal void RefreshDistanceSummaries()
         {
-            RefreshDistanceSummaries(refreshPatterns: true);
+            RefreshDistanceSummaries(refreshHistory: true);
         }
 
-        private void RefreshDistanceSummaries(bool refreshPatterns)
+        private void RefreshDistanceSummaries(bool refreshHistory)
         {
             AffinitySummarySnapshot snapshot = AffinitySummaryBuilder.BuildSnapshot(
                 database: _database,
@@ -1320,9 +1320,15 @@ namespace Affinity
                 tryResolveGameLogoPath: TryResolveGameLogoPath,
                 tryResolveGameLogo: TryLoadGameLogo,
                 gameProfiles: _gameProfiles);
-            AffinityPatternSnapshot patternSnapshot = refreshPatterns ? BuildPatternSnapshot(DateTime.Now) : null;
-            ExecuteOnUiThread(() => ApplySummarySnapshot(snapshot,
-                refreshPatterns ? patternSnapshot : DrivingPatternSnapshot));
+            AffinityPatternSnapshot patternSnapshot = refreshHistory ? BuildPatternSnapshot(DateTime.Now) : null;
+            ExecuteOnUiThread(() =>
+            {
+                ApplySummarySnapshot(snapshot, refreshHistory ? patternSnapshot : DrivingPatternSnapshot);
+                if (refreshHistory)
+                {
+                    ApplySelectedGameTabTimeFilter();
+                }
+            });
         }
 
         internal void ClearSelectedGameTabFilter()
@@ -2381,8 +2387,8 @@ namespace Affinity
                 return;
             }
 
-            // Telemetry refreshes live totals only; history analysis belongs to explicit overview refreshes.
-            RefreshDistanceSummaries(refreshPatterns: false);
+            // Telemetry refreshes live totals only; history queries belong to explicit UI/filter refreshes.
+            RefreshDistanceSummaries(refreshHistory: false);
             _pendingMetersSinceSave = 0.0;
             _pendingUsedTimeSecondsSinceSave = 0.0;
         }
@@ -2486,6 +2492,10 @@ namespace Affinity
                     refreshedTab.SelectedTimePeriodFilterKey = previousTab.SelectedTimePeriodFilterKey;
                     refreshedTab.SelectedSortModeKey = previousTab.SelectedSortModeKey;
                     refreshedTab.SelectedResultLimitKey = previousTab.SelectedResultLimitKey;
+                    if (!string.Equals(previousTab.SelectedTimePeriodFilterKey, GameDistanceTab.TimePeriodAllTime, StringComparison.Ordinal))
+                    {
+                        refreshedTab.SetTimePeriodSummaries(previousTab.GetActiveTimePeriodRows());
+                    }
                 }
             }
             bool canReuseTopLevelTabStructure = CanReuseTopLevelTabStructure(GameTabs, snapshot.GameTabs)
@@ -2510,7 +2520,6 @@ namespace Affinity
 
             SelectedTopLevelTab = ResolveSelectedTopLevelTab(previouslySelectedTopLevelTab, GameTabs, _overviewTab, _settingsTab);
             SelectedGameTab = SelectedTopLevelTab as GameDistanceTab;
-            ApplySelectedGameTabTimeFilter();
 
             foreach (GameDistanceTab tab in GameTabs)
             {

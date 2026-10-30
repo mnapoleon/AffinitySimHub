@@ -724,7 +724,7 @@ namespace Affinity
             OnPropertyChanged(nameof(HasActiveFilter));
         }
 
-        private IEnumerable<DistanceSummary> GetActiveTimePeriodRows()
+        internal IEnumerable<DistanceSummary> GetActiveTimePeriodRows()
         {
             return _timePeriodSummaries ?? RawSummaries ?? Enumerable.Empty<DistanceSummary>();
         }

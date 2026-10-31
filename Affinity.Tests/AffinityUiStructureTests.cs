@@ -86,6 +86,7 @@ namespace Affinity.Tests
             XElement observations = document.Descendants(wpf + "ItemsControl")
                 .Single(element => (string)element.Attribute(x + "Name") == "PatternObservationCards");
             Assert.AreEqual("{Binding Observations}", (string)observations.Attribute("ItemsSource"));
+            Assert.AreEqual("0,0,-10,0", (string)observations.Attribute("Margin"), "The observation row should cancel the last card's right margin and align with the summary row.");
             XElement observationPanel = observations.Descendants(wpf + "ItemsPanelTemplate").Single();
             XElement observationGrid = observationPanel.Descendants(wpf + "UniformGrid").Single();
             Assert.AreEqual("3", (string)observationGrid.Attribute("Columns"));

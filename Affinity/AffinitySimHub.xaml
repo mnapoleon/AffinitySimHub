@@ -250,7 +250,7 @@
                                                 </Style>
                                             </StackPanel.Style>
                                             <TextBlock Margin="0,0,0,8" FontWeight="SemiBold" Text="Pattern observations" />
-                                            <ItemsControl x:Name="PatternObservationCards" ItemsSource="{Binding Observations}">
+                                            <ItemsControl x:Name="PatternObservationCards" Margin="0,0,-10,0" ItemsSource="{Binding Observations}">
                                                 <ItemsControl.ItemsPanel>
                                                     <ItemsPanelTemplate>
                                                         <UniformGrid Columns="3" />

@@ -253,7 +253,7 @@
                                             <ItemsControl x:Name="PatternObservationCards" Margin="0,0,-10,0" ItemsSource="{Binding Observations}">
                                                 <ItemsControl.ItemsPanel>
                                                     <ItemsPanelTemplate>
-                                                        <UniformGrid Columns="3" />
+                                                        <UniformGrid Rows="1" />
                                                     </ItemsPanelTemplate>
                                                 </ItemsControl.ItemsPanel>
                                                 <ItemsControl.ItemTemplate>

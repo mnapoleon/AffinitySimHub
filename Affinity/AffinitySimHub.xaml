@@ -250,10 +250,16 @@
                                                 </Style>
                                             </StackPanel.Style>
                                             <TextBlock Margin="0,0,0,8" FontWeight="SemiBold" Text="Pattern observations" />
-                                            <ItemsControl ItemsSource="{Binding Observations}">
+                                            <ItemsControl x:Name="PatternObservationCards" ItemsSource="{Binding Observations}">
+                                                <ItemsControl.ItemsPanel>
+                                                    <ItemsPanelTemplate>
+                                                        <WrapPanel />
+                                                    </ItemsPanelTemplate>
+                                                </ItemsControl.ItemsPanel>
                                                 <ItemsControl.ItemTemplate>
                                                     <DataTemplate>
-                                                        <Border Margin="0,0,0,8" Padding="12,10" Background="#252525" BorderBrush="#2CB7F0" BorderThickness="1" CornerRadius="4">
+                                                        <Border Width="360" MinHeight="112" Margin="0,0,10,10" Padding="12,10"
+                                                                Background="#252525" BorderBrush="#2CB7F0" BorderThickness="1" CornerRadius="4">
                                                             <StackPanel>
                                                                 <TextBlock Foreground="#89D9FF" FontWeight="SemiBold" Text="{Binding Title}" TextWrapping="Wrap" />
                                                                 <TextBlock Margin="0,4,0,0" Foreground="#D8D8D8" Text="{Binding Detail}" TextWrapping="Wrap" />
@@ -262,7 +268,9 @@
                                                     </DataTemplate>
                                                 </ItemsControl.ItemTemplate>
                                             </ItemsControl>
-                                            <Border Margin="0,8,0,12" Padding="12,10" Background="#252525" BorderBrush="#3A3A3A" BorderThickness="1" CornerRadius="4">
+                                            <WrapPanel x:Name="PatternChartRow" Margin="0,8,0,0">
+                                            <Border x:Name="WeekdayPatternPanel" Width="430" Margin="0,0,10,12" Padding="12,10"
+                                                    Background="#252525" BorderBrush="#3A3A3A" BorderThickness="1" CornerRadius="4">
                                                 <StackPanel>
                                                     <TextBlock Margin="0,0,0,4" FontWeight="SemiBold" Text="When you drive" />
                                                     <TextBlock Margin="0,0,0,10" Foreground="#B8B8B8" Text="Time driven by weekday" TextWrapping="Wrap" />
@@ -288,7 +296,8 @@
                                                     </ItemsControl>
                                                 </StackPanel>
                                             </Border>
-                                            <Border Margin="0,0,0,12" Padding="12,10" Background="#252525" BorderBrush="#3A3A3A" BorderThickness="1" CornerRadius="4">
+                                            <Border x:Name="DistancePatternPanel" Width="600" Margin="0,0,0,12" Padding="12,10"
+                                                    Background="#252525" BorderBrush="#3A3A3A" BorderThickness="1" CornerRadius="4">
                                                 <StackPanel>
                                                     <TextBlock Margin="0,0,0,10" FontWeight="SemiBold" Text="Where your distance went" />
                                                     <WrapPanel>
@@ -337,6 +346,7 @@
                                                     </WrapPanel>
                                                 </StackPanel>
                                             </Border>
+                                            </WrapPanel>
                                             <TextBlock Margin="0,0,0,8" FontWeight="SemiBold" Text="Compared with the previous period" TextWrapping="Wrap" />
                                             <WrapPanel>
                                                 <Border Width="220" Margin="0,0,10,10" Padding="12,10" Background="#252525" BorderBrush="#3A3A3A" BorderThickness="1" CornerRadius="4">

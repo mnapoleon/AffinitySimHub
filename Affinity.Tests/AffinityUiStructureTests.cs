@@ -63,12 +63,46 @@ namespace Affinity.Tests
         {
             string xaml = ReadSource("AffinitySimHub.xaml");
             string controls = ReadSource("AffinityPatternChartControls.cs");
+            XNamespace wpf = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+            XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+            XElement distancePanel = XDocument.Parse(xaml).Descendants(wpf + "Border")
+                .Single(element => (string)element.Attribute(x + "Name") == "DistancePatternPanel");
 
             Assert.IsTrue(xaml.Contains("AlternationCount=\"5\""), "Legend entries should cycle through the donut palette.");
             Assert.IsTrue(xaml.Contains("ItemsControl.AlternationIndex"));
-            Assert.IsFalse(xaml.Contains("Width=\"360\""), "The legend should not force a width wider than a narrow settings panel.");
+            Assert.IsFalse(distancePanel.ToString().Contains("Width=\"360\""), "The legend should not force a width wider than a narrow settings panel.");
             Assert.IsTrue(controls.Contains("leader.TrackDisplayName"), "The donut center should use the shorter track name.");
             Assert.IsTrue(controls.Contains("TextTrimming.CharacterEllipsis"), "Long center labels should stay on one line.");
+        }
+
+        [TestMethod]
+        public void Overview_UsesThreeCompactObservationCardsAndBalancedChartRow()
+        {
+            XNamespace wpf = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+            XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+            XNamespace local = "clr-namespace:Affinity";
+            XDocument document = XDocument.Parse(ReadSource("AffinitySimHub.xaml"));
+
+            XElement observations = document.Descendants(wpf + "ItemsControl")
+                .Single(element => (string)element.Attribute(x + "Name") == "PatternObservationCards");
+            Assert.AreEqual("{Binding Observations}", (string)observations.Attribute("ItemsSource"));
+            Assert.AreEqual(1, observations.Descendants(wpf + "ItemsPanelTemplate").Descendants(wpf + "WrapPanel").Count());
+            XElement observationCard = observations.Descendants(wpf + "DataTemplate").Single().Element(wpf + "Border");
+            Assert.AreEqual("360", (string)observationCard.Attribute("Width"));
+            Assert.AreEqual("112", (string)observationCard.Attribute("MinHeight"));
+            Assert.IsNull(observationCard.Attribute("Height"), "Observation text must be able to grow beyond the minimum card height.");
+
+            XElement chartRow = document.Descendants(wpf + "WrapPanel")
+                .Single(element => (string)element.Attribute(x + "Name") == "PatternChartRow");
+            XElement weekdayPanel = chartRow.Elements(wpf + "Border")
+                .Single(element => (string)element.Attribute(x + "Name") == "WeekdayPatternPanel");
+            XElement distancePanel = chartRow.Elements(wpf + "Border")
+                .Single(element => (string)element.Attribute(x + "Name") == "DistancePatternPanel");
+            Assert.AreEqual("430", (string)weekdayPanel.Attribute("Width"));
+            Assert.AreEqual("600", (string)distancePanel.Attribute("Width"));
+            Assert.AreEqual(1, weekdayPanel.Descendants(wpf + "ItemsControl").Count(element => (string)element.Attribute("ItemsSource") == "{Binding WeekdayBuckets}"));
+            Assert.AreEqual("{Binding TrackShares}", (string)distancePanel.Descendants(local + "AffinityDonutChart").Single().Attribute("ItemsSource"));
+            Assert.AreEqual(1, distancePanel.Descendants(wpf + "ItemsControl").Count(element => (string)element.Attribute("ItemsSource") == "{Binding TrackShares}"));
         }
 
         [TestMethod]

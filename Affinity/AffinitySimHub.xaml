@@ -253,12 +253,12 @@
                                             <ItemsControl x:Name="PatternObservationCards" ItemsSource="{Binding Observations}">
                                                 <ItemsControl.ItemsPanel>
                                                     <ItemsPanelTemplate>
-                                                        <WrapPanel />
+                                                        <UniformGrid Columns="3" />
                                                     </ItemsPanelTemplate>
                                                 </ItemsControl.ItemsPanel>
                                                 <ItemsControl.ItemTemplate>
                                                     <DataTemplate>
-                                                        <Border Width="360" MinHeight="112" Margin="0,0,10,10" Padding="12,10"
+                                                        <Border MinHeight="112" Margin="0,0,10,10" Padding="12,10"
                                                                 Background="#252525" BorderBrush="#2CB7F0" BorderThickness="1" CornerRadius="4">
                                                             <StackPanel>
                                                                 <TextBlock Foreground="#89D9FF" FontWeight="SemiBold" Text="{Binding Title}" TextWrapping="Wrap" />

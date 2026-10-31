@@ -76,7 +76,7 @@ namespace Affinity.Tests
         }
 
         [TestMethod]
-        public void Overview_UsesThreeCompactObservationCardsAndBalancedChartRow()
+        public void Overview_UsesThreeEqualObservationCardsAndBalancedChartRow()
         {
             XNamespace wpf = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
             XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
@@ -86,9 +86,12 @@ namespace Affinity.Tests
             XElement observations = document.Descendants(wpf + "ItemsControl")
                 .Single(element => (string)element.Attribute(x + "Name") == "PatternObservationCards");
             Assert.AreEqual("{Binding Observations}", (string)observations.Attribute("ItemsSource"));
-            Assert.AreEqual(1, observations.Descendants(wpf + "ItemsPanelTemplate").Descendants(wpf + "WrapPanel").Count());
+            XElement observationPanel = observations.Descendants(wpf + "ItemsPanelTemplate").Single();
+            XElement observationGrid = observationPanel.Descendants(wpf + "UniformGrid").Single();
+            Assert.AreEqual("3", (string)observationGrid.Attribute("Columns"));
+            Assert.AreEqual(0, observationPanel.Descendants(wpf + "WrapPanel").Count());
             XElement observationCard = observations.Descendants(wpf + "DataTemplate").Single().Element(wpf + "Border");
-            Assert.AreEqual("360", (string)observationCard.Attribute("Width"));
+            Assert.IsNull(observationCard.Attribute("Width"), "The three-column grid should size observation cards equally across the available width.");
             Assert.AreEqual("112", (string)observationCard.Attribute("MinHeight"));
             Assert.IsNull(observationCard.Attribute("Height"), "Observation text must be able to grow beyond the minimum card height.");
 

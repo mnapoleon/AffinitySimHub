@@ -76,7 +76,7 @@ namespace Affinity.Tests
         }
 
         [TestMethod]
-        public void Overview_StretchesEveryObservationCardAcrossOneRow()
+        public void Overview_UsesEqualWidthRowsForEveryCardSection()
         {
             XNamespace wpf = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
             XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
@@ -97,17 +97,42 @@ namespace Affinity.Tests
             Assert.AreEqual("112", (string)observationCard.Attribute("MinHeight"));
             Assert.IsNull(observationCard.Attribute("Height"), "Observation text must be able to grow beyond the minimum card height.");
 
-            XElement chartRow = document.Descendants(wpf + "WrapPanel")
+            XElement chartRow = document.Descendants(wpf + "UniformGrid")
                 .Single(element => (string)element.Attribute(x + "Name") == "PatternChartRow");
+            Assert.AreEqual("1", (string)chartRow.Attribute("Rows"));
+            Assert.IsNull(chartRow.Attribute("Columns"), "The chart row should derive equal columns from its card count.");
+            Assert.AreEqual("0,8,-10,0", (string)chartRow.Attribute("Margin"));
+            XElement[] chartCards = chartRow.Elements(wpf + "Border").ToArray();
+            Assert.AreEqual(2, chartCards.Length);
+            Assert.IsTrue(chartCards.All(card => card.Attribute("Width") == null));
+            Assert.IsTrue(chartCards.All(card => (string)card.Attribute("Margin") == "0,0,10,12"));
             XElement weekdayPanel = chartRow.Elements(wpf + "Border")
                 .Single(element => (string)element.Attribute(x + "Name") == "WeekdayPatternPanel");
             XElement distancePanel = chartRow.Elements(wpf + "Border")
                 .Single(element => (string)element.Attribute(x + "Name") == "DistancePatternPanel");
-            Assert.AreEqual("430", (string)weekdayPanel.Attribute("Width"));
-            Assert.AreEqual("600", (string)distancePanel.Attribute("Width"));
             Assert.AreEqual(1, weekdayPanel.Descendants(wpf + "ItemsControl").Count(element => (string)element.Attribute("ItemsSource") == "{Binding WeekdayBuckets}"));
             Assert.AreEqual("{Binding TrackShares}", (string)distancePanel.Descendants(local + "AffinityDonutChart").Single().Attribute("ItemsSource"));
             Assert.AreEqual(1, distancePanel.Descendants(wpf + "ItemsControl").Count(element => (string)element.Attribute("ItemsSource") == "{Binding TrackShares}"));
+
+            XElement comparisonRow = document.Descendants(wpf + "UniformGrid")
+                .Single(element => (string)element.Attribute(x + "Name") == "PatternComparisonRow");
+            Assert.AreEqual("1", (string)comparisonRow.Attribute("Rows"));
+            Assert.IsNull(comparisonRow.Attribute("Columns"), "The comparison row should derive equal columns from its card count.");
+            Assert.AreEqual("0,0,-10,0", (string)comparisonRow.Attribute("Margin"));
+            XElement[] comparisonCards = comparisonRow.Elements(wpf + "Border").ToArray();
+            Assert.AreEqual(3, comparisonCards.Length);
+            Assert.IsTrue(comparisonCards.All(card => card.Attribute("Width") == null));
+            Assert.IsTrue(comparisonCards.All(card => (string)card.Attribute("Margin") == "0,0,10,10"));
+            CollectionAssert.AreEquivalent(
+                new[]
+                {
+                    "{Binding Comparison.DistanceTrendValues}",
+                    "{Binding Comparison.SessionCountTrendValues}",
+                    "{Binding Comparison.MedianDurationTrendValues}"
+                },
+                comparisonRow.Descendants(local + "AffinitySparkline")
+                    .Select(element => (string)element.Attribute("Values"))
+                    .ToArray());
         }
 
         [TestMethod]

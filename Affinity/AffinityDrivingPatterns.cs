@@ -14,6 +14,8 @@ namespace Affinity
 
         public string TrackName { get; set; }
 
+        public string TrackIdentity { get; set; }
+
         public string TrackDisplayName { get; set; }
 
         public DateTime StartedUtc { get; set; }

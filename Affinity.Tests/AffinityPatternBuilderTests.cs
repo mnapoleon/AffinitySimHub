@@ -168,6 +168,29 @@ namespace Affinity.Tests
                 snapshot.TrackShares.Select(track => track.Label).ToArray());
         }
 
+        [TestMethod]
+        public void Build_KeepsDistinctTrackIdentitiesSeparateWhenLabelsMatch()
+        {
+            AffinitySessionRecord[] sessions = SpreadSessions(6);
+            for (int i = 0; i < sessions.Length; i++)
+            {
+                sessions[i].GameName = "Game";
+                sessions[i].CarModel = "Car";
+                sessions[i].TrackIdentity = i < 3 ? "layout-a" : "layout-b";
+                sessions[i].TrackDisplayName = "Shared label";
+                sessions[i].DistanceMeters = 1000;
+            }
+
+            AffinityPatternSnapshot snapshot = Build(sessions);
+
+            Assert.AreEqual(2, snapshot.TrackShares.Count);
+            Assert.IsTrue(snapshot.TrackShares.All(track => Math.Abs(track.SharePercent - 50.0) < 0.001));
+            AffinityPatternObservation concentration = snapshot.Observations.Single(card => card.Category == "Concentration");
+            MsStringAssert.Contains(concentration.Detail, "50%");
+            AffinityPatternObservation variety = snapshot.Observations.Single(card => card.Category == "Variety");
+            MsStringAssert.Contains(variety.Detail, "2 tracks");
+        }
+
         [DataTestMethod]
         [DataRow(false, "8.0 km", 1.609344)]
         [DataRow(true, "5.0 mi", 1.0)]

@@ -325,6 +325,7 @@ SELECT
     g.name,
     COALESCE(NULLIF(c.display_name, ''), c.model_name),
     t.raw_track_name,
+    t.track_name_with_config,
     COALESCE(NULLIF(t.display_name, ''), t.track_name_with_config),
     s.started_utc,
     s.ended_utc,
@@ -349,11 +350,12 @@ WHERE s.started_utc >= @startUtc AND s.started_utc < @endUtc AND s.session_uid N
                             GameName = reader.GetString(1),
                             CarModel = reader.GetString(2),
                             TrackName = reader.GetString(3),
-                            TrackDisplayName = reader.GetString(4),
-                            StartedUtc = ReadUtcDateTime(reader, 5),
-                            EndedUtc = ReadUtcDateTime(reader, 6),
-                            DistanceMeters = Convert.ToDouble(reader.GetValue(7), CultureInfo.InvariantCulture),
-                            TimeDrivenSeconds = Convert.ToDouble(reader.GetValue(8), CultureInfo.InvariantCulture)
+                            TrackIdentity = reader.GetString(4),
+                            TrackDisplayName = reader.GetString(5),
+                            StartedUtc = ReadUtcDateTime(reader, 6),
+                            EndedUtc = ReadUtcDateTime(reader, 7),
+                            DistanceMeters = Convert.ToDouble(reader.GetValue(8), CultureInfo.InvariantCulture),
+                            TimeDrivenSeconds = Convert.ToDouble(reader.GetValue(9), CultureInfo.InvariantCulture)
                         });
                     }
                 }

@@ -283,6 +283,7 @@ UPDATE tracks SET display_name = '' WHERE game_id = (SELECT id FROM games WHERE 
                 Assert.AreEqual("Assetto Corsa", atStart.GameName);
                 Assert.AreEqual("BMW M3 GT2 Display", atStart.CarModel);
                 Assert.AreEqual("monza", atStart.TrackName);
+                Assert.AreEqual("monza_gp", atStart.TrackIdentity);
                 Assert.AreEqual("Monza GP Display", atStart.TrackDisplayName);
                 Assert.AreEqual(startUtc, atStart.StartedUtc);
                 Assert.AreEqual(startUtc.AddMinutes(10), atStart.EndedUtc);
@@ -298,6 +299,7 @@ UPDATE tracks SET display_name = '' WHERE game_id = (SELECT id FROM games WHERE 
                 Assert.AreEqual("iRacing", otherGame.GameName);
                 Assert.AreEqual("BMW M3 GT2", otherGame.CarModel);
                 Assert.AreEqual("monza", otherGame.TrackName);
+                Assert.AreEqual("Monza GP Display", otherGame.TrackIdentity);
                 Assert.AreEqual("Monza GP Display", otherGame.TrackDisplayName);
             }
         }

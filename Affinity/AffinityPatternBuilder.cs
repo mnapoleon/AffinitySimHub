@@ -169,16 +169,23 @@ namespace Affinity
             IReadOnlyCollection<AffinitySessionRecord> sessions, bool miles, CultureInfo culture)
         {
             double totalDistance = sessions.Sum(session => session.DistanceMeters);
-            var tracks = sessions.GroupBy(session => new { session.GameName, session.TrackDisplayName })
+            var tracks = sessions.GroupBy(session => new
+                {
+                    session.GameName,
+                    TrackIdentity = PatternTrackIdentity(session),
+                    session.TrackDisplayName
+                })
                 .Select(group => new
                 {
                     group.Key.GameName,
+                    group.Key.TrackIdentity,
                     group.Key.TrackDisplayName,
                     Distance = group.Sum(session => session.DistanceMeters)
                 })
                 .OrderByDescending(track => track.Distance)
                 .ThenBy(track => track.TrackDisplayName, StringComparer.Ordinal)
-                .ThenBy(track => track.GameName, StringComparer.Ordinal).ToList();
+                .ThenBy(track => track.GameName, StringComparer.Ordinal)
+                .ThenBy(track => track.TrackIdentity, StringComparer.Ordinal).ToList();
             List<AffinityTrackShare> shares = tracks.Take(MaximumNamedTracks)
                 .Select(track => TrackShare(track.GameName, track.TrackDisplayName, track.Distance,
                     totalDistance, miles, culture, false)).ToList();
@@ -214,7 +221,13 @@ namespace Affinity
             if (totalDistance <= 0) return null;
 
             // Prefer a car/track pairing, then track, car, and game, all within the game's identity.
-            IEnumerable<DistanceFact> facts = sessions.GroupBy(session => new { session.GameName, session.CarModel, session.TrackDisplayName })
+            IEnumerable<DistanceFact> facts = sessions.GroupBy(session => new
+                {
+                    session.GameName,
+                    session.CarModel,
+                    TrackIdentity = PatternTrackIdentity(session),
+                    session.TrackDisplayName
+                })
                 .Select(group => new DistanceFact
                 {
                     Specificity = 0,
@@ -222,7 +235,12 @@ namespace Affinity
                     GameName = group.Key.GameName,
                     Distance = group.Sum(session => session.DistanceMeters)
                 })
-                .Concat(sessions.GroupBy(session => new { session.GameName, session.TrackDisplayName }).Select(group => new DistanceFact
+                .Concat(sessions.GroupBy(session => new
+                {
+                    session.GameName,
+                    TrackIdentity = PatternTrackIdentity(session),
+                    session.TrackDisplayName
+                }).Select(group => new DistanceFact
                 {
                     Specificity = 1,
                     Title = group.Key.TrackDisplayName + " is a mainstay",
@@ -312,13 +330,15 @@ namespace Affinity
             CultureInfo culture)
         {
             int cars = current.Select(session => new { session.GameName, session.CarModel }).Distinct().Count();
-            int tracks = current.Select(session => new { session.GameName, session.TrackDisplayName }).Distinct().Count();
+            int tracks = current.Select(session => new
+                { session.GameName, TrackIdentity = PatternTrackIdentity(session) }).Distinct().Count();
             if (cars < MinimumVarietyCount && tracks < MinimumVarietyCount) return null;
             string detail = VarietyCounts(cars, tracks, culture) + " this period.";
             if (hasComparison)
             {
                 int priorCars = previous.Select(session => new { session.GameName, session.CarModel }).Distinct().Count();
-                int priorTracks = previous.Select(session => new { session.GameName, session.TrackDisplayName }).Distinct().Count();
+                int priorTracks = previous.Select(session => new
+                    { session.GameName, TrackIdentity = PatternTrackIdentity(session) }).Distinct().Count();
                 detail += " Previously: " + VarietyCounts(priorCars, priorTracks, culture) + ".";
             }
             return new AffinityPatternObservation { Category = "Variety", Title = "Your driving variety", Detail = detail };
@@ -328,6 +348,13 @@ namespace Affinity
         {
             return cars.ToString("N0", culture) + (cars == 1 ? " car" : " cars") + " and " +
                 tracks.ToString("N0", culture) + (tracks == 1 ? " track" : " tracks");
+        }
+
+        private static string PatternTrackIdentity(AffinitySessionRecord session)
+        {
+            return string.IsNullOrWhiteSpace(session.TrackIdentity)
+                ? session.TrackDisplayName ?? string.Empty
+                : session.TrackIdentity;
         }
 
         private static void AddObservation(AffinityPatternSnapshot snapshot, AffinityPatternObservation observation)

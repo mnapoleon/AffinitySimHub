@@ -120,6 +120,34 @@ namespace Affinity.Tests
             });
         }
 
+        [TestMethod]
+        public void BuildPatternSnapshot_AppliesGameProfileTrackDisplayNames()
+        {
+            WithRepository((plugin, repository) =>
+            {
+                var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["ks_brands_hatch-indy"] = "Brands Hatch - Indy"
+                };
+                typeof(AffinityPlugin).GetField("_assettoCorsaTrackMap", BindingFlags.Instance | BindingFlags.NonPublic)
+                    .SetValue(plugin, map);
+                typeof(AffinityPlugin).GetField("_trackDisplayContext", BindingFlags.Instance | BindingFlags.NonPublic)
+                    .SetValue(plugin, new AffinityTrackDisplayContext(map));
+                for (int day = 2; day <= 6; day++)
+                {
+                    DateTime startedLocal = new DateTime(2026, 6, day, 12, 0, 0, DateTimeKind.Local);
+                    repository.UpsertSession("mapped-" + day, "Assetto Corsa", "MX-5",
+                        "ks_brands_hatch", "ks_brands_hatch-indy", startedLocal.ToUniversalTime(),
+                        startedLocal.AddMinutes(10).ToUniversalTime(), 1000, 600);
+                }
+
+                AffinityPatternSnapshot snapshot = BuildPatternSnapshot(
+                    plugin, new DateTime(2026, 7, 2, 12, 0, 0, DateTimeKind.Local));
+
+                Assert.AreEqual("Brands Hatch - Indy", snapshot.TrackShares.Single().TrackDisplayName);
+            });
+        }
+
         private static void WithRepository(Action<AffinityPlugin, AffinitySqliteRepository> test)
         {
             string directory = Path.Combine(Path.GetTempPath(), "AffinityTests", Guid.NewGuid().ToString("N"));

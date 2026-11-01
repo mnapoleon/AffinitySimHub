@@ -2470,6 +2470,14 @@ namespace Affinity
 
             // This year's comparison ends before the current window starts; exclude that gap when partitioning.
             List<AffinitySessionRecord> sessions = _sqliteRepository.GetPatternSessions(previousStartUtc, currentEndUtc);
+            foreach (AffinitySessionRecord session in sessions)
+            {
+                string rawDisplayName = string.IsNullOrWhiteSpace(session.TrackDisplayName)
+                    ? session.TrackIdentity
+                    : session.TrackDisplayName;
+                session.TrackDisplayName = _gameProfiles.Resolve(session.GameName)
+                    .GetTrackDisplayName(rawDisplayName, _trackDisplayContext);
+            }
             List<AffinitySessionRecord> currentSessions = sessions
                 .Where(session => session.StartedUtc >= currentStartUtc && session.StartedUtc < currentEndUtc).ToList();
             List<AffinitySessionRecord> previousSessions = sessions

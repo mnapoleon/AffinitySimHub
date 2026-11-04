@@ -162,7 +162,7 @@ namespace Affinity.Tests
             SetTrack(sessions[3], "Game", "Gamma", 1000);
             SetTrack(sessions[4], "Game", "Zulu", 1000);
 
-            AffinityPatternSnapshot snapshot = Build(sessions.Reverse().ToArray());
+            AffinityPatternSnapshot snapshot = Build(Enumerable.Reverse(sessions).ToArray());
 
             CollectionAssert.AreEqual(new[] { "Alpha (Alpha game)", "Alpha (Zulu game)", "Beta (Game)", "Other" },
                 snapshot.TrackShares.Select(track => track.Label).ToArray());
@@ -295,7 +295,7 @@ namespace Affinity.Tests
                 sessions[i].TrackDisplayName = i < 3 ? "Zulu track" : "Alpha track";
             }
 
-            AffinityPatternObservation concentration = Build(sessions.Reverse().ToArray())
+            AffinityPatternObservation concentration = Build(Enumerable.Reverse(sessions).ToArray())
                 .Observations.Single(card => card.Category == "Concentration");
 
             Assert.AreEqual("Alpha car at Alpha track", concentration.Title);

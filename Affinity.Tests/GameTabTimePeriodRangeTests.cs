@@ -1,4 +1,5 @@
 using System;
+using System.Reflection;
 using Affinity;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
@@ -53,44 +54,54 @@ namespace Affinity.Tests
             Assert.AreEqual(referenceLocal.ToUniversalTime(), endUtc.Value);
         }
 
-        [TestMethod]
-        public void TryGetRecentHighlightsRangeUtcRanges_UsesCurrentCultureWeekBoundariesForCurrentAndPreviousWeek()
+        [DataTestMethod]
+        [DataRow("Last30Days", 2026, 5, 3, 2026, 6, 2)]
+        [DataRow("Last90Days", 2026, 1, 3, 2026, 4, 3)]
+        public void TryGetPatternRangeUtcRanges_UsesAdjacentRollingLocalDayWindows(
+            string key, int previousYear, int previousMonth, int previousDay, int currentYear, int currentMonth, int currentDay)
         {
-            DateTime referenceLocal = new DateTime(2026, 7, 4, 12, 0, 0, DateTimeKind.Local);
+            var reference = new DateTime(2026, 7, 2, 12, 34, 56, DateTimeKind.Local);
+            var currentStart = new DateTime(currentYear, currentMonth, currentDay, 12, 34, 56, DateTimeKind.Local);
+            var previousStart = new DateTime(previousYear, previousMonth, previousDay, 12, 34, 56, DateTimeKind.Local);
+            AssertPatternRanges(key, reference, currentStart, reference, previousStart, currentStart);
+        }
 
-            bool hasRange = AffinityPlugin.TryGetRecentHighlightsRangeUtcRanges(
-                AffinityPlugin.RecentHighlightsRangeWeek,
-                referenceLocal,
-                out DateTime? currentStartUtc,
-                out DateTime? currentEndUtc,
-                out DateTime? previousStartUtc,
-                out DateTime? previousEndUtc);
-
-            Assert.IsTrue(hasRange);
-            Assert.AreEqual(new DateTime(2026, 6, 28, 0, 0, 0, DateTimeKind.Local).ToUniversalTime(), currentStartUtc.Value);
-            Assert.AreEqual(referenceLocal.ToUniversalTime(), currentEndUtc.Value);
-            Assert.AreEqual(new DateTime(2026, 6, 21, 0, 0, 0, DateTimeKind.Local).ToUniversalTime(), previousStartUtc.Value);
-            Assert.AreEqual(new DateTime(2026, 6, 28, 0, 0, 0, DateTimeKind.Local).ToUniversalTime(), previousEndUtc.Value);
+        [DataTestMethod]
+        [DataRow(2026, 7, 4, 2025, 7, 4)]
+        [DataRow(2024, 2, 29, 2023, 2, 28)]
+        [DataRow(2026, 1, 1, 2025, 1, 1)]
+        public void TryGetPatternRangeUtcRanges_UsesYearToDateAndEquivalentPreviousLocalDate(
+            int year, int month, int day, int previousYear, int previousMonth, int previousDay)
+        {
+            var reference = new DateTime(year, month, day, 12, 34, 56, DateTimeKind.Local);
+            AssertPatternRanges("ThisYear", reference,
+                new DateTime(year, 1, 1, 0, 0, 0, DateTimeKind.Local), reference,
+                new DateTime(previousYear, 1, 1, 0, 0, 0, DateTimeKind.Local),
+                new DateTime(previousYear, previousMonth, previousDay, 12, 34, 56, DateTimeKind.Local));
         }
 
         [TestMethod]
-        public void TryGetRecentHighlightsRangeUtcRanges_UsesLocalCalendarBoundariesForCurrentAndPreviousMonth()
+        public void TryGetPatternRangeUtcRanges_ConvertsUtcReferenceBeforeComputingLocalWindow()
         {
-            DateTime referenceLocal = new DateTime(2026, 7, 4, 12, 0, 0, DateTimeKind.Local);
+            var reference = new DateTime(2026, 7, 2, 12, 0, 0, DateTimeKind.Local);
+            AssertPatternRanges("Last30Days", reference.ToUniversalTime(),
+                new DateTime(2026, 6, 2, 12, 0, 0, DateTimeKind.Local), reference,
+                new DateTime(2026, 5, 3, 12, 0, 0, DateTimeKind.Local),
+                new DateTime(2026, 6, 2, 12, 0, 0, DateTimeKind.Local));
+        }
 
-            bool hasRange = AffinityPlugin.TryGetRecentHighlightsRangeUtcRanges(
-                AffinityPlugin.RecentHighlightsRangeMonth,
-                referenceLocal,
-                out DateTime? currentStartUtc,
-                out DateTime? currentEndUtc,
-                out DateTime? previousStartUtc,
-                out DateTime? previousEndUtc);
-
-            Assert.IsTrue(hasRange);
-            Assert.AreEqual(new DateTime(2026, 7, 1, 0, 0, 0, DateTimeKind.Local).ToUniversalTime(), currentStartUtc.Value);
-            Assert.AreEqual(referenceLocal.ToUniversalTime(), currentEndUtc.Value);
-            Assert.AreEqual(new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Local).ToUniversalTime(), previousStartUtc.Value);
-            Assert.AreEqual(new DateTime(2026, 7, 1, 0, 0, 0, DateTimeKind.Local).ToUniversalTime(), previousEndUtc.Value);
+        private static void AssertPatternRanges(string key, DateTime reference, DateTime currentStart, DateTime currentEnd,
+            DateTime previousStart, DateTime previousEnd)
+        {
+            MethodInfo method = typeof(AffinityPlugin).GetMethod("TryGetPatternRangeUtcRanges", BindingFlags.Static | BindingFlags.NonPublic);
+            Assert.IsNotNull(method);
+            object[] args = { key, reference, null, null, null, null };
+            Assert.IsTrue((bool)method.Invoke(null, args));
+            Assert.AreEqual(currentStart.ToUniversalTime(), args[2]);
+            Assert.AreEqual(currentEnd.ToUniversalTime(), args[3]);
+            Assert.AreEqual(previousStart.ToUniversalTime(), args[4]);
+            Assert.AreEqual(previousEnd.ToUniversalTime(), args[5]);
+            for (int i = 2; i < args.Length; i++) Assert.AreEqual(DateTimeKind.Utc, ((DateTime)args[i]).Kind);
         }
     }
 }

@@ -313,6 +313,57 @@ GROUP BY g.name, COALESCE(NULLIF(c.display_name, ''), c.model_name), t.raw_track
             return summaries;
         }
 
+        public List<AffinitySessionRecord> GetPatternSessions(DateTime startUtc, DateTime endUtc)
+        {
+            var sessions = new List<AffinitySessionRecord>();
+
+            using (var command = _connection.CreateCommand())
+            {
+                command.CommandText = @"
+SELECT
+    s.session_uid,
+    g.name,
+    COALESCE(NULLIF(c.display_name, ''), c.model_name),
+    t.raw_track_name,
+    t.track_name_with_config,
+    COALESCE(NULLIF(t.display_name, ''), t.track_name_with_config),
+    s.started_utc,
+    s.ended_utc,
+    s.distance_meters,
+    s.time_driven_seconds
+FROM sessions s
+INNER JOIN track_contexts tc ON tc.id = s.track_context_id
+INNER JOIN games g ON g.id = tc.game_id
+INNER JOIN cars c ON c.id = tc.car_id
+INNER JOIN tracks t ON t.id = tc.track_id
+WHERE s.started_utc >= @startUtc AND s.started_utc < @endUtc AND s.session_uid NOT LIKE 'legacy-%';";
+                command.Parameters.AddWithValue("@startUtc", ToIsoUtc(startUtc));
+                command.Parameters.AddWithValue("@endUtc", ToIsoUtc(endUtc));
+
+                using (var reader = command.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        sessions.Add(new AffinitySessionRecord
+                        {
+                            SessionUid = reader.GetString(0),
+                            GameName = reader.GetString(1),
+                            CarModel = reader.GetString(2),
+                            TrackName = reader.GetString(3),
+                            TrackIdentity = reader.GetString(4),
+                            TrackDisplayName = reader.GetString(5),
+                            StartedUtc = ReadUtcDateTime(reader, 6),
+                            EndedUtc = ReadUtcDateTime(reader, 7),
+                            DistanceMeters = Convert.ToDouble(reader.GetValue(8), CultureInfo.InvariantCulture),
+                            TimeDrivenSeconds = Convert.ToDouble(reader.GetValue(9), CultureInfo.InvariantCulture)
+                        });
+                    }
+                }
+            }
+
+            return sessions;
+        }
+
         public void Dispose()
         {
             _connection?.Dispose();

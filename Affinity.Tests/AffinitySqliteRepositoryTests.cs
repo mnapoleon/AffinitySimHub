@@ -244,6 +244,107 @@ UPDATE tracks SET display_name = 'Monza GP Display';";
             }
         }
 
+        [TestMethod]
+        public void GetPatternSessions_ReturnsGameScopedDisplayDataWithinHalfOpenRange()
+        {
+            var startUtc = new DateTime(2026, 5, 1, 4, 0, 0, DateTimeKind.Utc);
+            var endUtc = new DateTime(2026, 6, 1, 4, 0, 0, DateTimeKind.Utc);
+
+            using (var repository = CreateRepository())
+            {
+                repository.UpsertSession("before-start", "Assetto Corsa", "BMW M3 GT2", "monza", "monza_gp",
+                    startUtc.AddSeconds(-1), startUtc.AddMinutes(10), 100.0, 60.0);
+                repository.UpsertSession("at-start", "Assetto Corsa", "BMW M3 GT2", "monza", "monza_gp",
+                    startUtc, startUtc.AddMinutes(10), 1500.0, 600.0);
+                repository.UpsertSession("same-context", "Assetto Corsa", "BMW M3 GT2", "monza", "monza_gp",
+                    startUtc.AddHours(1), startUtc.AddHours(2), 2500.0, 3600.0);
+                repository.UpsertSession("other-game", "iRacing", "BMW M3 GT2", "monza", "Monza GP Display",
+                    startUtc.AddDays(1), startUtc.AddDays(1).AddMinutes(20), 5000.0, 1200.0);
+                repository.UpsertSession("at-end", "Assetto Corsa", "BMW M3 GT2", "monza", "monza_gp",
+                    endUtc, endUtc.AddMinutes(10), 100.0, 60.0);
+
+                using (var connection = new System.Data.SQLite.SQLiteConnection($"Data Source={_databasePath};Version=3;"))
+                {
+                    connection.Open();
+                    using (var command = connection.CreateCommand())
+                    {
+                        command.CommandText = @"
+UPDATE cars SET display_name = 'BMW M3 GT2 Display' WHERE game_id = (SELECT id FROM games WHERE name = 'Assetto Corsa');
+UPDATE tracks SET display_name = 'Monza GP Display' WHERE game_id = (SELECT id FROM games WHERE name = 'Assetto Corsa');
+UPDATE tracks SET display_name = '' WHERE game_id = (SELECT id FROM games WHERE name = 'iRacing');";
+                        command.ExecuteNonQuery();
+                    }
+                }
+
+                System.Collections.Generic.List<AffinitySessionRecord> sessions = repository.GetPatternSessions(startUtc, endUtc);
+
+                Assert.AreEqual(3, sessions.Count);
+                var atStart = sessions.Single(session => session.SessionUid == "at-start");
+                Assert.AreEqual("Assetto Corsa", atStart.GameName);
+                Assert.AreEqual("BMW M3 GT2 Display", atStart.CarModel);
+                Assert.AreEqual("monza", atStart.TrackName);
+                Assert.AreEqual("monza_gp", atStart.TrackIdentity);
+                Assert.AreEqual("Monza GP Display", atStart.TrackDisplayName);
+                Assert.AreEqual(startUtc, atStart.StartedUtc);
+                Assert.AreEqual(startUtc.AddMinutes(10), atStart.EndedUtc);
+                Assert.AreEqual(DateTimeKind.Utc, atStart.StartedUtc.Kind);
+                Assert.AreEqual(DateTimeKind.Utc, atStart.EndedUtc.Kind);
+                Assert.AreEqual(1500.0, atStart.DistanceMeters, 0.000001);
+                Assert.AreEqual(600.0, atStart.TimeDrivenSeconds, 0.000001);
+
+                var sameContext = sessions.Single(session => session.SessionUid == "same-context");
+                Assert.AreEqual(2500.0, sameContext.DistanceMeters, 0.000001);
+                Assert.AreEqual(3600.0, sameContext.TimeDrivenSeconds, 0.000001);
+                var otherGame = sessions.Single(session => session.SessionUid == "other-game");
+                Assert.AreEqual("iRacing", otherGame.GameName);
+                Assert.AreEqual("BMW M3 GT2", otherGame.CarModel);
+                Assert.AreEqual("monza", otherGame.TrackName);
+                Assert.AreEqual("Monza GP Display", otherGame.TrackIdentity);
+                Assert.AreEqual("Monza GP Display", otherGame.TrackDisplayName);
+            }
+        }
+
+        [TestMethod]
+        public void GetPatternSessions_ExcludesLegacyRowsFromMixedHistory()
+        {
+            var startUtc = new DateTime(2026, 5, 30, 0, 0, 0, DateTimeKind.Utc);
+            var legacy = new AffinityDatabase();
+            legacy.Games["Assetto Corsa"] = new GameBucket
+            {
+                Cars =
+                {
+                    ["BMW M3 GT2"] = new CarBucket
+                    {
+                        Tracks =
+                        {
+                            ["monza_gp"] = new TrackBucket
+                            {
+                                TrackName = "monza",
+                                TrackNameWithConfig = "monza_gp",
+                                TotalDistanceMeters = 4321.0,
+                                UsedTime = 321.0
+                            }
+                        }
+                    }
+                }
+            };
+
+            using (var repository = CreateRepository())
+            {
+                repository.ImportLegacyDatabase(legacy, startUtc);
+                repository.UpsertSession("normal-session", "Assetto Corsa", "BMW M3 GT2", "monza", "monza_gp",
+                    startUtc.AddHours(1), startUtc.AddHours(2), 1000.0, 3600.0);
+
+                var sessions = repository.GetPatternSessions(startUtc, startUtc.AddDays(1));
+
+                Assert.AreEqual(1, sessions.Count);
+                Assert.AreEqual("normal-session", sessions.Single().SessionUid);
+                Assert.AreEqual(1000.0, sessions.Single().DistanceMeters, 0.000001);
+                Assert.AreEqual(3600.0, sessions.Single().TimeDrivenSeconds, 0.000001);
+                Assert.AreEqual(5.321, repository.GetDistanceSummaries().Single().TotalDistanceKm, 0.000001);
+            }
+        }
+
         private AffinitySqliteRepository CreateRepository()
         {
             var repository = new AffinitySqliteRepository(_databasePath);

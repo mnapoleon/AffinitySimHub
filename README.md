@@ -29,6 +29,9 @@ The current SimHub UI includes:
 - a featured card for the most-driven game
 - a featured card for the most-driven track, including its game
 - a featured card for the most-driven car, including its game
+- Driving Patterns with observations, charts, and previous-period comparisons
+- a shared pattern range selector for Last 30 days, Last 90 days, and This year
+- a cumulative distance and driving-time card at the top of each game's tab
 - per-game tabs with top-track and top-car highlights
 - per-game track and car tables
 - per-game track/car cross-filtering
@@ -155,6 +158,18 @@ This separation is useful because:
 - persistence stays simple and storage-oriented
 - the UI binds to presentation-ready summary objects
 - unit conversion and display formatting happen in one place
+
+### Driving Patterns
+
+Driving Patterns uses a separate snapshot built from trustworthy finalized session history.
+
+The Overview keeps the all-time featured game, track, and car cards. Driving Patterns replaces Recent Highlights and offers `Last 30 days` (the default), `Last 90 days`, and `This year`. The rolling ranges compare with the immediately preceding matching range; This year compares year-to-date with the equivalent period last year. Ranges and driving schedules use local time, and sessions belong to a range by their start time. The selection resets to Last 30 days when the plugin initializes.
+
+Up to three plain-language observations describe habits such as a favorite track, a preferred driving schedule, or a meaningful change from the previous period. Supporting charts use weekday bars for time driven and a track-share donut with a distance legend for the top three tracks plus Other. The distance, completed-session count, and typical session duration (median) comparison cards each include an eight-bucket sparkline for the selected period.
+
+Patterns need at least five non-legacy finalized sessions in the selected range. Until then, the section explains that more completed sessions are needed. Previous-period comparisons need at least three sessions; otherwise their changes are unavailable while valid current-period patterns still appear. Imported legacy rows are excluded because their migration dates do not represent when the driving happened. Those rows remain part of cumulative totals.
+
+Each game's cumulative distance and driving time now appear at the top of its own tab, ahead of the top-track and top-car highlights. Pattern history is read during summary refreshes and range changes, keeping this work out of the live telemetry loop.
 
 ### Track naming
 
@@ -300,8 +315,10 @@ The Data tab is effectively the reporting surface for the plugin:
 - live tracking status with current game, car, and track context
 - current-session and current-context distance totals
 - featured all-time summary cards across all games
-- compact monthly highlights
+- Driving Patterns observations and charts for Last 30 days, Last 90 days, or This year
+- previous-period distance, session-count, and typical-duration comparisons
 - per-game tabs for track/car detail
+- a cumulative distance and driving-time card at the top of each game's tab
 - current-tab track/car cross-filtering
 - current-tab track/car search, period, sort order, and result limit controls
 - all-games totals footer

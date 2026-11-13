@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Runtime.Serialization;
 using Affinity;
@@ -175,6 +176,160 @@ namespace Affinity.Tests
                 .Invoke(plugin, new object[] { ResolveProfile("RRRE"), lineCrossingStatus, 20785.39 });
 
             Assert.AreEqual(20786.03, (double)lineCrossingResult, 0.05);
+        }
+
+        [TestMethod]
+        public void UpdateStatefulDerivedAbsoluteSessionDistanceMeters_DoesNotCreditCarriedRaceRoomLapsAfterGarageReturn()
+        {
+            AffinityPlugin plugin = new AffinityPlugin();
+            SetPrivateField(plugin, "_sessionStartTrackPositionMeters", 170.30);
+            SetPrivateField(plugin, "_sessionLapCounterDistanceBaselineMeters", (2 * 2632.93) + 170.30);
+            SetPrivateField(plugin, "_lastObservedCompletedLaps", 2);
+            SetPrivateField(plugin, "_lastTrackPositionWithinLapMeters", 170.30);
+
+            TestStatusData stationaryDeparture = CreateStatus(
+                completedLaps: 2,
+                trackLengthMeters: 2632.93,
+                trackPositionMeters: 170.30,
+                speedKmh: 0.0);
+            object stationaryResult = typeof(AffinityPlugin)
+                .GetMethod("UpdateStatefulDerivedAbsoluteSessionDistanceMeters", BindingFlags.Instance | BindingFlags.NonPublic)
+                .Invoke(plugin, new object[] { ResolveProfile("RRRE"), stationaryDeparture, 2632.93 });
+
+            Assert.AreEqual(0.0, (double)stationaryResult, 0.001);
+
+            TestStatusData movingDeparture = CreateStatus(
+                completedLaps: 2,
+                trackLengthMeters: 2632.93,
+                trackPositionMeters: 220.30,
+                speedKmh: 50.0);
+            object movingResult = typeof(AffinityPlugin)
+                .GetMethod("UpdateStatefulDerivedAbsoluteSessionDistanceMeters", BindingFlags.Instance | BindingFlags.NonPublic)
+                .Invoke(plugin, new object[] { ResolveProfile("RRRE"), movingDeparture, 2632.93 });
+
+            Assert.AreEqual(50.0, (double)movingResult, 0.001);
+
+            UpdateRaceRoomDistance(plugin, ResolveProfile("RRRE"), 2632.93, 2, 800.0, "Silverstone Circuit - Stowe Circuit-Short");
+            UpdateRaceRoomDistance(plugin, ResolveProfile("RRRE"), 2632.93, 2, 1600.0, "Silverstone Circuit - Stowe Circuit-Short");
+            UpdateRaceRoomDistance(plugin, ResolveProfile("RRRE"), 2632.93, 2, 2400.0, "Silverstone Circuit - Stowe Circuit-Short");
+            double firstCrossing = UpdateRaceRoomDistance(plugin, ResolveProfile("RRRE"), 2632.93, 3, 1.0, "Silverstone Circuit - Stowe Circuit-Short");
+
+            Assert.AreEqual(2463.63, firstCrossing, 0.01);
+        }
+
+        [TestMethod]
+        public void DataUpdate_RaceRoomGarageReturnsPersistDrivenSegmentsWithoutCarriedLapDistance()
+        {
+            string tempDirectory = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(tempDirectory);
+            AffinitySqliteRepository repository = null;
+            try
+            {
+                AffinityPlugin plugin = new AffinityPlugin();
+                PluginManager pluginManager = CreatePluginManager();
+                repository = new AffinitySqliteRepository(Path.Combine(tempDirectory, "Affinity.distance.db"));
+                repository.Initialize();
+                SetPrivateField(plugin, "_sqliteRepository", repository);
+                Guid sessionId = Guid.NewGuid();
+
+                GameData start = CreateRaceRoomGameData(CreateRaceRoomStatus(0, 170.30, false), sessionId);
+                plugin.DataUpdate(pluginManager, ref start);
+                GameData firstDrive = CreateRaceRoomGameData(CreateRaceRoomStatus(0, 220.30, false), sessionId);
+                plugin.DataUpdate(pluginManager, ref firstDrive);
+                Assert.AreEqual(0.05, plugin.CurrentContextDistanceKm, 0.0001);
+
+                GameData firstGarage = CreateRaceRoomGameData(CreateRaceRoomStatus(2, 170.30, true), sessionId);
+                plugin.DataUpdate(pluginManager, ref firstGarage);
+                Assert.AreEqual(50.0, repository.GetPatternSessions(DateTime.UtcNow.AddMinutes(-5), DateTime.UtcNow.AddMinutes(5)).Single().DistanceMeters, 0.01);
+
+                GameData departure = CreateRaceRoomGameData(CreateRaceRoomStatus(2, 170.30, false), sessionId);
+                plugin.DataUpdate(pluginManager, ref departure);
+                GameData stationary = CreateRaceRoomGameData(CreateRaceRoomStatus(2, 170.30, false), sessionId);
+                plugin.DataUpdate(pluginManager, ref stationary);
+                Assert.AreEqual(0.05, plugin.CurrentContextDistanceKm, 0.0001);
+
+                GameData secondDrive = CreateRaceRoomGameData(CreateRaceRoomStatus(2, 220.30, false), sessionId);
+                plugin.DataUpdate(pluginManager, ref secondDrive);
+                Assert.AreEqual(0.10, plugin.CurrentContextDistanceKm, 0.0001);
+
+                GameData segmentProgress1 = CreateRaceRoomGameData(CreateRaceRoomStatus(2, 800.0, false), sessionId);
+                plugin.DataUpdate(pluginManager, ref segmentProgress1);
+                GameData segmentProgress2 = CreateRaceRoomGameData(CreateRaceRoomStatus(2, 1600.0, false), sessionId);
+                plugin.DataUpdate(pluginManager, ref segmentProgress2);
+                GameData segmentProgress3 = CreateRaceRoomGameData(CreateRaceRoomStatus(2, 2400.0, false), sessionId);
+                plugin.DataUpdate(pluginManager, ref segmentProgress3);
+                GameData firstCrossing = CreateRaceRoomGameData(CreateRaceRoomStatus(3, 1.0, false), sessionId);
+                plugin.DataUpdate(pluginManager, ref firstCrossing);
+                Assert.AreEqual(2.51363, plugin.CurrentContextDistanceKm, 0.00001);
+
+                GameData secondGarage = CreateRaceRoomGameData(CreateRaceRoomStatus(3, 1.0, true), sessionId);
+                plugin.DataUpdate(pluginManager, ref secondGarage);
+                Assert.AreEqual(2513.63, repository.GetPatternSessions(DateTime.UtcNow.AddMinutes(-5), DateTime.UtcNow.AddMinutes(5)).Sum(session => session.DistanceMeters), 0.01);
+            }
+            finally
+            {
+                repository?.Dispose();
+                if (Directory.Exists(tempDirectory))
+                {
+                    Directory.Delete(tempDirectory, recursive: true);
+                }
+            }
+        }
+
+        [TestMethod]
+        public void DataUpdate_NewRaceRoomSessionResetsNlsLapCounterFloorSuppression()
+        {
+            AffinityPlugin plugin = new AffinityPlugin();
+            PluginManager pluginManager = CreatePluginManager();
+            Guid firstSessionId = Guid.NewGuid();
+            GameData firstSession = CreateRaceRoomGameData(CreateRaceRoomStatus(0, 170.30, false), firstSessionId);
+            plugin.DataUpdate(pluginManager, ref firstSession);
+            SetPrivateField(plugin, "_lapCounterDistanceFloorDisabled", true);
+
+            GameData replacementSession = CreateRaceRoomGameData(
+                CreateRaceRoomStatus(0, 170.30, false),
+                Guid.NewGuid());
+            plugin.DataUpdate(pluginManager, ref replacementSession);
+
+            Assert.IsFalse(GetPrivateField<bool>(plugin, "_lapCounterDistanceFloorDisabled"));
+        }
+
+        [DataTestMethod]
+        [DataRow(0, 170.30)]
+        [DataRow(1, 2803.23)]
+        [DataRow(2, 5436.16)]
+        public void GetLapCounterDistanceBaselineMeters_IsRelativeForAnyCarriedLapCount(
+            int completedLaps,
+            double expectedBaselineMeters)
+        {
+            object result = typeof(AffinityPlugin)
+                .GetMethod("GetLapCounterDistanceBaselineMeters", BindingFlags.Static | BindingFlags.NonPublic)
+                .Invoke(null, new object[] { completedLaps, 2632.93, 170.30 });
+
+            Assert.AreEqual(expectedBaselineMeters, (double)result, 0.01);
+        }
+
+        [TestMethod]
+        public void UpdateStatefulDerivedAbsoluteSessionDistanceMeters_RejectsNlsShortcutLapAndKeepsFollowingFullLap()
+        {
+            AffinityPlugin plugin = new AffinityPlugin();
+            IAffinityGameProfile profile = ResolveProfile("RRRE");
+            const double trackLength = 24321.31;
+
+            UpdateRaceRoomDistance(plugin, profile, trackLength, 0, 300.0, "Nürburgring - Nordschleife-NLS");
+            double beforeShortcut = UpdateRaceRoomDistance(plugin, profile, trackLength, 0, 3560.0, "Nürburgring - Nordschleife-NLS");
+            Assert.AreEqual(3260.0, beforeShortcut, 0.001);
+
+            double afterShortcut = UpdateRaceRoomDistance(plugin, profile, trackLength, 1, 1.44, "Nürburgring - Nordschleife-NLS");
+            Assert.AreEqual(3260.0, afterShortcut, 0.001);
+
+            UpdateRaceRoomDistance(plugin, profile, trackLength, 1, 6000.0, "Nürburgring - Nordschleife-NLS");
+            UpdateRaceRoomDistance(plugin, profile, trackLength, 1, 12000.0, "Nürburgring - Nordschleife-NLS");
+            UpdateRaceRoomDistance(plugin, profile, trackLength, 1, 18000.0, "Nürburgring - Nordschleife-NLS");
+            UpdateRaceRoomDistance(plugin, profile, trackLength, 1, 24300.0, "Nürburgring - Nordschleife-NLS");
+            double afterFullLap = UpdateRaceRoomDistance(plugin, profile, trackLength, 2, 2.0, "Nürburgring - Nordschleife-NLS");
+
+            Assert.AreEqual(27581.87, afterFullLap, 0.05);
         }
 
         [TestMethod]
@@ -635,11 +790,52 @@ namespace Affinity.Tests
             return status;
         }
 
+        private static double UpdateRaceRoomDistance(
+            AffinityPlugin plugin,
+            IAffinityGameProfile profile,
+            double trackLengthMeters,
+            int completedLaps,
+            double trackPositionMeters,
+            string trackNameWithConfig)
+        {
+            TestStatusData status = CreateStatus(completedLaps, trackLengthMeters, trackPositionMeters, 100.0);
+            SetProperty(status, "TrackName", trackNameWithConfig);
+            return (double)typeof(AffinityPlugin)
+                .GetMethod("UpdateStatefulDerivedAbsoluteSessionDistanceMeters", BindingFlags.Instance | BindingFlags.NonPublic)
+                .Invoke(plugin, new object[] { profile, status, trackLengthMeters });
+        }
+
         private static GameData CreateGameData(StatusDataBase status, Guid sessionId)
         {
             GameData data = new GameData();
             SetMemberValue(data, "GameRunning", true);
             SetMemberValue(data, "GameName", "Test Game");
+            SetMemberValue(data, "SessionId", sessionId);
+            SetMemberValue(data, "NewData", status);
+            return data;
+        }
+
+        private static RaceRoomStatusData CreateRaceRoomStatus(int completedLaps, double trackPositionMeters, bool inGarage)
+        {
+            var status = new RaceRoomStatusData
+            {
+                RawData = new RaceRoomRawData { GamePlayerInGarage = inGarage ? 1 : 0 }
+            };
+            SetProperty(status, "CarModel", "Alpine A110 GT4+");
+            SetProperty(status, "TrackName", "Silverstone Circuit - Stowe Circuit-Short");
+            SetProperty(status, "CompletedLaps", completedLaps);
+            SetProperty(status, "TrackLength", 2632.93);
+            SetProperty(status, "TrackPositionMeters", trackPositionMeters);
+            SetProperty(status, "TrackPositionPercent", trackPositionMeters / 2632.93);
+            SetProperty(status, "SpeedKmh", inGarage ? 0.0 : 50.0);
+            return status;
+        }
+
+        private static GameData CreateRaceRoomGameData(StatusDataBase status, Guid sessionId)
+        {
+            GameData data = new GameData();
+            SetMemberValue(data, "GameRunning", true);
+            SetMemberValue(data, "GameName", "RRRE");
             SetMemberValue(data, "SessionId", sessionId);
             SetMemberValue(data, "NewData", status);
             return data;
@@ -690,6 +886,21 @@ namespace Affinity.Tests
             }
         }
 
+        private sealed class RaceRoomStatusData : StatusDataBase
+        {
+            public object RawData { get; set; }
+
+            public override object GetRawDataObject()
+            {
+                return RawData;
+            }
+        }
+
+        private sealed class RaceRoomRawData
+        {
+            public int GamePlayerInGarage;
+        }
+
         private sealed class IgnoreLineWrapProfile : AffinityGameProfileBase
         {
             public IgnoreLineWrapProfile()
@@ -728,6 +939,18 @@ namespace Affinity.Tests
             public bool AcceptsInitialPositionSnap => false;
 
             public bool UsesLapCounterDistanceFloor => false;
+
+            public bool TryGetTelemetrySampleSequence(StatusDataBase status, out long sampleSequence)
+            {
+                sampleSequence = 0;
+                return false;
+            }
+
+            public LapCounterDistanceFloorDecision GetLapCounterDistanceFloorDecision(
+                AffinityDistanceSampleContext context)
+            {
+                return LapCounterDistanceFloorDecision.Apply;
+            }
 
             public bool Matches(string gameName)
             {

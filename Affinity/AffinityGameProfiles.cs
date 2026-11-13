@@ -22,6 +22,13 @@ namespace Affinity
         StatefulDerived
     }
 
+    internal enum LapCounterDistanceFloorDecision
+    {
+        Apply,
+        Skip,
+        DisableForSession
+    }
+
     internal sealed class CircuitDisplayParts
     {
         public string CircuitNameDisplay { get; set; } = string.Empty;
@@ -93,6 +100,8 @@ namespace Affinity
 
         public double SessionStartTrackPositionMeters { get; set; }
 
+        public double LapCounterSessionMeters { get; set; }
+
         public double LastTrackPositionWithinLapMeters { get; set; }
 
         public double LastObservedSessionMeters { get; set; }
@@ -133,6 +142,10 @@ namespace Affinity
         bool AcceptsInitialPositionSnap { get; }
 
         bool UsesLapCounterDistanceFloor { get; }
+
+        bool TryGetTelemetrySampleSequence(StatusDataBase status, out long sampleSequence);
+
+        LapCounterDistanceFloorDecision GetLapCounterDistanceFloorDecision(AffinityDistanceSampleContext context);
 
         bool ShouldIgnoreTransientReset(AffinityDistanceSampleContext context);
 
@@ -202,6 +215,18 @@ namespace Affinity
         public virtual bool AcceptsInitialPositionSnap => false;
 
         public virtual bool UsesLapCounterDistanceFloor => false;
+
+        public virtual bool TryGetTelemetrySampleSequence(StatusDataBase status, out long sampleSequence)
+        {
+            sampleSequence = 0;
+            return false;
+        }
+
+        public virtual LapCounterDistanceFloorDecision GetLapCounterDistanceFloorDecision(
+            AffinityDistanceSampleContext context)
+        {
+            return LapCounterDistanceFloorDecision.Apply;
+        }
 
         public bool Matches(string gameName)
         {

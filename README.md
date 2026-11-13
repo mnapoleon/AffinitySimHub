@@ -109,7 +109,9 @@ The distance engine retains support for these internal session sources:
 
 Every shipped supported profile selects stateful derived distance. Affinity integrates forward track-position movement across line wraps and applies profile decisions for simulator-specific anomalies instead of relying on raw `SessionOdo`.
 
-Shipped stateful derived distance is based on successive positions within the lap. The lap-derived formula remains available to the engine for RaceRoom's floor and diagnostic/source calculations.
+Shipped stateful derived distance is based on successive positions within the lap. The lap-derived formula remains available to the engine for RaceRoom's guarded floor and diagnostic/source calculations. RaceRoom garage departures establish a new segment baseline without inheriting completed-lap distance. On Nordschleife-NLS, a shortcut-driven counter jump that materially outruns observed position movement disables the counter floor for that segment while normal position movement continues to count.
+
+RaceRoom debug logging also records a speed-based estimate guarded by raw `Player.GameSimulationTicks`. It is diagnostic only: repeated/frozen frames, backward or reset tick sequences, pause, replay, garage state, invalid speed, and long gaps cannot bridge the estimate across stale telemetry. Raw `SessionOdo` and its converted values remain diagnostics until live comparisons establish their units and reset behavior.
 
 Important protections in the runtime logic include:
 

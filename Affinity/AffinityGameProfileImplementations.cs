@@ -409,6 +409,43 @@ namespace Affinity
 
         public override bool UsesLapCounterDistanceFloor => true;
 
+        public override bool TryGetTelemetrySampleSequence(GameReaderCommon.StatusDataBase status, out long sampleSequence)
+        {
+            sampleSequence = 0;
+            object rawData = AffinityReplayDetector.GetRawStatusDataObject(status);
+            if (!AffinityReplayDetector.TryGetMemberValue(rawData, "Player", out object player) ||
+                !AffinityReplayDetector.TryGetIntegerMemberValue(player, "GameSimulationTicks", out int simulationTicks))
+            {
+                return false;
+            }
+
+            sampleSequence = simulationTicks;
+            return true;
+        }
+
+        public override LapCounterDistanceFloorDecision GetLapCounterDistanceFloorDecision(
+            AffinityDistanceSampleContext context)
+        {
+            if (context.CompletedLaps <= context.LastObservedCompletedLaps)
+            {
+                return LapCounterDistanceFloorDecision.Skip;
+            }
+
+            string normalizedTrackName = AffinityGameName.Normalize(
+                string.Concat(context.Status?.TrackName, " ", context.Status?.TrackNameWithConfig));
+            if (!normalizedTrackName.Contains("nordschleifenls"))
+            {
+                return LapCounterDistanceFloorDecision.Apply;
+            }
+
+            bool counterIsFarAheadOfObservedMovement =
+                context.LapCounterSessionMeters - context.SessionStatefulAbsoluteMeters > context.TrackLengthMeters * 0.10;
+
+            return counterIsFarAheadOfObservedMovement
+                ? LapCounterDistanceFloorDecision.DisableForSession
+                : LapCounterDistanceFloorDecision.Apply;
+        }
+
         public override TelemetryDisposition EvaluateTelemetry(AffinityTelemetryContext context)
         {
             TelemetryDisposition disposition = base.EvaluateTelemetry(context);

@@ -36,7 +36,7 @@ The stored identities remain the telemetry-provided game, car, track, and track-
 
 ## Distance Tracking
 
-Every shipped supported profile selects `StatefulDerived` distance. Affinity reconstructs the forward path from successive positions within the lap, adjusts real start/finish wraps by one track length, and adds only positive session-distance deltas to the current bucket. The lap counter remains available for profile decisions and RaceRoom's distance floor, but it is not stored as a cumulative total.
+Every shipped supported profile selects `StatefulDerived` distance. Affinity reconstructs the forward path from successive positions within the lap, adjusts real start/finish wraps by one track length, and adds only positive session-distance deltas to the current bucket. The lap counter remains available for profile decisions and RaceRoom's guarded distance floor, but it is not stored as a cumulative total.
 
 High-level flow:
 
@@ -111,7 +111,7 @@ The engine still contains internal automatic and raw-`SessionOdo` source machine
 | Le Mans Ultimate (`lmu`) | Waits for reliable car/track context instead of tracking missing or `Unknown` values; duplicates the full track display into both circuit columns. `Le Mans Ultimate` is logo-only and does not broaden runtime matching beyond `LMU`. | Ignores qualifying low-speed exit-line lap increments and placeholder session starts after exit/reset telemetry. |
 | Project Motor Racing (`projectmotorracing`) | Uses shared telemetry and default display behavior. | Captures the session-start position, uses the stationary startup anchor, and accepts initial-position movement. |
 | rFactor 2 (`rfactor2`) | Splits circuit/layout display on `--`. | Ignores qualifying low-speed false line wraps and near-stationary false lap increments. |
-| RaceRoom Racing Experience (`raceroomracingexperience`, `r3e`, `rrre`) | After shared replay checks, rejects raw finished and in-garage telemetry. | Uses the lap-counter distance floor to avoid losing a legitimate line crossing when the position/counter timing differs. |
+| RaceRoom Racing Experience (`raceroomracingexperience`, `r3e`, `rrre`) | After shared replay checks, rejects raw finished and in-garage telemetry. Raw `Player.GameSimulationTicks` is used only to validate the debug speed estimate against fresh frames. | Uses a segment-relative lap/position baseline and applies the lap-counter distance floor only for a new counter increment. A garage departure therefore cannot inherit completed laps at departure or at its next line crossing, including when the carried count is zero. On the `Nordschleife-NLS` layout, a counter floor more than 10% of the layout ahead of physically observed position movement disables the floor only for that segment; normal position integration continues, including the following full lap. |
 
 All alias matching removes non-alphanumeric characters and ignores case. Profile settings keys are also used for per-game debug settings and log filenames, but do not replace stored game names.
 
@@ -125,6 +125,19 @@ LMU and rFactor 2 implement `ShouldIgnoreLapIncrement`. The plugin deliberately 
 The post-distance decision must not reuse the pre-distance result because the decision inputs can change during the distance branch.
 
 Telemetry thresholds and anomaly rules are evidence-driven. Change them only in separate work with simulator evidence and focused regression tests; the profile migration does not generalize one game's observed thresholds to another.
+
+### RaceRoom evidence and source choice
+
+RaceRoom remains on stateful track-position distance. The speed integral and raw `SessionOdo` are diagnostics, not persisted distance sources.
+
+The November 8, 2026 controlled logs established these limits:
+
+- On Silverstone Stowe, two normal laps produced `2,580.03 m` of saved position distance. The freshness-unsafe speed estimate was close before telemetry froze, but a repeated `140.36 km/h` frame continued to inflate it. The installed RaceRoom reader exposes `Player.GameSimulationTicks`; repeated ticks now break the estimate chain, the first fresh frame after a freeze only re-anchors it, and a backward/reset sequence starts a new timing anchor instead of bridging timelines.
+- Returning to the Stowe garage with two completed laps preserved the prior `2,580.03 m`, but the old unconditional floor created a separate `2,624.86 m` session immediately after departure while the car had not driven that distance.
+- On the `24,321.31 m` Nordschleife-NLS layout, the shortcut advanced the counter near `3.28 km` of observed movement. The old floor added `21,041.56 m` in one update. A subsequent normal full lap was visible in continuous position telemetry, so the new layout-specific decision disables the untrusted counter floor while keeping position movement.
+- Multiplying raw `SessionOdo` changes by `1.609344` was close to the movement estimates in the observed runs, but its units, reset behavior, provenance, and agreement with RaceRoom's in-game per-track statistic have not been established. It is therefore logged only.
+
+Fresh live validation still needs before/after RaceRoom per-track totals for a normal multi-lap run, a partial lap returned to the garage, and an NLS shortcut followed by a normal lap. Compare those totals with saved rows, the freshness-safe speed estimate, raw and converted `SessionOdo`, and position distance before considering either diagnostic as a persisted source.
 
 ## Session Start Behavior
 
@@ -211,6 +224,7 @@ It records:
 - replay and inactive-sample decisions when detected
 - selected raw game-state fields for games with targeted guards
 - reset and wrap events
+- RaceRoom's diagnostic speed integral, raw `Player.GameSimulationTicks` freshness sequence, freshness availability, and whether the NLS lap-counter floor has been disabled for the active segment
 
 ## Extending Game Support
 

@@ -110,6 +110,10 @@ namespace Affinity
         {
             "FinishStatus",
             "GamePlayerInGarage",
+            "GamePaused",
+            "LapDistance",
+            "LapDistanceFraction",
+            "CarSpeed",
             "mViewedParticipantIndex",
             "mGameState",
             "mSessionState",
@@ -120,6 +124,9 @@ namespace Affinity
         private bool _hasLoggedDataError;
         private readonly AffinityGameProfileRegistry _gameProfiles = DefaultGameProfiles;
         private readonly AffinityGameRuntimeState _gameRuntimeState = new AffinityGameRuntimeState();
+        private readonly AffinitySpeedDistance _debugSpeedDistance = new AffinitySpeedDistance();
+        private bool _lapCounterDistanceFloorDisabled;
+        private double _sessionLapCounterDistanceBaselineMeters;
         private ImageSource _pictureIcon;
         private string _settingsPath = string.Empty;
         private string _databasePath = string.Empty;
@@ -702,6 +709,25 @@ namespace Affinity
                     promotedAccTrackContext = TryPromoteAccTrackContext(sessionId, profile, gameName, carModel, trackName, trackNameWithConfig);
                 }
 
+                if ((activeContextChanged && !promotedAccTrackContext) || !shouldDebugTelemetry)
+                {
+                    _debugSpeedDistance.Reset();
+                }
+
+                if (shouldDebugTelemetry)
+                {
+                    object rawStatus = AffinityReplayDetector.GetRawStatusDataObject(data.NewData);
+                    bool paused = AffinityReplayDetector.TryGetIntegerMemberValue(rawStatus, "GamePaused", out int gamePaused) && gamePaused == 1;
+                    long? sampleSequence = profile.TryGetTelemetrySampleSequence(data.NewData, out long resolvedSampleSequence)
+                        ? (long?)resolvedSampleSequence
+                        : null;
+                    _debugSpeedDistance.Update(
+                        data.NewData.SpeedKmh,
+                        (double)System.Diagnostics.Stopwatch.GetTimestamp() / System.Diagnostics.Stopwatch.Frequency,
+                        paused,
+                        sampleSequence);
+                }
+
                 if (activeContextChanged && !promotedAccTrackContext)
                 {
                     FinalizeActiveSession(refreshSummaries: bucketTimeUpdated);
@@ -744,10 +770,20 @@ namespace Affinity
                     _activeSessionId = sessionId;
                     _activeStorageSessionUid = Guid.NewGuid().ToString("N");
                     _activeSessionStartedUtc = now;
+                    _lapCounterDistanceFloorDisabled = false;
                     _sessionDistanceSource = ResolveSessionDistanceSource(profile, data.NewData);
                     _sessionStartTrackPositionMeters = GetSessionStartTrackPositionMeters(profile, data.NewData);
                     _sessionStatefulAbsoluteMeters = 0.0;
-                    _lastTrackPositionWithinLapMeters = AffinityGameProfileBase.GetTrackPositionWithinLapMeters(data.NewData, data.NewData.TrackLength > 0.0 ? data.NewData.TrackLength : data.NewData.ReportedTrackLength);
+                    double sessionTrackLengthMeters = data.NewData.TrackLength > 0.0
+                        ? data.NewData.TrackLength
+                        : data.NewData.ReportedTrackLength;
+                    _lastTrackPositionWithinLapMeters = AffinityGameProfileBase.GetTrackPositionWithinLapMeters(
+                        data.NewData,
+                        sessionTrackLengthMeters);
+                    _sessionLapCounterDistanceBaselineMeters = GetLapCounterDistanceBaselineMeters(
+                        completedLaps,
+                        sessionTrackLengthMeters,
+                        _lastTrackPositionWithinLapMeters);
                     _sessionDistanceOriginMeters = ShouldUseZeroSessionOrigin(profile, _sessionDistanceSource)
                         ? 0.0
                         : GetAbsoluteSessionDistanceMeters(profile, data.NewData, _sessionDistanceSource);
@@ -1909,9 +1945,11 @@ namespace Affinity
                 object rawData = AffinityReplayDetector.GetRawStatusDataObject(status);
                 string rawDataType = FormatDebugValue(rawData?.GetType().FullName);
                 string rawDataExtra = GetDebugMemberValues(rawData, RawDataDebugMemberNames);
+                long freshnessSequence = 0;
+                bool freshnessAvailable = profile?.TryGetTelemetrySampleSequence(status, out freshnessSequence) == true;
                 string line = string.Format(
                     System.Globalization.CultureInfo.InvariantCulture,
-                    "{0:o} reason={1} game=\"{2}\" car=\"{3}\" track=\"{4}\" sessionId={5} source={6} originM={7:F2} absM={8:F2} sessM={9:F2} deltaM={10:F2} completedLaps={11} lapDelta={12} trackLenM={13:F2} reportedTrackLenM={14:F2} posM={15:F2} posPct={16:F5} sessOdoRaw={17:F5} sessOdoAsM={18:F2} sessOdoAsKmM={19:F2} derivedM={20:F2} speedKmh={21:F2} isRestart={22} initialSnap={23} replayDetected={24} gdIsGameReplay=\"{25}\" gdGameReplay=\"{26}\" gdReplayMode=\"{27}\" sdIsGameReplay=\"{28}\" sdReplayMode=\"{29}\" gdType=\"{30}\" sdType=\"{31}\" gdExtra=\"{32}\" sdExtra=\"{33}\" rawType=\"{34}\" rawExtra=\"{35}\" ams2PlayerViewedParticipantIndex={36}",
+                    "{0:o} reason={1} game=\"{2}\" car=\"{3}\" track=\"{4}\" sessionId={5} source={6} originM={7:F2} absM={8:F2} sessM={9:F2} deltaM={10:F2} completedLaps={11} lapDelta={12} trackLenM={13:F2} reportedTrackLenM={14:F2} posM={15:F2} posPct={16:F5} sessOdoRaw={17:F5} sessOdoAsM={18:F2} sessOdoAsKmM={19:F2} derivedM={20:F2} speedKmh={21:F2} isRestart={22} initialSnap={23} replayDetected={24} gdIsGameReplay=\"{25}\" gdGameReplay=\"{26}\" gdReplayMode=\"{27}\" sdIsGameReplay=\"{28}\" sdReplayMode=\"{29}\" gdType=\"{30}\" sdType=\"{31}\" gdExtra=\"{32}\" sdExtra=\"{33}\" rawType=\"{34}\" rawExtra=\"{35}\" ams2PlayerViewedParticipantIndex={36} speedEstimateM={37:F2} freshnessSequence={38} freshnessAvailable={39} lapCounterFloorDisabled={40}",
                     DateTime.UtcNow,
                     reason,
                     gameName,
@@ -1948,7 +1986,11 @@ namespace Affinity
                     statusExtra,
                     rawDataType,
                     rawDataExtra,
-                    _gameRuntimeState.Automobilista2PlayerViewedParticipantIndex);
+                    _gameRuntimeState.Automobilista2PlayerViewedParticipantIndex,
+                    _debugSpeedDistance.Meters,
+                    freshnessAvailable ? freshnessSequence.ToString(System.Globalization.CultureInfo.InvariantCulture) : "<missing>",
+                    freshnessAvailable,
+                    _lapCounterDistanceFloorDisabled);
 
                 File.AppendAllText(debugLogPath, line + Environment.NewLine, Encoding.UTF8);
             }
@@ -2020,12 +2062,42 @@ namespace Affinity
                 _sessionStatefulAbsoluteMeters += deltaTrackPositionMeters;
             }
 
-            if (profile?.UsesLapCounterDistanceFloor == true && Math.Max(0, status.CompletedLaps) > 0)
+            if (profile?.UsesLapCounterDistanceFloor == true &&
+                !_lapCounterDistanceFloorDisabled &&
+                Math.Max(0, status.CompletedLaps) > 0)
             {
-                double lapCounterSessionMeters = GetDerivedSessionDistanceMeters(status, trackLengthMeters);
-                if (lapCounterSessionMeters > _sessionStatefulAbsoluteMeters)
+                double lapCounterSessionMeters = Math.Max(
+                    0.0,
+                    GetDerivedSessionDistanceMeters(status, trackLengthMeters) -
+                        _sessionLapCounterDistanceBaselineMeters);
+                AffinityDistanceSampleContext floorContext = new AffinityDistanceSampleContext
                 {
-                    _sessionStatefulAbsoluteMeters = lapCounterSessionMeters;
+                    Status = status,
+                    DistanceMode = profile.DistanceMode,
+                    CompletedLaps = Math.Max(0, status.CompletedLaps),
+                    LapDelta = Math.Max(0, status.CompletedLaps) - _lastObservedCompletedLaps,
+                    TrackLengthMeters = trackLengthMeters,
+                    DeltaTrackPositionMeters = deltaTrackPositionMeters,
+                    SessionStatefulAbsoluteMeters = _sessionStatefulAbsoluteMeters,
+                    SessionStartTrackPositionMeters = _sessionStartTrackPositionMeters,
+                    LapCounterSessionMeters = lapCounterSessionMeters,
+                    LastTrackPositionWithinLapMeters = _lastTrackPositionWithinLapMeters,
+                    LastObservedSessionMeters = _lastObservedSessionMeters,
+                    LastIgnoredSessionMeters = _lastIgnoredSessionMeters,
+                    LastObservedCompletedLaps = _lastObservedCompletedLaps
+                };
+                LapCounterDistanceFloorDecision floorDecision =
+                    profile.GetLapCounterDistanceFloorDecision(floorContext);
+                if (floorDecision == LapCounterDistanceFloorDecision.DisableForSession)
+                {
+                    _lapCounterDistanceFloorDisabled = true;
+                }
+                else if (floorDecision == LapCounterDistanceFloorDecision.Apply)
+                {
+                    if (lapCounterSessionMeters > _sessionStatefulAbsoluteMeters)
+                    {
+                        _sessionStatefulAbsoluteMeters = lapCounterSessionMeters;
+                    }
                 }
             }
 
@@ -2086,6 +2158,20 @@ namespace Affinity
             return Math.Max(0, status.CompletedLaps) * trackLengthMeters + trackPositionMeters;
         }
 
+        private static double GetLapCounterDistanceBaselineMeters(
+            int completedLaps,
+            double trackLengthMeters,
+            double trackPositionMeters)
+        {
+            if (trackLengthMeters <= 0.0)
+            {
+                return 0.0;
+            }
+
+            return (Math.Max(0, completedLaps) * trackLengthMeters) +
+                Math.Max(0.0, trackPositionMeters);
+        }
+
         private static double GetSessionStartTrackPositionMeters(
             IAffinityGameProfile profile,
             StatusDataBase status)
@@ -2112,6 +2198,9 @@ namespace Affinity
 
         private void ResetActiveSession(bool clearContext)
         {
+            _debugSpeedDistance.Reset();
+            _lapCounterDistanceFloorDisabled = false;
+            _sessionLapCounterDistanceBaselineMeters = 0.0;
             _activeSessionId = Guid.Empty;
             _activeContextKey = string.Empty;
             _activeStorageSessionUid = string.Empty;

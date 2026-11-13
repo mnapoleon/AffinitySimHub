@@ -183,6 +183,48 @@ namespace Affinity.Tests
             }
         }
 
+        [TestMethod]
+        public void LogTelemetryDebugSnapshot_IncludesRaceRoomRawDistanceAndSpeed()
+        {
+            string tempDirectory = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+            try
+            {
+                AffinityPlugin plugin = new AffinityPlugin();
+                plugin.Settings.EnableDebugLogging = true;
+                plugin.Settings.GameDebugLogging["raceroomracingexperience"] = true;
+                SetMemberValue(plugin, "_debugLogPath", Path.Combine(tempDirectory, "Affinity.distance.debug.log"));
+                StatusDataBase status = new RawStatusData
+                {
+                    RawData = new RaceRoomRawData
+                    {
+                        LapDistance = 123.5f,
+                        LapDistanceFraction = 0.25f,
+                        CarSpeed = 20.5f,
+                        Player = new RaceRoomPlayerData { GameSimulationTicks = 4567 }
+                    }
+                };
+                GameData data = CreateGameDataWithStatus(status);
+                IAffinityGameProfile profile = AffinityGameProfileRegistry.CreateDefault().Resolve("RRRE");
+                typeof(AffinityPlugin).GetMethod("LogTelemetryDebugSnapshot", BindingFlags.Instance | BindingFlags.NonPublic)
+                    .Invoke(plugin, new object[] { "test", data, profile, "RRRE", "car", "track", Guid.NewGuid(), status, 0.0, 0.0, 0, false });
+                string line = File.ReadAllText(Path.Combine(tempDirectory, "Affinity.distance.debug.raceroomracingexperience.log"));
+                Assert.IsTrue(line.Contains("LapDistance=123.5"), line);
+                Assert.IsTrue(line.Contains("LapDistanceFraction=0.25"), line);
+                Assert.IsTrue(line.Contains("CarSpeed=20.5"), line);
+                Assert.IsTrue(line.Contains("speedEstimateM=0.00"), line);
+                Assert.IsTrue(line.Contains("freshnessSequence=4567"), line);
+                Assert.IsTrue(line.Contains("freshnessAvailable=True"), line);
+                Assert.IsTrue(line.Contains("lapCounterFloorDisabled=False"), line);
+            }
+            finally
+            {
+                if (Directory.Exists(tempDirectory))
+                {
+                    Directory.Delete(tempDirectory, recursive: true);
+                }
+            }
+        }
+
         private static AffinityGameRuntimeState GetRuntimeState(AffinityPlugin plugin)
         {
             FieldInfo field = typeof(AffinityPlugin)
@@ -281,6 +323,19 @@ namespace Affinity.Tests
             {
                 return RawData;
             }
+        }
+
+        private sealed class RaceRoomRawData
+        {
+            public float LapDistance;
+            public float LapDistanceFraction;
+            public float CarSpeed;
+            public RaceRoomPlayerData Player;
+        }
+
+        private sealed class RaceRoomPlayerData
+        {
+            public int GameSimulationTicks;
         }
 
         private sealed class Automobilista2RawData
